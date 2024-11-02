@@ -31,7 +31,7 @@ public class VarTracer {
         allVars.put(name, v);
     }
 
-    public void count(long time, String name, long value) {
+    public void count(long time, String name, int value) {
         if (allVars.containsKey(name)) {
             allVars.get(name).add(value);
             return;
@@ -56,13 +56,13 @@ public class VarTracer {
         }
     }
 
-    private static class CounterVar extends Var<Long> {
+    private static class CounterVar extends Var<Integer> {
         public CounterVar(long timePoints, String name) {
             super(timePoints, name);
         }
 
         @Override
-        public void add(long var) {
+        public void add(int var) {
             value += var;
         }
     }

@@ -22,10 +22,9 @@ import static java.util.Objects.requireNonNull;
 public class TableMetaConnector implements Connector {
     private final TableMetaMetadata metaMetadata;
 
-    public TableMetaConnector(String catalogName, String catalogType) {
+    public TableMetaConnector(String catalogName) {
         requireNonNull(catalogName, "catalogName is null");
-        requireNonNull(catalogType, "catalogType is null");
-        this.metaMetadata = new TableMetaMetadata(catalogName, catalogType);
+        this.metaMetadata = new TableMetaMetadata(catalogName);
     }
 
     @Override

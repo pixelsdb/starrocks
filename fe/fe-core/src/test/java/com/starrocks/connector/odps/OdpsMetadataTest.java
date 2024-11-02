@@ -23,10 +23,8 @@ import com.starrocks.catalog.PartitionKey;
 import com.starrocks.catalog.Table;
 import com.starrocks.common.AnalysisException;
 import com.starrocks.connector.ConnectorMetadata;
-import com.starrocks.connector.GetRemoteFilesParams;
 import com.starrocks.connector.PartitionInfo;
 import com.starrocks.connector.RemoteFileInfo;
-import com.starrocks.connector.TableVersionRange;
 import com.starrocks.credential.CloudType;
 import com.starrocks.credential.aliyun.AliyunCloudConfiguration;
 import com.starrocks.sql.ast.PartitionValue;
@@ -111,7 +109,7 @@ public class OdpsMetadataTest extends MockedBase {
 
     @Test
     public void testListPartitionNames() {
-        List<String> partitionNames = odpsMetadata.listPartitionNames("project", "tableName", TableVersionRange.empty());
+        List<String> partitionNames = odpsMetadata.listPartitionNames("project", "tableName", -1);
         Assert.assertEquals(Collections.singletonList("p1=a/p2=b"), partitionNames);
     }
 
@@ -129,7 +127,7 @@ public class OdpsMetadataTest extends MockedBase {
     @Test
     public void testGetPartitions() {
         Table table = odpsMetadata.getTable("db", "tbl");
-        List<String> partitionNames = odpsMetadata.listPartitionNames("db", "tbl", TableVersionRange.empty());
+        List<String> partitionNames = odpsMetadata.listPartitionNames("db", "tbl", -1);
         List<PartitionInfo> partitions = odpsMetadata.getPartitions(table, partitionNames);
         Assert.assertEquals(1, partitions.size());
         PartitionInfo partitionInfo = partitions.get(0);
@@ -151,15 +149,14 @@ public class OdpsMetadataTest extends MockedBase {
     }
 
     @Test
-    public void testGetRemoteFiles() throws AnalysisException, IOException {
+    public void testGetRemoteFileInfos() throws AnalysisException, IOException {
         Table odpsTable = odpsMetadata.getTable("project", "tableName");
         PartitionKey partitionKey =
                 PartitionKey.createPartitionKey(ImmutableList.of(new PartitionValue("a"), new PartitionValue("b")),
                         odpsTable.getPartitionColumns());
-        GetRemoteFilesParams params = GetRemoteFilesParams.newBuilder().setFieldNames(odpsTable.getPartitionColumnNames())
-                .setPartitionKeys(ImmutableList.of(partitionKey)).build();
         List<RemoteFileInfo> remoteFileInfos =
-                odpsMetadata.getRemoteFiles(odpsTable, params, mockTableReadSessionBuilder);
+                odpsMetadata.getRemoteFileInfos(odpsTable, ImmutableList.of(partitionKey), -1, null,
+                        odpsTable.getPartitionColumnNames(), -1, mockTableReadSessionBuilder);
         Assert.assertEquals(1, remoteFileInfos.size());
     }
 

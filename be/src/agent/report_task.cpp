@@ -20,7 +20,7 @@
 namespace starrocks {
 
 AgentStatus report_task(const TReportRequest& request, TMasterResult* result) {
-    MasterServerClient client;
+    MasterServerClient client(ExecEnv::GetInstance()->frontend_client_cache());
     return client.report(request, result);
 }
 

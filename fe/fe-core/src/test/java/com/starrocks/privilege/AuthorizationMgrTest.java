@@ -19,12 +19,16 @@ import com.google.common.collect.Lists;
 import com.google.gson.stream.JsonReader;
 import com.starrocks.analysis.TableName;
 import com.starrocks.authentication.AuthenticationMgr;
+import com.starrocks.catalog.Column;
+import com.starrocks.catalog.HiveTable;
 import com.starrocks.catalog.InternalCatalog;
-import com.starrocks.catalog.Table;
+import com.starrocks.catalog.Type;
 import com.starrocks.common.Config;
 import com.starrocks.common.DdlException;
 import com.starrocks.common.ErrorReportException;
 import com.starrocks.common.UserException;
+import com.starrocks.connector.hive.HiveMetastore;
+import com.starrocks.meta.MetaContext;
 import com.starrocks.persist.ImageWriter;
 import com.starrocks.persist.OperationType;
 import com.starrocks.persist.RolePrivilegeCollectionInfo;
@@ -41,8 +45,9 @@ import com.starrocks.qe.ShowExecutor;
 import com.starrocks.qe.ShowResultSet;
 import com.starrocks.qe.StmtExecutor;
 import com.starrocks.server.GlobalStateMgr;
-import com.starrocks.server.LocalMetastore;
+import com.starrocks.server.MetadataMgr;
 import com.starrocks.sql.analyzer.Authorizer;
+import com.starrocks.sql.ast.CreateCatalogStmt;
 import com.starrocks.sql.ast.CreateMaterializedViewStatement;
 import com.starrocks.sql.ast.CreateResourceStmt;
 import com.starrocks.sql.ast.CreateUserStmt;
@@ -58,8 +63,10 @@ import com.starrocks.sql.ast.ShowTableStmt;
 import com.starrocks.sql.ast.StatementBase;
 import com.starrocks.sql.ast.UserIdentity;
 import com.starrocks.utframe.UtFrameUtils;
+import mockit.Expectations;
 import mockit.Mock;
 import mockit.MockUp;
+import mockit.Mocked;
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
@@ -1029,22 +1036,17 @@ public class AuthorizationMgrTest {
         DDLStmtExecutor.execute(UtFrameUtils.parseStmtWithNewParser(
                 "grant role1 to role role2", ctx), ctx);
 
-        Set<String> allPredecessorRoleNames =
-                manager.getAllPredecessorRoleNames(manager.getRoleIdByNameNoLock("role1"));
-        System.out.println(allPredecessorRoleNames);
-        Assert.assertTrue(allPredecessorRoleNames.contains("role0"));
-
         // role inheritance depth
         Assert.assertEquals(0, manager.getMaxRoleInheritanceDepthInner(0, roleIds[2]));
         Assert.assertEquals(1, manager.getMaxRoleInheritanceDepthInner(0, roleIds[1]));
         Assert.assertEquals(2, manager.getMaxRoleInheritanceDepthInner(0, roleIds[0]));
         // role predecessor
         Assert.assertEquals(new HashSet<>(Arrays.asList(roleIds[0])),
-                manager.getAllPredecessorRoleIdsUnlocked(roleIds[0]));
+                manager.getAllPredecessorsUnlocked(roleIds[0]));
         Assert.assertEquals(new HashSet<>(Arrays.asList(roleIds[0], roleIds[1])),
-                manager.getAllPredecessorRoleIdsUnlocked(roleIds[1]));
+                manager.getAllPredecessorsUnlocked(roleIds[1]));
         Assert.assertEquals(new HashSet<>(Arrays.asList(roleIds[0], roleIds[1], roleIds[2])),
-                manager.getAllPredecessorRoleIdsUnlocked(roleIds[2]));
+                manager.getAllPredecessorsUnlocked(roleIds[2]));
         // role descendants
         Assert.assertEquals(new HashSet<>(Arrays.asList(roleIds[0], roleIds[1], roleIds[2])),
                 manager.getAllDescendantsUnlocked(roleIds[0]));
@@ -1068,13 +1070,13 @@ public class AuthorizationMgrTest {
         Assert.assertEquals(2, manager.getMaxRoleInheritanceDepthInner(0, roleIds[3]));
         // role predecessor
         Assert.assertEquals(new HashSet<>(Arrays.asList(roleIds[0])),
-                manager.getAllPredecessorRoleIdsUnlocked(roleIds[0]));
+                manager.getAllPredecessorsUnlocked(roleIds[0]));
         Assert.assertEquals(new HashSet<>(Arrays.asList(roleIds[0], roleIds[1], roleIds[3])),
-                manager.getAllPredecessorRoleIdsUnlocked(roleIds[1]));
+                manager.getAllPredecessorsUnlocked(roleIds[1]));
         Assert.assertEquals(new HashSet<>(Arrays.asList(roleIds[0], roleIds[1], roleIds[2], roleIds[3])),
-                manager.getAllPredecessorRoleIdsUnlocked(roleIds[2]));
+                manager.getAllPredecessorsUnlocked(roleIds[2]));
         Assert.assertEquals(new HashSet<>(Arrays.asList(roleIds[0], roleIds[3])),
-                manager.getAllPredecessorRoleIdsUnlocked(roleIds[3]));
+                manager.getAllPredecessorsUnlocked(roleIds[3]));
         // role descendants
         Assert.assertEquals(new HashSet<>(Arrays.asList(roleIds[0], roleIds[1], roleIds[2], roleIds[3])),
                 manager.getAllDescendantsUnlocked(roleIds[0]));
@@ -1114,11 +1116,11 @@ public class AuthorizationMgrTest {
         DDLStmtExecutor.execute(UtFrameUtils.parseStmtWithNewParser(
                 "grant role1 to user_test_role_inheritance", ctx), ctx);
         Assert.assertEquals(new HashSet<>(Arrays.asList(roleIds[0], roleIds[1], roleIds[3])),
-                manager.getAllPredecessorRoleIdsUnlocked(collection));
+                manager.getAllPredecessorsUnlocked(collection));
         DDLStmtExecutor.execute(UtFrameUtils.parseStmtWithNewParser(
                 "grant role0 to user_test_role_inheritance", ctx), ctx);
         Assert.assertEquals(new HashSet<>(Arrays.asList(roleIds[0], roleIds[1], roleIds[3])),
-                manager.getAllPredecessorRoleIdsUnlocked(collection));
+                manager.getAllPredecessorsUnlocked(collection));
         // exception:
         try {
             DDLStmtExecutor.execute(UtFrameUtils.parseStmtWithNewParser(
@@ -1127,14 +1129,14 @@ public class AuthorizationMgrTest {
             Assert.assertTrue(e.getMessage().contains("'user_test_role_inheritance'@'%' has total 5 predecessor roles > 3"));
         }
         Assert.assertEquals(new HashSet<>(Arrays.asList(roleIds[0], roleIds[1], roleIds[3])),
-                manager.getAllPredecessorRoleIdsUnlocked(collection));
+                manager.getAllPredecessorsUnlocked(collection));
         // normal grant
         Config.privilege_max_total_roles_per_user = oldValue;
         DDLStmtExecutor.execute(UtFrameUtils.parseStmtWithNewParser(
                 "grant role4 to user_test_role_inheritance", ctx), ctx);
         Assert.assertEquals(new HashSet<>(Arrays.asList(
                         roleIds[0], roleIds[1], roleIds[2], roleIds[3], roleIds[4])),
-                manager.getAllPredecessorRoleIdsUnlocked(collection));
+                manager.getAllPredecessorsUnlocked(collection));
 
 
         // grant role with circle: bad case
@@ -1147,8 +1149,8 @@ public class AuthorizationMgrTest {
         //     \      |
         //      \-> role3
         Assert.assertEquals(new HashSet<>(Arrays.asList(roleIds[0], roleIds[1], roleIds[2], roleIds[3], roleIds[4])),
-                manager.getAllPredecessorRoleIdsUnlocked(roleIds[4]));
-        Assert.assertEquals(new HashSet<>(Arrays.asList(roleIds[0])), manager.getAllPredecessorRoleIdsUnlocked(roleIds[0]));
+                manager.getAllPredecessorsUnlocked(roleIds[4]));
+        Assert.assertEquals(new HashSet<>(Arrays.asList(roleIds[0])), manager.getAllPredecessorsUnlocked(roleIds[0]));
         try {
             DDLStmtExecutor.execute(UtFrameUtils.parseStmtWithNewParser(
                     "grant role4 to role role0", ctx), ctx);
@@ -1157,8 +1159,8 @@ public class AuthorizationMgrTest {
             Assert.assertTrue(e.getMessage().contains("is already a predecessor role of role4"));
         }
         Assert.assertEquals(new HashSet<>(Arrays.asList(roleIds[0], roleIds[1], roleIds[2], roleIds[3], roleIds[4])),
-                manager.getAllPredecessorRoleIdsUnlocked(roleIds[4]));
-        Assert.assertEquals(new HashSet<>(Arrays.asList(roleIds[0])), manager.getAllPredecessorRoleIdsUnlocked(roleIds[0]));
+                manager.getAllPredecessorsUnlocked(roleIds[4]));
+        Assert.assertEquals(new HashSet<>(Arrays.asList(roleIds[0])), manager.getAllPredecessorsUnlocked(roleIds[0]));
     }
 
     private void assertTableSelectOnTest(UserIdentity userIdentity, boolean... canSelectOnTbls) throws Exception {
@@ -1227,14 +1229,14 @@ public class AuthorizationMgrTest {
                 "grant test_drop_role_3 to user_test_drop_role_inheritance", ctx), ctx);
 
         Assert.assertEquals(new HashSet<>(Arrays.asList(roleIds[0], roleIds[1], roleIds[3])),
-                manager.getAllPredecessorRoleIdsUnlocked(collection));
+                manager.getAllPredecessorsUnlocked(collection));
         assertTableSelectOnTest(user, true, true, false, true);
 
         // role0 -> role1[user] -> role2
         DDLStmtExecutor.execute(UtFrameUtils.parseStmtWithNewParser(
                 "drop role test_drop_role_3;", ctx), ctx);
         Assert.assertEquals(new HashSet<>(Arrays.asList(roleIds[0], roleIds[1])),
-                manager.getAllPredecessorRoleIdsUnlocked(collection));
+                manager.getAllPredecessorsUnlocked(collection));
         Assert.assertEquals(2, manager.getMaxRoleInheritanceDepthInner(0, roleIds[0]));
         Assert.assertEquals(1, manager.getMaxRoleInheritanceDepthInner(0, roleIds[1]));
         assertTableSelectOnTest(user, true, true, false, false);
@@ -1243,7 +1245,7 @@ public class AuthorizationMgrTest {
         DDLStmtExecutor.execute(UtFrameUtils.parseStmtWithNewParser(
                 "drop role test_drop_role_2;", ctx), ctx);
         Assert.assertEquals(new HashSet<>(Arrays.asList(roleIds[0], roleIds[1])),
-                manager.getAllPredecessorRoleIdsUnlocked(collection));
+                manager.getAllPredecessorsUnlocked(collection));
         Assert.assertEquals(1, manager.getMaxRoleInheritanceDepthInner(0, roleIds[0]));
         Assert.assertEquals(0, manager.getMaxRoleInheritanceDepthInner(0, roleIds[1]));
         assertTableSelectOnTest(user, true, true, false, false);
@@ -1252,7 +1254,7 @@ public class AuthorizationMgrTest {
         DDLStmtExecutor.execute(UtFrameUtils.parseStmtWithNewParser(
                 "drop role test_drop_role_0;", ctx), ctx);
         Assert.assertEquals(new HashSet<>(Arrays.asList(roleIds[1])),
-                manager.getAllPredecessorRoleIdsUnlocked(collection));
+                manager.getAllPredecessorsUnlocked(collection));
         Assert.assertEquals(0, manager.getMaxRoleInheritanceDepthInner(0, roleIds[1]));
         assertTableSelectOnTest(user, false, true, false, false);
 
@@ -1268,7 +1270,7 @@ public class AuthorizationMgrTest {
                 manager.roleIdToPrivilegeCollection.get(roleIds[1]).getSubRoleIds().size());
 
         Assert.assertEquals(new HashSet<>(Arrays.asList(roleIds[1])),
-                manager.getAllPredecessorRoleIdsUnlocked(collection));
+                manager.getAllPredecessorsUnlocked(collection));
         assertTableSelectOnTest(user, false, true, false, false);
     }
 
@@ -1656,18 +1658,6 @@ public class AuthorizationMgrTest {
 
     @Test
     public void testPartialRevoke() throws Exception {
-        new MockUp<LocalMetastore>() {
-            @Mock
-            public Table getTable(String dbName, String tblName) {
-                return GlobalStateMgr.getCurrentState().getMetadataMgr().getTable(new TableName("db", "tbl1")).get();
-            }
-
-            @Mock
-            public Table getTable(Long dbId, Long tableId) {
-                return GlobalStateMgr.getCurrentState().getMetadataMgr().getTable(new TableName("db", "tbl1")).get();
-            }
-        };
-
         String sql = "grant select on table db.tbl0 to test_user";
         DDLStmtExecutor.execute(UtFrameUtils.parseStmtWithNewParser(sql, ctx), ctx);
 
@@ -1750,6 +1740,104 @@ public class AuthorizationMgrTest {
         authorizationMgr.loadV2(reader);
 
         Assert.assertNotNull(authorizationMgr.getRolePrivilegeCollection("test_persist_role0"));
+    }
+
+    @Test
+    public void testUpgradePrivilege(@Mocked HiveMetastore hiveMetastore) throws Exception {
+        ConnectContext connectCtx = new ConnectContext();
+        String createCatalog = "CREATE EXTERNAL CATALOG hive_catalog_1 COMMENT \"hive_catalog\" PROPERTIES(\"type\"=\"hive\", " +
+                "\"hive.metastore.uris\"=\"thrift://127.0.0.1:9083\");";
+        StatementBase stmt = UtFrameUtils.parseStmtWithNewParser(createCatalog, ctx);
+        Assert.assertTrue(stmt instanceof CreateCatalogStmt);
+        connectCtx.setGlobalStateMgr(GlobalStateMgr.getCurrentState());
+        connectCtx.setCurrentUserIdentity(UserIdentity.ROOT);
+        connectCtx.setCurrentRoleIds(UserIdentity.ROOT);
+        CreateCatalogStmt statement = (CreateCatalogStmt) stmt;
+        DDLStmtExecutor.execute(statement, connectCtx);
+
+        new Expectations() {
+            {
+                hiveMetastore.getAllDatabaseNames();
+                result = Lists.newArrayList("db");
+                minTimes = 0;
+
+                hiveMetastore.getAllTableNames("db");
+                result = Lists.newArrayList("tbl");
+                minTimes = 0;
+            }
+        };
+
+        MetadataMgr metadataMgr = connectCtx.getGlobalStateMgr().getMetadataMgr();
+        new Expectations(metadataMgr) {
+            {
+                metadataMgr.getDb("hive_catalog_1", "db");
+                result = new com.starrocks.catalog.Database(0, "db");
+                minTimes = 0;
+
+                metadataMgr.getTable("hive_catalog_1", "db", "tbl");
+                result = HiveTable.builder().setHiveTableName("tbl")
+                        .setFullSchema(Lists.newArrayList(new Column("v1", Type.INT))).build();
+                minTimes = 0;
+            }
+        };
+
+        connectCtx.changeCatalog("hive_catalog_1");
+
+        MetaContext.get().setStarRocksMetaVersion(3);
+
+        DDLStmtExecutor.execute(UtFrameUtils.parseStmtWithNewParser(
+                "create user test_upgrade_priv", connectCtx), connectCtx);
+        DDLStmtExecutor.execute(UtFrameUtils.parseStmtWithNewParser(
+                "grant create database on catalog hive_catalog_1 to test_upgrade_priv", connectCtx), connectCtx);
+        setCurrentUserAndRoles(connectCtx, UserIdentity.createAnalyzedUserIdentWithIp("test_upgrade_priv", "%"));
+        new NativeAccessController().checkCatalogAction(connectCtx.getCurrentUserIdentity(), connectCtx.getCurrentRoleIds(),
+                "hive_catalog_1", PrivilegeType.CREATE_DATABASE);
+        Assert.assertThrows(AccessDeniedException.class, () ->
+                new NativeAccessController().checkCatalogAction(connectCtx.getCurrentUserIdentity(),
+                        connectCtx.getCurrentRoleIds(), "hive_catalog_1", PrivilegeType.USAGE));
+
+        DDLStmtExecutor.execute(UtFrameUtils.parseStmtWithNewParser(
+                "create user test_upgrade_priv_2", connectCtx), connectCtx);
+        DDLStmtExecutor.execute(UtFrameUtils.parseStmtWithNewParser(
+                "grant create table on database db to test_upgrade_priv_2", connectCtx), connectCtx);
+        setCurrentUserAndRoles(connectCtx, UserIdentity.createAnalyzedUserIdentWithIp("test_upgrade_priv_2", "%"));
+        Assert.assertThrows(AccessDeniedException.class, () ->
+                new NativeAccessController().checkCatalogAction(connectCtx.getCurrentUserIdentity(),
+                        connectCtx.getCurrentRoleIds(), "hive_catalog_1", PrivilegeType.USAGE));
+
+        DDLStmtExecutor.execute(UtFrameUtils.parseStmtWithNewParser(
+                "create user test_upgrade_priv_3", connectCtx), connectCtx);
+        DDLStmtExecutor.execute(UtFrameUtils.parseStmtWithNewParser(
+                "grant select on table db.tbl to test_upgrade_priv_3", connectCtx), connectCtx);
+        setCurrentUserAndRoles(connectCtx, UserIdentity.createAnalyzedUserIdentWithIp("test_upgrade_priv_3", "%"));
+        Assert.assertThrows(AccessDeniedException.class, () ->
+                new NativeAccessController().checkCatalogAction(connectCtx.getCurrentUserIdentity(),
+                        connectCtx.getCurrentRoleIds(), "hive_catalog_1", PrivilegeType.USAGE));
+
+
+        GlobalStateMgr masterGlobalStateMgr = connectCtx.getGlobalStateMgr();
+        UtFrameUtils.PseudoJournalReplayer.resetFollowerJournalQueue();
+        UtFrameUtils.PseudoImage image = new UtFrameUtils.PseudoImage();
+        saveRBACPrivilege(masterGlobalStateMgr, image.getImageWriter());
+        loadRBACPrivilege(masterGlobalStateMgr, image.getJsonReader());
+
+        AuthorizationMgr authorizationMgr = GlobalStateMgr.getCurrentState().getAuthorizationMgr();
+        UserPrivilegeCollectionV2 up1 = authorizationMgr.getUserPrivilegeCollectionUnlockedAllowNull(
+                UserIdentity.createAnalyzedUserIdentWithIp("test_upgrade_priv", "%"));
+        UserPrivilegeCollectionV2 up2 = authorizationMgr.getUserPrivilegeCollectionUnlockedAllowNull(
+                UserIdentity.createAnalyzedUserIdentWithIp("test_upgrade_priv_2", "%"));
+        UserPrivilegeCollectionV2 up3 = authorizationMgr.getUserPrivilegeCollectionUnlockedAllowNull(
+                UserIdentity.createAnalyzedUserIdentWithIp("test_upgrade_priv_3", "%"));
+
+        authorizationMgr.checkAction(up1, ObjectType.CATALOG, PrivilegeType.USAGE,
+                Lists.newArrayList("hive_catalog_1"));
+        authorizationMgr.checkAction(up2, ObjectType.CATALOG, PrivilegeType.USAGE,
+                Lists.newArrayList("hive_catalog_1"));
+        authorizationMgr.checkAction(up3, ObjectType.CATALOG, PrivilegeType.USAGE,
+                Lists.newArrayList("hive_catalog_1"));
+
+        saveRBACPrivilege(masterGlobalStateMgr, image.getImageWriter());
+        loadRBACPrivilege(masterGlobalStateMgr, image.getJsonReader());
     }
 
     @Test

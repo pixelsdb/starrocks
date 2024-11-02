@@ -1,4 +1,4 @@
--- name: test_mv_partition_compensate_hive @slow
+-- name: test_mv_partition_compensate_hive
 create external catalog mv_hive_${uuid0}
 properties
 (
@@ -57,9 +57,6 @@ create database db_${uuid0};
 -- result:
 -- !result
 use db_${uuid0};
--- result:
--- !result
-set new_planner_optimize_timeout=10000;
 -- result:
 -- !result
 CREATE MATERIALIZED VIEW test_mv1 

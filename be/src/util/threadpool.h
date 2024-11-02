@@ -129,7 +129,7 @@ public:
     ThreadPoolBuilder& set_borrowed_cpuids(const std::vector<CpuUtil::CpuIds>& borrowed_cpuids);
 
     // Instantiate a new ThreadPool with the existing builder arguments.
-    Status build(std::unique_ptr<ThreadPool>* pool) const;
+    [[nodiscard]] Status build(std::unique_ptr<ThreadPool>* pool) const;
 
 private:
     friend class ThreadPool;
@@ -201,10 +201,10 @@ public:
     void shutdown();
 
     // Submits a Runnable class.
-    Status submit(std::shared_ptr<Runnable> r, Priority pri = LOW_PRIORITY);
+    [[nodiscard]] Status submit(std::shared_ptr<Runnable> r, Priority pri = LOW_PRIORITY);
 
     // Submits a function bound using std::bind(&FuncName, args...).
-    Status submit_func(std::function<void()> f, Priority pri = LOW_PRIORITY);
+    [[nodiscard]] Status submit_func(std::function<void()> f, Priority pri = LOW_PRIORITY);
 
     // Waits until all the tasks are completed.
     void wait();
@@ -214,7 +214,7 @@ public:
     [[nodiscard]] bool wait_for(const MonoDelta& delta);
 
     // dynamic update max threads num
-    Status update_max_threads(int max_threads);
+    [[nodiscard]] Status update_max_threads(int max_threads);
 
     // dynamic update min threads num
     Status update_min_threads(int max_threads);
@@ -419,10 +419,10 @@ public:
     ~ThreadPoolToken();
 
     // Submits a Runnable class with specified priority.
-    Status submit(std::shared_ptr<Runnable> r, ThreadPool::Priority pri = ThreadPool::LOW_PRIORITY);
+    [[nodiscard]] Status submit(std::shared_ptr<Runnable> r, ThreadPool::Priority pri = ThreadPool::LOW_PRIORITY);
 
     // Submits a function bound using std::bind(&FuncName, args...)  with specified priority.
-    Status submit_func(std::function<void()> f, ThreadPool::Priority pri = ThreadPool::LOW_PRIORITY);
+    [[nodiscard]] Status submit_func(std::function<void()> f, ThreadPool::Priority pri = ThreadPool::LOW_PRIORITY);
 
     // Marks the token as unusable for future submissions. Any queued tasks not
     // yet running are destroyed. If tasks are in flight, Shutdown() will wait

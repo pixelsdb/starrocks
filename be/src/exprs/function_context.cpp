@@ -196,8 +196,12 @@ bool FunctionContext::add_warning(const char* warning_msg) {
     std::stringstream ss;
     ss << "UDF WARNING: " << warning_msg;
 
-    std::cerr << ss.str() << std::endl;
-    return true;
+    if (_state != nullptr) {
+        return _state->log_error(ss.str());
+    } else {
+        std::cerr << ss.str() << std::endl;
+        return true;
+    }
 }
 
 const FunctionContext::TypeDesc* FunctionContext::get_arg_type(int arg_idx) const {

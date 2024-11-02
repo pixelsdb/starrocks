@@ -204,7 +204,6 @@ public class Deployer {
                         fragment.getFragmentIndex(),
                         request,
                         instance.getWorker());
-                execution.setFragmentInstance(instance);
 
                 threeStageExecutionsToDeploy.get(stageIndex).add(execution);
 
@@ -250,10 +249,6 @@ public class Deployer {
         if (firstErrResult != null) {
             failureHandler.apply(firstErrResult.getStatus(), firstErrExecution, firstErrResult.getFailure());
         }
-    }
-
-    public TExecPlanFragmentParams createIncrementalScanRangesRequest(FragmentInstance instance) {
-        return tFragmentInstanceFactory.createIncrementalScanRanges(instance);
     }
 }
 

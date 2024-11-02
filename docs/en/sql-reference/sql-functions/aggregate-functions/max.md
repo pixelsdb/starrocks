@@ -4,7 +4,7 @@ displayed_sidebar: docs
 
 # max
 
-
+## Description
 
 Returns the maximum value of the expr expression.
 

@@ -347,7 +347,10 @@ insert into t values(1,1);
 create materialized view tva REFRESH ASYNC as select k, sum(v) from t group by k;
 -- result:
 -- !result
-REFRESH MATERIALIZED VIEW tva WITH SYNC MODE;
+select sleep(2);
+-- result:
+1
+-- !result
  explain select sum(v) from t;
 -- result:
 [REGEX].*rollup: tva.*

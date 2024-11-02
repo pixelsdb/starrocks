@@ -42,7 +42,6 @@ public class CurrentQueryStatisticsProcDirTest {
         Map<String, QueryStatisticsItem> statistic = new HashMap<>();
         statistic.put("queryId1", new QueryStatisticsItem.Builder()
                 .queryStartTime(1)
-                .customQueryId("abc1")
                 .queryId("queryId1")
                 .warehouseName("wh1")
                 .resourceGroupName("wg1")
@@ -50,7 +49,6 @@ public class CurrentQueryStatisticsProcDirTest {
         );
         statistic.put("queryId2", new QueryStatisticsItem.Builder()
                 .queryStartTime(2)
-                .customQueryId("abc2")
                 .queryId("queryId2")
                 .warehouseName("wh1")
                 .resourceGroupName("wg2")
@@ -80,10 +78,8 @@ public class CurrentQueryStatisticsProcDirTest {
         Assert.assertEquals("queryId1", list1.get(2));
         // Warehouse
         Assert.assertEquals("wh1", list1.get(12));
-        // CustomQueryId
-        Assert.assertEquals("abc1", list1.get(13));
         // ResourceGroupName
-        Assert.assertEquals("wg1", list1.get(14));
+        Assert.assertEquals("wg1", list1.get(13));
 
         List<String> list2 = rows.get(1);
         Assert.assertEquals(list2.size(), CurrentQueryStatisticsProcDir.TITLE_NAMES.size());
@@ -91,10 +87,8 @@ public class CurrentQueryStatisticsProcDirTest {
         Assert.assertEquals("queryId2", list2.get(2));
         // Warehouse
         Assert.assertEquals("wh1", list2.get(12));
-        // CustomQueryId
-        Assert.assertEquals("abc2", list2.get(13));
         // ResourceGroupName
-        Assert.assertEquals("wg2", list2.get(14));
+        Assert.assertEquals("wg2", list2.get(13));
     }
 
     @Test

@@ -38,10 +38,6 @@ public class ForeignKeyConstraintTest {
         db.registerTableUnlocked(table1);
         db.registerTableUnlocked(table2);
         db.registerTableUnlocked(table3);
-    }
-
-    @Test
-    public void testParseInternal() {
 
         new Expectations(globalStateMgr) {
             {
@@ -49,24 +45,15 @@ public class ForeignKeyConstraintTest {
                 minTimes = 0;
                 result = globalStateMgr;
 
-                globalStateMgr.getLocalMetastore().getDb(anyLong);
+                globalStateMgr.getDb(anyLong);
                 minTimes = 0;
                 result = db;
-
-                globalStateMgr.getLocalMetastore().getTable(anyLong, 1000L);
-                minTimes = 0;
-                result = db.getTable(1000L);
-
-                globalStateMgr.getLocalMetastore().getTable(anyLong, 1001L);
-                minTimes = 0;
-                result = db.getTable(1001L);
-
-                globalStateMgr.getLocalMetastore().getTable(anyLong, 1002L);
-                minTimes = 0;
-                result = db.getTable(1002L);
             }
         };
+    }
 
+    @Test
+    public void testParseInternal() {
         // internal catalog
         String constraintDescs = "(column1)  REFERENCES  default_catalog.100.1000(newColumn1)";
         List<ForeignKeyConstraint> foreignKeyConstraints1 = ForeignKeyConstraint.parse(constraintDescs);

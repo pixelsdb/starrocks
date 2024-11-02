@@ -23,7 +23,6 @@ class PredicateNodeFactory;
 
 enum class CompoundNodeType : uint8_t { AND, OR };
 
-class PredicateBaseNode;
 class PredicateColumnNode;
 
 template <CompoundNodeType Type>

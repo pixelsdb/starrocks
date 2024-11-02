@@ -14,8 +14,6 @@
 
 package com.starrocks.connector.delta;
 
-import com.starrocks.connector.ConnectorProperties;
-import com.starrocks.connector.ConnectorType;
 import com.starrocks.connector.HdfsEnvironment;
 import com.starrocks.connector.MetastoreType;
 import com.starrocks.connector.hive.CachingHiveMetastoreConf;
@@ -32,7 +30,6 @@ public class DeltaLakeMetadataFactory {
     protected final IDeltaLakeMetastore metastore;
     protected final long perQueryMetastoreMaxNum;
     private final HdfsEnvironment hdfsEnvironment;
-    protected final ConnectorProperties connectorProperties;
     protected final MetastoreType metastoreType;
 
     public DeltaLakeMetadataFactory(String catalogName, IDeltaLakeMetastore metastore, CachingHiveMetastoreConf hmsConf,
@@ -42,7 +39,6 @@ public class DeltaLakeMetadataFactory {
         this.metastore = metastore;
         this.perQueryMetastoreMaxNum = hmsConf.getPerQueryCacheMaxNum();
         this.hdfsEnvironment = hdfsEnvironment;
-        this.connectorProperties = new ConnectorProperties(ConnectorType.DELTALAKE, properties);
         if (properties.containsKey(HIVE_METASTORE_URIS)) {
             this.hdfsEnvironment.getConfiguration().set(MetastoreConf.ConfVars.THRIFT_URIS.getHiveName(),
                     properties.get(HIVE_METASTORE_URIS));
@@ -61,7 +57,7 @@ public class DeltaLakeMetadataFactory {
 
         Optional<DeltaLakeCacheUpdateProcessor> cacheUpdateProcessor = getCacheUpdateProcessor();
         return new DeltaLakeMetadata(hdfsEnvironment, catalogName, metastoreOperations,
-                cacheUpdateProcessor.orElse(null), connectorProperties);
+                cacheUpdateProcessor.orElse(null));
     }
 
     public synchronized Optional<DeltaLakeCacheUpdateProcessor> getCacheUpdateProcessor() {

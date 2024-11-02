@@ -47,7 +47,6 @@ import com.starrocks.analysis.SlotRef;
 import com.starrocks.analysis.TableName;
 import com.starrocks.analysis.TupleDescriptor;
 import com.starrocks.catalog.Column;
-import com.starrocks.catalog.ColumnId;
 import com.starrocks.catalog.Database;
 import com.starrocks.catalog.DistributionInfo;
 import com.starrocks.catalog.ExpressionRangePartitionInfo;
@@ -64,6 +63,7 @@ import com.starrocks.catalog.OlapTable;
 import com.starrocks.catalog.Partition;
 import com.starrocks.catalog.PartitionKey;
 import com.starrocks.catalog.PartitionType;
+import com.starrocks.catalog.ColumnId;
 import com.starrocks.catalog.PhysicalPartition;
 import com.starrocks.catalog.RangePartitionInfo;
 import com.starrocks.catalog.Replica;
@@ -86,7 +86,7 @@ import com.starrocks.sql.analyzer.RelationFields;
 import com.starrocks.sql.analyzer.RelationId;
 import com.starrocks.sql.analyzer.Scope;
 import com.starrocks.sql.analyzer.SelectAnalyzer;
-import com.starrocks.sql.analyzer.SemanticException;
+import com.starrocks.sql.common.MetaUtils;
 import com.starrocks.system.SystemInfoService;
 import com.starrocks.thrift.TColumn;
 import com.starrocks.thrift.TDataSink;
@@ -116,9 +116,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 import java.util.TreeMap;
-import java.util.TreeSet;
 import java.util.stream.Collectors;
 
 public class OlapTableSink extends DataSink {
@@ -190,7 +188,6 @@ public class OlapTableSink extends DataSink {
         if (txnState != null) {
             tSink.setTxn_trace_parent(txnState.getTraceParent());
             tSink.setLabel(txnState.getLabel());
-            tSink.setWrite_txn_log(txnState.isUseCombinedTxnLog());
         }
         tSink.setDb_id(dbId);
         tSink.setLoad_channel_timeout_s(loadChannelTimeoutS);
@@ -201,7 +198,7 @@ public class OlapTableSink extends DataSink {
         tSink.setEnable_replicated_storage(enableReplicatedStorage);
         tSink.setAutomatic_bucket_size(automaticBucketSize);
         tSink.setEncryption_meta(GlobalStateMgr.getCurrentState().getKeyMgr().getCurrentKEKAsEncryptionMeta());
-        Database db = GlobalStateMgr.getCurrentState().getLocalMetastore().getDb(dbId);
+        Database db = GlobalStateMgr.getCurrentState().getDb(dbId);
         if (db != null) {
             tSink.setDb_name(db.getFullName());
         }
@@ -237,23 +234,6 @@ public class OlapTableSink extends DataSink {
         complete();
     }
 
-    public List<Long> getOpenPartitions() {
-        if (!enableAutomaticPartition || Config.max_load_initial_open_partition_number <= 0
-                || partitionIds.size() < Config.max_load_initial_open_partition_number) {
-            return partitionIds;
-        }
-        // bigger partition id means newer partition
-        // open last max_load_initial_open_partition_number partitions
-        Set<Long> openPartitionIds = partitionIds.stream().collect(
-                Collectors.toCollection(() -> new TreeSet<>(Collections.reverseOrder())))
-                .stream().limit(Config.max_load_initial_open_partition_number).collect(Collectors.toSet());;
-        if (!dstTable.getDoubleWritePartitions().isEmpty()) {
-            openPartitionIds.addAll(dstTable.getDoubleWritePartitions().keySet());
-        }
-
-        return openPartitionIds.stream().collect(Collectors.toList());
-    }
-
     // must called after tupleDescriptor is computed
     public void complete() throws UserException {
         TOlapTableSink tSink = tDataSink.getOlap_table_sink();
@@ -271,7 +251,7 @@ public class OlapTableSink extends DataSink {
         tSink.setNeed_gen_rollup(dstTable.shouldLoadToNewRollup());
         tSink.setSchema(createSchema(tSink.getDb_id(), dstTable, tupleDescriptor));
         TOlapTablePartitionParam partitionParam = createPartition(tSink.getDb_id(), dstTable, tupleDescriptor,
-                enableAutomaticPartition, automaticBucketSize, getOpenPartitions());
+                enableAutomaticPartition, automaticBucketSize, partitionIds);
         tSink.setPartition(partitionParam);
         tSink.setLocation(createLocation(dstTable, partitionParam, enableReplicatedStorage, warehouseId));
         tSink.setNodes_info(GlobalStateMgr.getCurrentState().createNodesInfo(warehouseId,
@@ -296,7 +276,7 @@ public class OlapTableSink extends DataSink {
                 tSink2.unsetPartition();
                 tSink2.unsetLocation();
                 TOlapTablePartitionParam partitionParam2 = createPartition(tSink2.getDb_id(), dstTable, tupleDescriptor,
-                        false, automaticBucketSize, doubleWritePartitionIds);
+                        enableAutomaticPartition, automaticBucketSize, doubleWritePartitionIds);
                 tSink2.setPartition(partitionParam2);
                 tSink2.setLocation(createLocation(dstTable, partitionParam2, enableReplicatedStorage, warehouseId));
                 tSink2.setIgnore_out_of_partition(true);
@@ -390,11 +370,7 @@ public class OlapTableSink extends DataSink {
             indexSchema.setColumn_to_expr_value(columnToExprValue);
             schemaParam.addToIndexes(indexSchema);
             if (indexMeta.getWhereClause() != null) {
-                Database db = GlobalStateMgr.getCurrentState().getLocalMetastore().getDb(dbId);
-                if (db == null) {
-                    throw new SemanticException("Database %s is not found", dbId);
-                }
-                String dbName = db.getFullName();
+                String dbName = MetaUtils.getDatabase(dbId).getFullName();
 
                 Map<String, SlotDescriptor> descMap = new TreeMap<>(String.CASE_INSENSITIVE_ORDER);
                 for (SlotDescriptor slot : tupleDescriptor.getSlots()) {

@@ -15,7 +15,6 @@
 #pragma once
 
 #include <cassert>
-#include <cstdint>
 #include <cstring>
 #include <iostream>
 #include <string_view>

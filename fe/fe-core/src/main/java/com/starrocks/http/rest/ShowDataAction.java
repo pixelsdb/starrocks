@@ -66,10 +66,10 @@ public class ShowDataAction extends RestBaseAction {
     public long getDataSizeOfDatabase(Database db) {
         long totalSize = 0;
         Locker locker = new Locker();
-        locker.lockDatabase(db.getId(), LockType.READ);
+        locker.lockDatabase(db, LockType.READ);
         try {
             // sort by table name
-            List<Table> tables = GlobalStateMgr.getCurrentState().getLocalMetastore().getTables(db.getId());
+            List<Table> tables = db.getTables();
             for (Table table : tables) {
                 if (!table.isNativeTableOrMaterializedView()) {
                     continue;
@@ -78,7 +78,7 @@ public class ShowDataAction extends RestBaseAction {
                 totalSize += tableSize;
             } // end for tables
         } finally {
-            locker.unLockDatabase(db.getId(), LockType.READ);
+            locker.unLockDatabase(db, LockType.READ);
         }
         return totalSize;
     }

@@ -22,7 +22,6 @@ import com.starrocks.catalog.IcebergTable;
 import com.starrocks.catalog.MaterializedView;
 import com.starrocks.catalog.PartitionKey;
 import com.starrocks.catalog.Table;
-import com.starrocks.connector.TableVersionRange;
 import com.starrocks.server.GlobalStateMgr;
 import com.starrocks.sql.optimizer.OptExpression;
 import com.starrocks.sql.optimizer.OptExpressionVisitor;
@@ -35,11 +34,9 @@ import com.starrocks.sql.optimizer.operator.logical.LogicalOlapScanOperator;
 import com.starrocks.sql.optimizer.operator.logical.LogicalScanOperator;
 import com.starrocks.sql.optimizer.operator.scalar.ColumnRefOperator;
 import com.starrocks.sql.optimizer.operator.scalar.ScalarOperator;
-import org.apache.iceberg.Snapshot;
 
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 
 import static com.starrocks.sql.optimizer.rule.transformation.materialization.MvPartitionCompensator.SUPPORTED_PARTITION_COMPENSATE_EXTERNAL_SCAN_TYPES;
 import static com.starrocks.sql.optimizer.rule.transformation.materialization.MvUtils.convertPartitionKeysToListPredicate;
@@ -51,6 +48,7 @@ public class OptCompensator extends OptExpressionVisitor<OptExpression, Void> {
     private final OptimizerContext optimizerContext;
     private final MaterializedView mv;
     private final Map<Table, BaseCompensation<?>> compensations;
+    private final Map<Table, Column> partitionTableAndColumns;
     // for olap table
     public OptCompensator(OptimizerContext optimizerContext,
                           MaterializedView mv,
@@ -58,12 +56,16 @@ public class OptCompensator extends OptExpressionVisitor<OptExpression, Void> {
         this.optimizerContext = optimizerContext;
         this.mv = mv;
         this.compensations = compensations;
+        this.partitionTableAndColumns = mv.getRefBaseTablePartitionColumns();
     }
 
     @Override
     public OptExpression visitLogicalTableScan(OptExpression optExpression, Void context) {
         LogicalScanOperator scanOperator = optExpression.getOp().cast();
         Table refBaseTable = scanOperator.getTable();
+        if (partitionTableAndColumns == null || !partitionTableAndColumns.containsKey(refBaseTable)) {
+            return optExpression;
+        }
 
         // reset the partition prune flag to be pruned again.
         Utils.resetOpAppliedRule(scanOperator, Operator.OP_PARTITION_PRUNE_BIT);
@@ -112,10 +114,6 @@ public class OptCompensator extends OptExpressionVisitor<OptExpression, Void> {
 
         // NOTE: This is necessary because iceberg's physical plan will not use selectedPartitionIds to
         // prune partitions.
-        final Map<Table, Column> partitionTableAndColumns = mv.getRefBaseTablePartitionColumns();
-        if (partitionTableAndColumns == null || !partitionTableAndColumns.containsKey(refBaseTable)) {
-            return scanOperator;
-        }
         Column refBaseTablePartitionCol = partitionTableAndColumns.get(refBaseTable);
         Preconditions.checkState(refBaseTablePartitionCol != null);
         ColumnRefOperator partitionColumnRef = scanOperator.getColumnReference(refBaseTablePartitionCol);
@@ -141,10 +139,6 @@ public class OptCompensator extends OptExpressionVisitor<OptExpression, Void> {
             }
 
             builder.setTable(currentTable);
-            TableVersionRange versionRange = TableVersionRange.withEnd(
-                    Optional.ofNullable(((IcebergTable) currentTable).getNativeTable().currentSnapshot())
-                            .map(Snapshot::snapshotId));
-            builder.setTableVersionRange(versionRange);
         }
         return builder.build();
     }

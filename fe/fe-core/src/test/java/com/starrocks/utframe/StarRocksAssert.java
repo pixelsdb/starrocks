@@ -172,9 +172,9 @@ public class StarRocksAssert {
 
     public StarRocksAssert withDatabase(String dbName) throws Exception {
         DropDbStmt dropDbStmt =
-                    (DropDbStmt) UtFrameUtils.parseStmtWithNewParser("drop database if exists `" + dbName + "`;", ctx);
+                (DropDbStmt) UtFrameUtils.parseStmtWithNewParser("drop database if exists `" + dbName + "`;", ctx);
         try {
-            GlobalStateMgr.getCurrentState().getLocalMetastore().dropDb(dropDbStmt.getDbName(), dropDbStmt.isForceDrop());
+            GlobalStateMgr.getCurrentState().getMetadata().dropDb(dropDbStmt.getDbName(), dropDbStmt.isForceDrop());
         } catch (MetaNotFoundException e) {
             if (!dropDbStmt.isSetIfExists()) {
                 ErrorReport.reportDdlException(ErrorCode.ERR_DB_DROP_EXISTS, dbName);
@@ -182,17 +182,17 @@ public class StarRocksAssert {
         }
 
         CreateDbStmt createDbStmt =
-                    (CreateDbStmt) UtFrameUtils.parseStmtWithNewParser("create database `" + dbName + "`;", ctx);
-        GlobalStateMgr.getCurrentState().getLocalMetastore().createDb(createDbStmt.getFullDbName());
+                (CreateDbStmt) UtFrameUtils.parseStmtWithNewParser("create database `" + dbName + "`;", ctx);
+        GlobalStateMgr.getCurrentState().getMetadata().createDb(createDbStmt.getFullDbName());
         return this;
     }
 
     public StarRocksAssert createDatabaseIfNotExists(String dbName) throws Exception {
         try {
             CreateDbStmt createDbStmt =
-                        (CreateDbStmt) UtFrameUtils.parseStmtWithNewParser("create database if not exists `"
-                                    + dbName + "`;", ctx);
-            GlobalStateMgr.getCurrentState().getLocalMetastore().createDb(createDbStmt.getFullDbName());
+                    (CreateDbStmt) UtFrameUtils.parseStmtWithNewParser("create database if not exists `"
+                            + dbName + "`;", ctx);
+            GlobalStateMgr.getCurrentState().getMetadata().createDb(createDbStmt.getFullDbName());
         } catch (AlreadyExistsException e) {
             // ignore
         }
@@ -201,27 +201,27 @@ public class StarRocksAssert {
 
     public StarRocksAssert withRole(String roleName) throws Exception {
         CreateRoleStmt createRoleStmt =
-                    (CreateRoleStmt) UtFrameUtils.parseStmtWithNewParser("create role " + roleName + ";", ctx);
+                (CreateRoleStmt) UtFrameUtils.parseStmtWithNewParser("create role " + roleName + ";", ctx);
         GlobalStateMgr.getCurrentState().getAuthorizationMgr().createRole(createRoleStmt);
         return this;
     }
 
     public StarRocksAssert withUser(String user) throws Exception {
         CreateUserStmt createUserStmt =
-                    (CreateUserStmt) UtFrameUtils.parseStmtWithNewParser(
-                                "create user " + user + " identified by '';", ctx);
+                (CreateUserStmt) UtFrameUtils.parseStmtWithNewParser(
+                        "create user " + user + " identified by '';", ctx);
         GlobalStateMgr.getCurrentState().getAuthenticationMgr().createUser(createUserStmt);
         return this;
     }
 
     public StarRocksAssert withDatabaseWithoutAnalyze(String dbName) throws Exception {
         CreateDbStmt dbStmt = new CreateDbStmt(false, dbName);
-        GlobalStateMgr.getCurrentState().getLocalMetastore().createDb(dbStmt.getFullDbName());
+        GlobalStateMgr.getCurrentState().getMetadata().createDb(dbStmt.getFullDbName());
         return this;
     }
 
     public boolean databaseExist(String dbName) {
-        Database db = GlobalStateMgr.getCurrentState().getLocalMetastore().getDb("" + dbName);
+        Database db = GlobalStateMgr.getCurrentState().getDb("" + dbName);
         return db != null;
     }
 
@@ -293,27 +293,25 @@ public class StarRocksAssert {
         utCreateTableWithRetry(createTableStmt, connectContext);
     }
 
-    public static void utDropTableWithRetry(DropTableStmt dropTableStmt) throws Exception {
-        ConnectContext connectContext = UtFrameUtils.createDefaultCtx();
-        connectContext.setDatabase(dropTableStmt.getDbName());
-        utDropTableWithRetry(dropTableStmt, connectContext);
-    }
-
-    @FunctionalInterface
-    public interface RetryableOperation {
-        void execute(int retryTime) throws Exception;
-    }
-
-    // retry 3 times when operator table in ut to avoid
-    // table operation timeout caused by heavy load of testing machine
-    public static void executeWithRetry(RetryableOperation operation, String operationMsg, int maxRetryTime) throws Exception {
+    // retry 3 times when create table in ut to avoid
+    // table creation timeout caused by heavy load of testing machine
+    public static void utCreateTableWithRetry(CreateTableStmt createTableStmt, ConnectContext ctx) throws Exception {
         int retryTime = 0;
-        while (retryTime < maxRetryTime) {
+        final int MAX_RETRY_TIME = 3;
+
+        while (retryTime < MAX_RETRY_TIME) {
             try {
-                operation.execute(retryTime);
+                CreateTableStmt createTableStmtCopied = createTableStmt;
+                if (retryTime > 0) {
+                    // copy `createTableStmt` after the first retry, because the state of `createTableStmt`
+                    // may change and throw different error after retry
+                    createTableStmtCopied = (CreateTableStmt) UtFrameUtils.parseStmtWithNewParser(
+                            createTableStmt.getOrigStmt().originStmt, ctx);
+                }
+                GlobalStateMgr.getCurrentState().getLocalMetastore().createTable(createTableStmtCopied);
                 break;
             } catch (Exception e) {
-                if (retryTime == maxRetryTime - 1) {
+                if (retryTime == MAX_RETRY_TIME - 1) {
                     if (e.getCause() instanceof DdlException) {
                         throw new DdlException(e.getMessage());
                     } else if (e.getCause() instanceof SemanticException) {
@@ -325,33 +323,11 @@ public class StarRocksAssert {
                     }
                 }
                 retryTime++;
-                System.out.println(operationMsg + " failed with " + retryTime + " time retry, msg: " +
-                            e.getMessage() + ", " + Arrays.toString(e.getStackTrace()));
+                System.out.println("ut create table failed with " + retryTime + " time retry, msg: " +
+                        e.getMessage() + ", " + Arrays.toString(e.getStackTrace()));
                 Thread.sleep(500);
             }
         }
-    }
-
-    public static void utCreateTableWithRetry(CreateTableStmt createTableStmt, ConnectContext ctx) throws Exception {
-        executeWithRetry((retryTime) -> {
-            CreateTableStmt createTableStmtCopied = createTableStmt;
-            if (retryTime > 0) {
-                createTableStmtCopied = (CreateTableStmt) UtFrameUtils.parseStmtWithNewParser(
-                            createTableStmt.getOrigStmt().originStmt, ctx);
-            }
-            GlobalStateMgr.getCurrentState().getLocalMetastore().createTable(createTableStmtCopied);
-        }, "Create Table", 3);
-    }
-
-    public static void utDropTableWithRetry(DropTableStmt dropTableStmt, ConnectContext ctx) throws Exception {
-        executeWithRetry((retryTime) -> {
-            DropTableStmt dropTableStmtCopied = dropTableStmt;
-            if (retryTime > 0) {
-                dropTableStmtCopied = (DropTableStmt) UtFrameUtils.parseStmtWithNewParser(
-                            dropTableStmt.getOrigStmt().originStmt, ctx);
-            }
-            GlobalStateMgr.getCurrentState().getLocalMetastore().dropTable(dropTableStmtCopied);
-        }, "Drop Table", 3);
     }
 
     public StarRocksAssert withTable(String sql) throws Exception {
@@ -369,7 +345,7 @@ public class StarRocksAssert {
 
     public StarRocksAssert withTemporaryTable(String sql) throws Exception {
         CreateTemporaryTableStmt createTableStmt =
-                    (CreateTemporaryTableStmt) UtFrameUtils.parseStmtWithNewParser(sql, ctx);
+                (CreateTemporaryTableStmt) UtFrameUtils.parseStmtWithNewParser(sql, ctx);
         createTableStmt.setSessionId(ctx.getSessionId());
         utCreateTableWithRetry(createTableStmt, ctx);
         return this;
@@ -378,7 +354,7 @@ public class StarRocksAssert {
     public StarRocksAssert withTemporaryTableLike(String dstTable, String srcTable) throws Exception {
         String sql = "create temporary table " + dstTable + " like " + srcTable;
         CreateTemporaryTableLikeStmt createTemporaryTableLikeStmt =
-                    (CreateTemporaryTableLikeStmt) UtFrameUtils.parseStmtWithNewParser(sql, ctx);
+                (CreateTemporaryTableLikeStmt) UtFrameUtils.parseStmtWithNewParser(sql, ctx);
         createTemporaryTableLikeStmt.setSessionId(ctx.getSessionId());
         utCreateTableWithRetry(createTemporaryTableLikeStmt.getCreateTableStmt(), ctx);
         return this;
@@ -390,7 +366,7 @@ public class StarRocksAssert {
     }
 
     public StarRocksAssert withMTable(String mTable,
-                                      ExceptionRunnable action) {
+                                       ExceptionRunnable action) {
         return withMTableNames(null, ImmutableList.of(mTable), action);
     }
 
@@ -401,10 +377,9 @@ public class StarRocksAssert {
 
     /**
      * Create tables by using MTables and do insert datas and later actions.
-     *
      * @param cluster pseudo cluster
      * @param mTables mtables to be used for creating tables
-     * @param action  action after creating base tables
+     * @param action action after creating base tables
      * @return return this
      */
     public StarRocksAssert withMTables(PseudoCluster cluster,
@@ -421,7 +396,7 @@ public class StarRocksAssert {
                 String sql = mTable.getCreateTableSql();
                 System.out.println(sql);
                 CreateTableStmt createTableStmt =
-                            (CreateTableStmt) UtFrameUtils.parseStmtWithNewParser(sql, ctx);
+                        (CreateTableStmt) UtFrameUtils.parseStmtWithNewParser(sql, ctx);
                 utCreateTableWithRetry(createTableStmt, ctx);
                 names.add(Pair.create(dbName, mTable.getTableName()));
 
@@ -456,18 +431,17 @@ public class StarRocksAssert {
 
     /**
      * With input base table's create table sqls and actions.
-     *
-     * @param sqls   the base table's create table sqls
+     * @param sqls the base table's create table sqls
      * @param action action after creating base tables
      * @return return this
      */
     public StarRocksAssert withTables(List<String> sqls,
-                                      ExceptionRunnable action) {
+                                       ExceptionRunnable action) {
         Set<String> tables = Sets.newHashSet();
         try {
             for (String sql : sqls) {
                 CreateTableStmt createTableStmt =
-                            (CreateTableStmt) UtFrameUtils.parseStmtWithNewParser(sql, ctx);
+                        (CreateTableStmt) UtFrameUtils.parseStmtWithNewParser(sql, ctx);
                 utCreateTableWithRetry(createTableStmt, ctx);
                 tables.add(createTableStmt.getTableName());
             }
@@ -476,7 +450,7 @@ public class StarRocksAssert {
             }
         } catch (Exception e) {
             e.printStackTrace();
-            Assert.fail("Do action failed:" + e.getMessage());
+            Assert.fail("Do action failed:" +  e.getMessage());
         } finally {
             if (action != null) {
                 for (String table : tables) {
@@ -507,7 +481,7 @@ public class StarRocksAssert {
                 MTable mTable = MSchema.getTable(table);
                 String sql = mTable.getCreateTableSql();
                 CreateTableStmt createTableStmt =
-                            (CreateTableStmt) UtFrameUtils.parseStmtWithNewParser(sql, ctx);
+                        (CreateTableStmt) UtFrameUtils.parseStmtWithNewParser(sql, ctx);
                 utCreateTableWithRetry(createTableStmt, ctx);
 
                 if (cluster != null) {
@@ -571,16 +545,12 @@ public class StarRocksAssert {
     }
 
     public Table getTable(String dbName, String tableName) {
-        return ctx.getGlobalStateMgr().getLocalMetastore().mayGetDb(dbName)
-                    .map(db -> GlobalStateMgr.getCurrentState().getLocalMetastore().getTable(db.getFullName(), tableName))
-                    .orElse(null);
+        return ctx.getGlobalStateMgr().mayGetDb(dbName).map(db -> db.getTable(tableName)).orElse(null);
     }
 
     public MaterializedView getMv(String dbName, String tableName) {
-        return (MaterializedView) ctx.getGlobalStateMgr().getLocalMetastore()
-                    .mayGetDb(dbName)
-                    .map(db -> GlobalStateMgr.getCurrentState().getLocalMetastore().getTable(db.getFullName(), tableName))
-                    .orElse(null);
+        return (MaterializedView) ctx.getGlobalStateMgr().mayGetDb(dbName).map(db -> db.getTable(tableName))
+                .orElse(null);
     }
 
     public StarRocksAssert withSingleReplicaTable(String sql) throws Exception {
@@ -615,9 +585,9 @@ public class StarRocksAssert {
     }
 
     public void withAsyncMv(
-                CreateMaterializedViewStatement createMaterializedViewStatement,
-                boolean isOnlySingleReplica,
-                boolean isRefresh) throws Exception {
+            CreateMaterializedViewStatement createMaterializedViewStatement,
+            boolean isOnlySingleReplica,
+            boolean isRefresh) throws Exception {
         if (isOnlySingleReplica) {
             createMaterializedViewStatement.getProperties().put(PropertyAnalyzer.PROPERTIES_REPLICATION_NUM, "1");
         }
@@ -629,9 +599,8 @@ public class StarRocksAssert {
                     if (stmt instanceof InsertStmt) {
                         InsertStmt insertStmt = (InsertStmt) stmt;
                         TableName tableName = insertStmt.getTableName();
-                        Database testDb = GlobalStateMgr.getCurrentState().getLocalMetastore().getDb(stmt.getTableName().getDb());
-                        OlapTable tbl = ((OlapTable) GlobalStateMgr.getCurrentState().getLocalMetastore()
-                                    .getTable(testDb.getFullName(), tableName.getTbl()));
+                        Database testDb = GlobalStateMgr.getCurrentState().getDb(stmt.getTableName().getDb());
+                        OlapTable tbl = ((OlapTable) testDb.getTable(tableName.getTbl()));
                         for (Partition partition : tbl.getPartitions()) {
                             if (insertStmt.getTargetPartitionIds().contains(partition.getId())) {
                                 long version = partition.getVisibleVersion() + 1;
@@ -650,8 +619,8 @@ public class StarRocksAssert {
                 }
             };
             String refreshSql = String.format("refresh materialized view `%s`.`%s` with sync mode;",
-                        createMaterializedViewStatement.getTableName().getDb(),
-                        createMaterializedViewStatement.getTableName().getTbl());
+                    createMaterializedViewStatement.getTableName().getDb(),
+                    createMaterializedViewStatement.getTableName().getTbl());
             ctx.executeSql(refreshSql);
         }
     }
@@ -678,22 +647,22 @@ public class StarRocksAssert {
 
     public StarRocksAssert dropView(String viewName) throws Exception {
         DropTableStmt dropViewStmt =
-                    (DropTableStmt) UtFrameUtils.parseStmtWithNewParser("drop view " + viewName + ";", ctx);
+                (DropTableStmt) UtFrameUtils.parseStmtWithNewParser("drop view " + viewName + ";", ctx);
         GlobalStateMgr.getCurrentState().getLocalMetastore().dropTable(dropViewStmt);
         return this;
     }
 
     public StarRocksAssert dropCatalog(String catalogName) throws Exception {
         DropCatalogStmt dropCatalogStmt =
-                    (DropCatalogStmt) UtFrameUtils.parseStmtWithNewParser("drop catalog " + catalogName + ";", ctx);
+                (DropCatalogStmt) UtFrameUtils.parseStmtWithNewParser("drop catalog " + catalogName + ";", ctx);
         GlobalStateMgr.getCurrentState().getCatalogMgr().dropCatalog(dropCatalogStmt);
         return this;
     }
 
     public StarRocksAssert dropDatabase(String dbName) throws Exception {
         DropDbStmt dropDbStmt =
-                    (DropDbStmt) UtFrameUtils.parseStmtWithNewParser("drop database " + dbName + ";", ctx);
-        GlobalStateMgr.getCurrentState().getLocalMetastore().dropDb(dropDbStmt.getDbName(), dropDbStmt.isForceDrop());
+                (DropDbStmt) UtFrameUtils.parseStmtWithNewParser("drop database " + dbName + ";", ctx);
+        GlobalStateMgr.getCurrentState().getMetadata().dropDb(dropDbStmt.getDbName(), dropDbStmt.isForceDrop());
         return this;
     }
 
@@ -728,22 +697,22 @@ public class StarRocksAssert {
 
     public StarRocksAssert dropTable(String tableName) throws Exception {
         DropTableStmt dropTableStmt =
-                    (DropTableStmt) UtFrameUtils.parseStmtWithNewParser("drop table " + tableName + ";", ctx);
+                (DropTableStmt) UtFrameUtils.parseStmtWithNewParser("drop table " + tableName + ";", ctx);
         GlobalStateMgr.getCurrentState().getLocalMetastore().dropTable(dropTableStmt);
         return this;
     }
 
     public StarRocksAssert dropTemporaryTable(String tableName, boolean ifExists) throws Exception {
         DropTemporaryTableStmt dropTemporaryTableStmt = (DropTemporaryTableStmt)
-                    UtFrameUtils.parseStmtWithNewParser("drop temporary table " + (ifExists ? "if exists " : "")
-                                + tableName + ";", ctx);
+                UtFrameUtils.parseStmtWithNewParser("drop temporary table " + (ifExists ? "if exists " : "")
+                        + tableName + ";", ctx);
         GlobalStateMgr.getCurrentState().getMetadataMgr().dropTemporaryTable(dropTemporaryTableStmt);
         return this;
     }
 
     public StarRocksAssert dropMaterializedView(String materializedViewName) throws Exception {
         DropMaterializedViewStmt dropMaterializedViewStmt = (DropMaterializedViewStmt) UtFrameUtils.
-                    parseStmtWithNewParser("drop materialized view if exists " + materializedViewName + ";", ctx);
+                parseStmtWithNewParser("drop materialized view if exists " + materializedViewName + ";", ctx);
         GlobalStateMgr.getCurrentState().getLocalMetastore().dropMaterializedView(dropMaterializedViewStmt);
         return this;
     }
@@ -847,8 +816,8 @@ public class StarRocksAssert {
     }
 
     public void assertMVWithoutComplexExpression(String dbName, String tableName) {
-        Database db = GlobalStateMgr.getCurrentState().getLocalMetastore().getDb(dbName);
-        Table table = GlobalStateMgr.getCurrentState().getLocalMetastore().getTable(db.getFullName(), tableName);
+        Database db = GlobalStateMgr.getCurrentState().getDb(dbName);
+        Table table = db.getTable(tableName);
         if (!(table instanceof OlapTable)) {
             return;
         }
@@ -906,8 +875,8 @@ public class StarRocksAssert {
             RefreshMaterializedViewStatement refreshMaterializedViewStatement = (RefreshMaterializedViewStatement) stmt;
 
             TableName mvName = refreshMaterializedViewStatement.getMvName();
-            Database db = GlobalStateMgr.getCurrentState().getLocalMetastore().getDb(mvName.getDb());
-            Table table = GlobalStateMgr.getCurrentState().getLocalMetastore().getTable(db.getFullName(), mvName.getTbl());
+            Database db = GlobalStateMgr.getCurrentState().getDb(mvName.getDb());
+            Table table = db.getTable(mvName.getTbl());
             Assert.assertNotNull(table);
             Assert.assertTrue(table instanceof MaterializedView);
             MaterializedView mv = (MaterializedView) table;
@@ -929,7 +898,6 @@ public class StarRocksAssert {
 
     /**
      * Wait the input mv refresh task finished.
-     *
      * @param mvId: mv id
      * @return true if the mv refresh task finished, otherwise false.
      */
@@ -952,8 +920,7 @@ public class StarRocksAssert {
 
     /**
      * Refresh materialized view asynchronously.
-     *
-     * @param ctx    connnect context
+     * @param ctx connnect context
      * @param mvName mv's name
      */
     public StarRocksAssert refreshMV(ConnectContext ctx, String mvName) throws Exception {
@@ -961,8 +928,8 @@ public class StarRocksAssert {
         StatementBase stmt = UtFrameUtils.parseStmtWithNewParser(sql, ctx);
         RefreshMaterializedViewStatement refreshMaterializedViewStatement = (RefreshMaterializedViewStatement) stmt;
         TableName tableName = refreshMaterializedViewStatement.getMvName();
-        Database db = GlobalStateMgr.getCurrentState().getLocalMetastore().getDb(tableName.getDb());
-        Table table = GlobalStateMgr.getCurrentState().getLocalMetastore().getTable(db.getFullName(), tableName.getTbl());
+        Database db = GlobalStateMgr.getCurrentState().getDb(tableName.getDb());
+        Table table = db.getTable(tableName.getTbl());
         Assert.assertNotNull(table);
         Assert.assertTrue(table instanceof MaterializedView);
         ctx.executeSql(sql);
@@ -973,8 +940,8 @@ public class StarRocksAssert {
         StatementBase stmt = UtFrameUtils.parseStmtWithNewParser(sql, ctx);
         RefreshMaterializedViewStatement refreshMaterializedViewStatement = (RefreshMaterializedViewStatement) stmt;
         TableName mvName = refreshMaterializedViewStatement.getMvName();
-        Database db = GlobalStateMgr.getCurrentState().getLocalMetastore().getDb(mvName.getDb());
-        Table table = GlobalStateMgr.getCurrentState().getLocalMetastore().getTable(db.getFullName(), mvName.getTbl());
+        Database db = GlobalStateMgr.getCurrentState().getDb(mvName.getDb());
+        Table table = db.getTable(mvName.getTbl());
         Assert.assertNotNull(table);
         Assert.assertTrue(table instanceof MaterializedView);
         MaterializedView mv = (MaterializedView) table;
@@ -997,7 +964,7 @@ public class StarRocksAssert {
     }
 
     public void updateTablePartitionVersion(String dbName, String tableName, long version) {
-        OlapTable table = (OlapTable) GlobalStateMgr.getCurrentState().getLocalMetastore().getDb(dbName).getTable(tableName);
+        OlapTable table = (OlapTable) GlobalStateMgr.getCurrentState().getDb(dbName).getTable(tableName);
         for (PhysicalPartition partition : table.getPhysicalPartitions()) {
             partition.setVisibleVersion(version, System.currentTimeMillis());
             MaterializedIndex baseIndex = partition.getBaseIndex();
@@ -1058,8 +1025,8 @@ public class StarRocksAssert {
         ShowResultSet res = ShowExecutor.execute((ShowStmt) stmt, ctx);
         String header = res.getMetaData().getColumns().stream().map(Column::getName).collect(Collectors.joining("|"));
         String body = res.getResultRows().stream()
-                    .map(row -> String.join("|", row))
-                    .collect(Collectors.joining("\n"));
+                .map(row -> String.join("|", row))
+                .collect(Collectors.joining("\n"));
         return header + "\n" + body;
     }
 
@@ -1094,9 +1061,8 @@ public class StarRocksAssert {
             if (alterJobV2.getJobState().isFinalState()) {
                 continue;
             }
-            Database database = GlobalStateMgr.getCurrentState().getLocalMetastore().getDb(alterJobV2.getDbId());
-            Table table =
-                        GlobalStateMgr.getCurrentState().getLocalMetastore().getTable(database.getId(), alterJobV2.getTableId());
+            Database database = GlobalStateMgr.getCurrentState().getDb(alterJobV2.getDbId());
+            Table table = database.getTable(alterJobV2.getTableId());
             Preconditions.checkState(table instanceof OlapTable);
             OlapTable olapTable = (OlapTable) table;
             int retry = 0;
@@ -1187,7 +1153,7 @@ public class StarRocksAssert {
                 explainQuery();
             } catch (AnalysisException | StarRocksPlannerException analysisException) {
                 Assert.assertTrue(analysisException.getMessage(),
-                            Stream.of(keywords).allMatch(analysisException.getMessage()::contains));
+                        Stream.of(keywords).allMatch(analysisException.getMessage()::contains));
                 return;
             } catch (Exception ex) {
                 Assert.fail();

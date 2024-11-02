@@ -22,6 +22,7 @@
 #include "exprs/agg/aggregate.h"
 #include "exprs/agg/factory/aggregate_factory.hpp"
 #include "types/logical_type.h"
+#include "types/logical_type_infra.h"
 #include "udf/java/java_function_fwd.h"
 
 namespace starrocks {
@@ -67,7 +68,6 @@ public:
     void register_approx();
     void register_others();
     void register_retract_functions();
-    void register_hypothesis_testing();
 
     const std::vector<LogicalType>& aggregate_types() const {
         const static std::vector<LogicalType> kTypes{

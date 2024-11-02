@@ -117,6 +117,14 @@ public class MvRewriteStrategy {
             return true;
         }
 
+        private boolean isEnableCBOSingleTableRewrite() {
+            if (sessionVariable.isEnableMaterializedViewViewDeltaRewrite() &&
+                    optimizerContext.getCandidateMvs().stream().anyMatch(MaterializationContext::hasMultiTables)) {
+                return true;
+            }
+            return false;
+        }
+
         private boolean isEnableCBOMultiTableRewrite(OptExpression queryPlan) {
             if (!sessionVariable.isEnableMaterializedViewSingleTableViewDeltaRewrite() &&
                     MvUtils.getAllTables(queryPlan).size() <= 1) {

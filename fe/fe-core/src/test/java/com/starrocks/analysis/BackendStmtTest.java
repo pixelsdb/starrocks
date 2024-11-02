@@ -19,7 +19,6 @@ package com.starrocks.analysis;
 
 import com.google.common.collect.Lists;
 import com.starrocks.qe.ConnectContext;
-import com.starrocks.server.WarehouseManager;
 import com.starrocks.sql.analyzer.SemanticException;
 import com.starrocks.sql.ast.AddBackendClause;
 import com.starrocks.sql.ast.AlterSystemStmt;
@@ -43,28 +42,23 @@ public class BackendStmtTest {
         switch (type) {
             case 1:
                 // missing ip
-                stmt = new AddBackendClause(Lists.newArrayList(":12346"),
-                        WarehouseManager.DEFAULT_WAREHOUSE_NAME);
+                stmt = new AddBackendClause(Lists.newArrayList(":12346"));
                 break;
             case 2:
                 // invalid ip
-                stmt = new AddBackendClause(Lists.newArrayList("asdasd:12345"),
-                        WarehouseManager.DEFAULT_WAREHOUSE_NAME);
+                stmt = new AddBackendClause(Lists.newArrayList("asdasd:12345"));
                 break;
             case 3:
                 // invalid port
-                stmt = new AddBackendClause(Lists.newArrayList("10.1.2.3:123467"),
-                        WarehouseManager.DEFAULT_WAREHOUSE_NAME);
+                stmt = new AddBackendClause(Lists.newArrayList("10.1.2.3:123467"));
                 break;
             case 4:
                 // normal add
-                stmt = new AddBackendClause(Lists.newArrayList("192.168.1.1:12345"),
-                        WarehouseManager.DEFAULT_WAREHOUSE_NAME);
+                stmt = new AddBackendClause(Lists.newArrayList("192.168.1.1:12345"));
                 break;
             case 5:
                 // normal remove
-                stmt = new DropBackendClause(Lists.newArrayList("192.168.1.2:12345"), true,
-                        WarehouseManager.DEFAULT_WAREHOUSE_NAME);
+                stmt = new DropBackendClause(Lists.newArrayList("192.168.1.2:12345"));
                 break;
             default:
                 break;

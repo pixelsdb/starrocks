@@ -380,7 +380,7 @@ public class RoutineLoadJobTest {
     public void testUpdateWhileDbDeleted(@Mocked GlobalStateMgr globalStateMgr) throws UserException {
         new Expectations() {
             {
-                globalStateMgr.getLocalMetastore().getDb(anyLong);
+                globalStateMgr.getDb(anyLong);
                 minTimes = 0;
                 result = null;
             }
@@ -397,10 +397,10 @@ public class RoutineLoadJobTest {
                                             @Injectable Database database) throws UserException {
         new Expectations() {
             {
-                globalStateMgr.getLocalMetastore().getDb(anyLong);
+                globalStateMgr.getDb(anyLong);
                 minTimes = 0;
                 result = database;
-                GlobalStateMgr.getCurrentState().getLocalMetastore().getTable(database.getId(), anyLong);
+                database.getTable(anyLong);
                 minTimes = 0;
                 result = null;
             }
@@ -419,10 +419,10 @@ public class RoutineLoadJobTest {
 
         new Expectations() {
             {
-                globalStateMgr.getLocalMetastore().getDb(anyLong);
+                globalStateMgr.getDb(anyLong);
                 minTimes = 0;
                 result = database;
-                GlobalStateMgr.getCurrentState().getLocalMetastore().getTable(database.getId(), anyLong);
+                database.getTable(anyLong);
                 minTimes = 0;
                 result = table;
             }

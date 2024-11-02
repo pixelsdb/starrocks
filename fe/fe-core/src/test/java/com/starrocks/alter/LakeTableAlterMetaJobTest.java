@@ -73,23 +73,23 @@ public class LakeTableAlterMetaJobTest {
     public void setUp() throws Exception {
         String createDbStmtStr = "create database " + DB_NAME;
         CreateDbStmt createDbStmt = (CreateDbStmt) UtFrameUtils.parseStmtWithNewParser(createDbStmtStr, connectContext);
-        GlobalStateMgr.getCurrentState().getLocalMetastore().createDb(createDbStmt.getFullDbName());
+        GlobalStateMgr.getCurrentState().getMetadata().createDb(createDbStmt.getFullDbName());
         connectContext.setDatabase(DB_NAME);
         db = GlobalStateMgr.getCurrentState().getLocalMetastore().getDb(DB_NAME);
 
         table = createTable(connectContext,
-                    "CREATE TABLE t0(c0 INT) PRIMARY KEY(c0) DISTRIBUTED BY HASH(c0) BUCKETS 1 " +
-                                "PROPERTIES('enable_persistent_index'='false')");
+                "CREATE TABLE t0(c0 INT) PRIMARY KEY(c0) DISTRIBUTED BY HASH(c0) BUCKETS 1 " +
+                        "PROPERTIES('enable_persistent_index'='false')");
         Assert.assertFalse(table.enablePersistentIndex());
         job = new LakeTableAlterMetaJob(GlobalStateMgr.getCurrentState().getNextId(), db.getId(), table.getId(),
-                    table.getName(), 60 * 1000, TTabletMetaType.ENABLE_PERSISTENT_INDEX, true);
+                table.getName(), 60 * 1000, TTabletMetaType.ENABLE_PERSISTENT_INDEX, true);
     }
 
     @After
     public void tearDown() throws DdlException, MetaNotFoundException {
         db.dropTable(table.getName());
         try {
-            GlobalStateMgr.getCurrentState().getLocalMetastore().dropDb(DB_NAME, true);
+            GlobalStateMgr.getCurrentState().getMetadata().dropDb(DB_NAME, true);
         } catch (MetaNotFoundException ignored) {
         }
     }
@@ -97,9 +97,8 @@ public class LakeTableAlterMetaJobTest {
     private static LakeTable createTable(ConnectContext connectContext, String sql) throws Exception {
         CreateTableStmt createTableStmt = (CreateTableStmt) UtFrameUtils.parseStmtWithNewParser(sql, connectContext);
         GlobalStateMgr.getCurrentState().getLocalMetastore().createTable(createTableStmt);
-        Database db = GlobalStateMgr.getCurrentState().getLocalMetastore().getDb(createTableStmt.getDbName());
-        return (LakeTable) GlobalStateMgr.getCurrentState().getLocalMetastore()
-                    .getTable(db.getFullName(), createTableStmt.getTableName());
+        Database db = GlobalStateMgr.getCurrentState().getDb(createTableStmt.getDbName());
+        return (LakeTable) db.getTable(createTableStmt.getTableName());
     }
 
     @Test
@@ -122,7 +121,7 @@ public class LakeTableAlterMetaJobTest {
             @Mock
             public Warehouse getWarehouse(long warehouseId) {
                 return new DefaultWarehouse(WarehouseManager.DEFAULT_WAREHOUSE_ID,
-                            WarehouseManager.DEFAULT_WAREHOUSE_NAME);
+                        WarehouseManager.DEFAULT_WAREHOUSE_NAME);
             }
 
             @Mock
@@ -209,8 +208,8 @@ public class LakeTableAlterMetaJobTest {
         Assert.assertEquals(AlterJobV2.JobState.FINISHED, job.getJobState());
 
         LakeTableAlterMetaJob replayAlterMetaJob = new LakeTableAlterMetaJob(job.jobId,
-                    job.dbId, job.tableId, job.tableName,
-                    job.timeoutMs, TTabletMetaType.ENABLE_PERSISTENT_INDEX, true);
+                job.dbId, job.tableId, job.tableName,
+                job.timeoutMs, TTabletMetaType.ENABLE_PERSISTENT_INDEX, true);
 
         Table<Long, Long, MaterializedIndex> partitionIndexMap = job.getPartitionIndexMap();
         Map<Long, Long> commitVersionMap = job.getCommitVersionMap();
@@ -250,7 +249,7 @@ public class LakeTableAlterMetaJobTest {
         tabletSet.add(1L);
         MarkedCountDownLatch<Long, Set<Long>> latch = new MarkedCountDownLatch<>(1);
         TabletMetadataUpdateAgentTask task = TabletMetadataUpdateAgentTaskFactory.createEnablePersistentIndexUpdateTask(
-                    backend, tabletSet, true);
+                backend, tabletSet, true);
         task.setLatch(latch);
         task.setTxnId(txnId);
         TUpdateTabletMetaInfoReq result = task.toThrift();
@@ -265,6 +264,6 @@ public class LakeTableAlterMetaJobTest {
         ModifyTablePropertiesClause modify = new ModifyTablePropertiesClause(properties);
         SchemaChangeHandler schemaChangeHandler = new SchemaChangeHandler();
         Assertions.assertThrows(DdlException.class,
-                    () -> schemaChangeHandler.createAlterMetaJob(modify, db, table));
+                () -> schemaChangeHandler.createAlterMetaJob(modify, db, table));
     }
 }

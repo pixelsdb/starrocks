@@ -14,6 +14,9 @@
 
 #include "exprs/arithmetic_expr.h"
 
+#include <llvm/IR/IRBuilder.h>
+#include <llvm/IR/Value.h>
+
 #include <optional>
 
 #include "column/type_traits.h"
@@ -24,17 +27,11 @@
 #include "exprs/binary_function.h"
 #include "exprs/decimal_binary_function.h"
 #include "exprs/decimal_cast_expr.h"
+#include "exprs/jit/ir_helper.h"
 #include "exprs/overflow.h"
 #include "exprs/unary_function.h"
 #include "runtime/runtime_state.h"
 #include "types/logical_type.h"
-
-#ifdef STARROCKS_JIT_ENABLE
-#include <llvm/IR/IRBuilder.h>
-#include <llvm/IR/Value.h>
-
-#include "exprs/jit/ir_helper.h"
-#endif
 
 namespace starrocks {
 
@@ -127,7 +124,6 @@ public:
             return VectorizedStrictBinaryFunction<ArithmeticOp>::template evaluate<Type>(l, r);
         }
     }
-#ifdef STARROCKS_JIT_ENABLE
 
     bool is_compilable(RuntimeState* state) const override {
         return state->can_jit_expr(CompilableExprType::ARITHMETIC) && IRHelper::support_jit(Type);
@@ -152,7 +148,6 @@ public:
             return ArithmeticOp::template generate_ir<CppType>(context, jit_ctx->module, jit_ctx->builder, datums);
         }
     }
-#endif
 
     std::string debug_string() const override {
         std::stringstream out;
@@ -201,8 +196,6 @@ public:
         }
     }
 
-#ifdef STARROCKS_JIT_ENABLE
-
     bool is_compilable(RuntimeState* state) const override {
         return state->can_jit_expr(CompilableExprType::DIV) && Type != TYPE_LARGEINT && IRHelper::support_jit(Type);
     }
@@ -241,7 +234,6 @@ public:
             return ArithmeticOp::template generate_ir<CppType>(context, jit_ctx->module, jit_ctx->builder, datums);
         }
     }
-#endif
 
     std::string debug_string() const override {
         std::stringstream out;
@@ -298,7 +290,6 @@ public:
             return VectorizedMod::template evaluate<Type>(l, r);
         }
     }
-#ifdef STARROCKS_JIT_ENABLE
 
     bool is_compilable(RuntimeState* state) const override {
         return state->can_jit_expr(CompilableExprType::MOD) && Type != TYPE_LARGEINT && IRHelper::support_jit(Type);
@@ -338,7 +329,6 @@ public:
             return ArithmeticOp::template generate_ir<CppType>(context, jit_ctx->module, jit_ctx->builder, datums);
         }
     }
-#endif
 
     std::string debug_string() const override {
         std::stringstream out;
@@ -360,7 +350,6 @@ public:
         using ArithmeticBitNot = ArithmeticUnaryOperator<BitNotOp, Type>;
         return VectorizedStrictUnaryFunction<ArithmeticBitNot>::template evaluate<Type>(l);
     }
-#ifdef STARROCKS_JIT_ENABLE
 
     bool is_compilable(RuntimeState* state) const override {
         return state->can_jit_expr(CompilableExprType::ARITHMETIC) && IRHelper::support_jit(Type);
@@ -392,7 +381,6 @@ public:
         datum.value = ArithmeticBitNot::generate_ir(jit_ctx->builder, datum.value);
         return datum;
     }
-#endif
 
     std::string debug_string() const override {
         std::stringstream out;
@@ -415,8 +403,6 @@ public:
         using ArithmeticOp = ArithmeticBinaryOperator<OP, Type>;
         return VectorizedStrictBinaryFunction<ArithmeticOp>::template evaluate<Type, TYPE_BIGINT, Type>(l, r);
     }
-
-#ifdef STARROCKS_JIT_ENABLE
 
     bool is_compilable(RuntimeState* state) const override {
         return state->can_jit_expr(CompilableExprType::ARITHMETIC) && IRHelper::support_jit(Type);
@@ -453,7 +439,6 @@ public:
         return ArithmeticOp::template generate_ir<CppType, RunTimeCppType<TYPE_BIGINT>, CppType>(
                 context, jit_ctx->module, jit_ctx->builder, datums);
     }
-#endif
 
     std::string debug_string() const override {
         std::stringstream out;

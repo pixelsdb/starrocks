@@ -28,7 +28,6 @@ import com.starrocks.common.Pair;
 import com.starrocks.common.UserException;
 import com.starrocks.common.profile.Tracers;
 import com.starrocks.connector.exception.StarRocksConnectorException;
-import com.starrocks.connector.metadata.MetadataTableType;
 import com.starrocks.credential.CloudConfiguration;
 import com.starrocks.qe.ConnectContext;
 import com.starrocks.sql.ast.AddPartitionClause;
@@ -92,20 +91,20 @@ public interface ConnectorMetadata {
     /**
      * Return all partition names of the table.
      *
-     * @param databaseName      the name of the database
-     * @param tableName         the name of the table
-     * @param tableVersionRange table version range in the query
+     * @param databaseName the name of the database
+     * @param tableName the name of the table
+     * @param snapshotId table snapshot id, default value is -1
      * @return a list of partition names
      */
-    default List<String> listPartitionNames(String databaseName, String tableName, TableVersionRange tableVersionRange) {
+    default List<String> listPartitionNames(String databaseName, String tableName, long snapshotId) {
         return Lists.newArrayList();
     }
 
     /**
      * Return partial partition names of the table using partitionValues to filter.
      *
-     * @param databaseName    the name of the database
-     * @param tableName       the name of the table
+     * @param databaseName the name of the database
+     * @param tableName the name of the table
      * @param partitionValues the partition value to filter
      * @return a list of partition names
      */
@@ -117,18 +116,12 @@ public interface ConnectorMetadata {
     /**
      * Get Table descriptor for the table specific by `dbName`.`tblName`
      *
-     * @param dbName  - the string represents the database name
+     * @param dbName - the string represents the database name
      * @param tblName - the string represents the table name
      * @return a Table instance
      */
     default Table getTable(String dbName, String tblName) {
         return null;
-    }
-
-    default TableVersionRange getTableVersionRange(String dbName, Table table,
-                                                   Optional<ConnectorTableVersion> startVersion,
-                                                   Optional<ConnectorTableVersion> endVersion) {
-        return TableVersionRange.empty();
     }
 
     default boolean tableExists(String dbName, String tblName) {
@@ -138,7 +131,7 @@ public interface ConnectorMetadata {
     /**
      * Get Table descriptor and materialized index for the materialized view index specific by `dbName`.`tblName`
      *
-     * @param dbName  - the string represents the database name
+     * @param dbName - the string represents the database name
      * @param tblName - the string represents the table name
      * @return a Table instance
      */
@@ -150,39 +143,36 @@ public interface ConnectorMetadata {
      * It is mainly used to generate ScanRange for scheduling.
      * There are two ways of current connector table.
      * 1. Get the remote files information from hdfs or s3 according to table or partition.
-     * 2. Get file scan tasks for iceberg/deltalake metadata by query predicate.
-     * <p>
-     * There is an implicit contract here:
-     * the order of remote file information in the list, must be identical to order of partition keys in params.
+     * 2. Get file scan tasks for iceberg metadata by query predicate.
+     *
+     * @param table
+     * @param partitionKeys selected partition columns
+     * @param snapshotId selected snapshot id
+     * @param predicate used to filter metadata for iceberg, etc
+     * @param fieldNames all selected columns (including partition columns)
+     * @param limit scan limit nums if needed
      *
      * @return the remote file information of the query to scan.
      */
-    default List<RemoteFileInfo> getRemoteFiles(Table table, GetRemoteFilesParams params) {
-        return Lists.newArrayList();
-    }
-
-    default RemoteFileInfoSource getRemoteFilesAsync(Table table, GetRemoteFilesParams params) {
-        return RemoteFileInfoDefaultSource.EMPTY;
-    }
-
-    default List<PartitionInfo> getRemotePartitions(Table table, List<String> partitionNames) {
+    default List<RemoteFileInfo> getRemoteFileInfos(Table table, List<PartitionKey> partitionKeys,
+                                                    long snapshotId, ScalarOperator predicate,
+                                                    List<String> fieldNames, long limit) {
         return Lists.newArrayList();
     }
 
     /**
      * Get table meta serialized specification
-     *
      * @param dbName
      * @param tableName
      * @param snapshotId
      * @param serializedPredicate serialized predicate string of lake format expression
-     * @param metadataTableType   metadata table type
      * @return table meta serialized specification
      */
-    default SerializedMetaSpec getSerializedMetaSpec(String dbName, String tableName, long snapshotId,
-                                                     String serializedPredicate, MetadataTableType metadataTableType) {
+    default SerializedMetaSpec getSerializedMetaSpec(String dbName, String tableName,
+                                                     long snapshotId, String serializedPredicate) {
         return null;
     }
+
 
     default List<PartitionInfo> getPartitions(Table table, List<String> partitionNames) {
         return Lists.newArrayList();
@@ -191,13 +181,13 @@ public interface ConnectorMetadata {
     /**
      * Get statistics for the table.
      *
-     * @param session           optimizer context
+     * @param session optimizer context
      * @param table
-     * @param columns           selected columns
-     * @param partitionKeys     selected partition keys
-     * @param predicate         used to filter metadata for iceberg, etc
-     * @param limit             scan limit if needed, default value is -1
-     * @param tableVersionRange table version range in the query
+     * @param columns selected columns
+     * @param partitionKeys selected partition keys
+     * @param predicate used to filter metadata for iceberg, etc
+     * @param limit scan limit if needed, default value is -1
+     *
      * @return the table statistics for the table.
      */
     default Statistics getTableStatistics(OptimizerContext session,
@@ -205,8 +195,7 @@ public interface ConnectorMetadata {
                                           Map<ColumnRefOperator, Column> columns,
                                           List<PartitionKey> partitionKeys,
                                           ScalarOperator predicate,
-                                          long limit,
-                                          TableVersionRange tableVersionRange) {
+                                          long limit) {
         return Statistics.builder().build();
     }
 
@@ -214,8 +203,7 @@ public interface ConnectorMetadata {
         return true;
     }
 
-    default List<PartitionKey> getPrunedPartitions(Table table, ScalarOperator predicate,
-                                                   long limit, TableVersionRange version) {
+    default List<PartitionKey> getPrunedPartitions(Table table, ScalarOperator predicate, long limit) {
         throw new StarRocksConnectorException("This connector doesn't support pruning partitions");
     }
 
@@ -274,7 +262,7 @@ public interface ConnectorMetadata {
         throw new StarRocksConnectorException("This connector doesn't support dropping temporary tables");
     }
 
-    default void finishSink(String dbName, String table, List<TSinkCommitInfo> commitInfos, String branch) {
+    default void finishSink(String dbName, String table, List<TSinkCommitInfo> commitInfos) {
         throw new StarRocksConnectorException("This connector doesn't support sink");
     }
 
@@ -298,7 +286,7 @@ public interface ConnectorMetadata {
     }
 
     default void addPartitions(ConnectContext ctx, Database db, String tableName, AddPartitionClause addPartitionClause)
-            throws DdlException {
+            throws DdlException, AnalysisException {
     }
 
     default void dropPartition(Database db, Table table, DropPartitionClause clause) throws DdlException {

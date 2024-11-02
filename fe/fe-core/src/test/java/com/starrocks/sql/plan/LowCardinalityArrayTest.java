@@ -604,8 +604,8 @@ public class LowCardinalityArrayTest extends PlanTestBase {
     public void testArrayIfNullString() throws Exception {
         String sql = "select ifnull(a1[1], a2[1]), a1, a2 from s2 order by v1";
         String plan = getFragmentPlan(sql);
-        assertContains(plan, "ifnull(DictDecode(10: a1, [<place-holder>], 10: a1[1]), " +
-                "DictDecode(11: a2, [<place-holder>], 11: a2[1]))");
+        assertContains(plan, "ifnull(DictDecode(10: a1, [<place-holder>], 10: a1[1])," + 
+                " DictDecode(11: a2, [<place-holder>], 11: a2[1]))");
     }
 
     @Test

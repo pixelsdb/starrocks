@@ -15,7 +15,7 @@
 
 package com.starrocks.authentication;
 
-import com.starrocks.sql.ast.UserAuthOption;
+import com.starrocks.mysql.privilege.Password;
 import com.starrocks.sql.ast.UserIdentity;
 import org.junit.Assert;
 import org.junit.Test;
@@ -25,7 +25,8 @@ public class AuthenticationProviderFactoryTest {
     public void testNormal() throws Exception {
         AuthenticationProvider fakeProvider = new AuthenticationProvider() {
             @Override
-            public UserAuthenticationInfo analyzeAuthOption(UserIdentity userIdentity, UserAuthOption userAuthOption)
+            public UserAuthenticationInfo validAuthenticationInfo(UserIdentity userIdentity, String password,
+                                                                  String textForAuthPlugin)
                     throws AuthenticationException {
                 return null;
             }
@@ -34,6 +35,12 @@ public class AuthenticationProviderFactoryTest {
             public void authenticate(String user, String host, byte[] password, byte[] randomString,
                                      UserAuthenticationInfo authenticationInfo) throws AuthenticationException {
 
+            }
+
+            @Override
+            public UserAuthenticationInfo upgradedFromPassword(UserIdentity userIdentity, Password password)
+                    throws AuthenticationException {
+                return null;
             }
         };
         String fakeName = "fake";

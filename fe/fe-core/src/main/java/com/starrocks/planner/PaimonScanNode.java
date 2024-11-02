@@ -24,7 +24,7 @@ import com.starrocks.catalog.Column;
 import com.starrocks.catalog.PaimonTable;
 import com.starrocks.catalog.Type;
 import com.starrocks.connector.CatalogConnector;
-import com.starrocks.connector.GetRemoteFilesParams;
+import com.starrocks.connector.RemoteFileDesc;
 import com.starrocks.connector.RemoteFileInfo;
 import com.starrocks.connector.paimon.PaimonRemoteFileDesc;
 import com.starrocks.connector.paimon.PaimonSplitsInfo;
@@ -55,6 +55,7 @@ import org.apache.paimon.table.source.RawFile;
 import org.apache.paimon.table.source.Split;
 import org.apache.paimon.utils.InstantiationUtil;
 
+import javax.annotation.Nullable;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
@@ -62,7 +63,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
-import javax.annotation.Nullable;
 
 import static com.starrocks.thrift.TExplainLevel.VERBOSE;
 import static java.nio.charset.StandardCharsets.UTF_8;
@@ -126,10 +126,8 @@ public class PaimonScanNode extends ScanNode {
     public void setupScanRangeLocations(TupleDescriptor tupleDescriptor, ScalarOperator predicate) {
         List<String> fieldNames =
                 tupleDescriptor.getSlots().stream().map(s -> s.getColumn().getName()).collect(Collectors.toList());
-        GetRemoteFilesParams params =
-                GetRemoteFilesParams.newBuilder().setPredicate(predicate).setFieldNames(fieldNames).build();
-        List<RemoteFileInfo> fileInfos =
-                GlobalStateMgr.getCurrentState().getMetadataMgr().getRemoteFiles(paimonTable, params);
+        List<RemoteFileInfo> fileInfos = GlobalStateMgr.getCurrentState().getMetadataMgr().getRemoteFileInfos(
+                paimonTable.getCatalogName(), paimonTable, null, -1, predicate, fieldNames, -1);
         PaimonRemoteFileDesc remoteFileDesc = (PaimonRemoteFileDesc) fileInfos.get(0).getFiles().get(0);
         PaimonSplitsInfo splitsInfo = remoteFileDesc.getPaimonSplitsInfo();
         String predicateInfo = encodeObjectToString(splitsInfo.getPredicate());
@@ -351,6 +349,11 @@ public class PaimonScanNode extends ScanNode {
         }
 
         return output.toString();
+    }
+
+    @Override
+    public int getNumInstances() {
+        return scanRangeLocationsList.size();
     }
 
     @Override

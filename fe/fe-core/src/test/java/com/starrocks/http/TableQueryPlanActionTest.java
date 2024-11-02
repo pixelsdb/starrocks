@@ -40,8 +40,10 @@ import okhttp3.Request;
 import okhttp3.RequestBody;
 import okhttp3.Response;
 import org.apache.thrift.TDeserializer;
+import org.apache.thrift.TException;
 import org.json.JSONObject;
 import org.junit.Assert;
+import org.junit.Before;
 import org.junit.Test;
 
 import java.io.IOException;
@@ -54,12 +56,14 @@ public class TableQueryPlanActionTest extends StarRocksHttpTestCase {
     protected static String ES_TABLE_URL;
 
     @Override
-    protected void doSetUp() throws Exception {
+    @Before
+    public void setUp() {
+        super.setUp();
         ES_TABLE_URL = "http://localhost:" + HTTP_PORT + "/api/" + DB_NAME + "/es_table";
     }
 
     @Test
-    public void testQueryPlanAction() throws Exception {
+    public void testQueryPlanAction() throws IOException, TException {
         super.setUpWithCatalog();
         RequestBody body =
                 RequestBody.create(JSON, "{ \"sql\" :  \" select k1 as alias_1,k2 from " + DB_NAME + "." + TABLE_NAME + " \" }");
@@ -161,7 +165,7 @@ public class TableQueryPlanActionTest extends StarRocksHttpTestCase {
     }
 
     @Test
-    public void testQueryPlanActionPruneEmpty() throws Exception {
+    public void testQueryPlanActionPruneEmpty() throws IOException {
         super.setUpWithCatalog();
 
 

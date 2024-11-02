@@ -36,7 +36,6 @@ PROPERTIES (
 );
 -- !result
 
-
 -- name: test_invalid_bucket_size
 create table t0(k int) properties('bucket_size'='0');
 -- result:
@@ -58,7 +57,6 @@ E: (1064, 'Getting analyzing error. Detail message: Illegal bucket size: -1.')
 alter table t set('bucket_size'='2048');
 -- result:
 -- !result
-
 
 -- name: test_automatic_bucket
 create database kkk;
@@ -91,7 +89,6 @@ select count(*) from information_schema.be_tablets t1, information_schema.tables
 alter table t set('bucket_size'='1');
 -- result:
 -- !result
-
 
 -- name: test_range_partition @sequential
 create database ttt;
@@ -152,7 +149,6 @@ select * from t;
 2021-01-05	1
 -- !result
 
-
 -- name: test_list_partition @sequential
 create database ddd;
 -- result:
@@ -212,7 +208,6 @@ select * from t;
 2021-01-03	1
 -- !result
 
-
 -- name: test_expr_partition @sequential
 create database eee;
 -- result:
@@ -266,7 +261,6 @@ select * from t;
 2021-01-01	1
 2021-01-01	1
 -- !result
-
 
 -- name: test_schema_change @sequential
 create table t(k date, v int) DUPLICATE KEY(k) PARTITION BY DATE_TRUNC('DAY', `k`)
@@ -372,7 +366,6 @@ select * from t;
 2021-01-05	None	2
 -- !result
 
-
 -- name: test_mv @sequential
 create table t(k date, v int, v1 int) DUPLICATE KEY(k) PARTITION BY DATE_TRUNC('DAY', `k`)
 PROPERTIES (
@@ -455,7 +448,6 @@ select k, v1 from t;
 2021-01-03	2
 -- !result
 
-
 -- name: test_delete
 create table t(k int, v int)
 PROPERTIES (
@@ -494,7 +486,6 @@ select * from t;
 -- result:
 -- !result
 
-
 -- name: test_mutable_bucket @sequential
 create database ggg;
 -- result:
@@ -517,7 +508,7 @@ t	CREATE TABLE `t` (
   `v` int(11) NULL COMMENT ""
 ) ENGINE=OLAP 
 DUPLICATE KEY(`k`, `v`)
-PARTITION BY date_trunc('DAY', `k`)
+PARTITION BY date_trunc('DAY', k)
 DISTRIBUTED BY RANDOM
 PROPERTIES (
 "bucket_size" = "1",
@@ -549,7 +540,7 @@ t	CREATE TABLE `t` (
   `v` int(11) NULL COMMENT ""
 ) ENGINE=OLAP 
 DUPLICATE KEY(`k`, `v`)
-PARTITION BY date_trunc('DAY', `k`)
+PARTITION BY date_trunc('DAY', k)
 DISTRIBUTED BY RANDOM
 PROPERTIES (
 "bucket_size" = "1",
@@ -574,9 +565,9 @@ select * from t;
 -- !result
 alter table t set('mutable_bucket_num'='-1');
 -- result:
-E: (1064, 'Getting analyzing error. Detail message: Illegal mutable bucket num: -1.')
+E: (5064, 'Getting analyzing error. Detail message: Illegal mutable bucket num: -1.')
 -- !result
 alter table t set('mutable_bucket_num'='a');
 -- result:
-E: (1064, 'Getting analyzing error. Detail message: Mutable bucket num: For input string: "a".')
+E: (5064, 'Getting analyzing error. Detail message: Mutable bucket num: For input string: "a".')
 -- !result

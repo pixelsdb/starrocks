@@ -4,7 +4,7 @@ displayed_sidebar: docs
 
 # min_by
 
-
+## Description
 
 Returns the value of `x` associated with the minimum value of `y`.
 

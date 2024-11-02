@@ -31,13 +31,12 @@ import java.util.Map;
 public class HudiConnector implements Connector {
     public static final String HIVE_METASTORE_URIS = "hive.metastore.uris";
     public static final List<String> SUPPORTED_METASTORE_TYPE = Lists.newArrayList("hive", "glue", "dlf");
-    private final Map<String, String> properties;
     private final String catalogName;
     private final HudiConnectorInternalMgr internalMgr;
     private final HudiMetadataFactory metadataFactory;
 
     public HudiConnector(ConnectorContext context) {
-        this.properties = context.getProperties();
+        Map<String, String> properties = context.getProperties();
         CloudConfiguration cloudConfiguration = CloudConfigurationFactory.buildCloudConfigurationForStorage(properties);
         HdfsEnvironment hdfsEnvironment = new HdfsEnvironment(cloudConfiguration);
         this.catalogName = context.getCatalogName();
@@ -63,8 +62,7 @@ public class HudiConnector implements Connector {
                 internalMgr.getPullRemoteFileExecutor(),
                 internalMgr.isSearchRecursive(),
                 hdfsEnvironment,
-                internalMgr.getMetastoreType(),
-                properties
+                internalMgr.getMetastoreType()
         );
     }
 

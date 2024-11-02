@@ -33,8 +33,6 @@ class NullableColumn : public ColumnFactory<Column, NullableColumn> {
     friend class ColumnFactory<Column, NullableColumn>;
 
 public:
-    using ValueType = void;
-
     inline static ColumnPtr wrap_if_necessary(ColumnPtr column) {
         if (column->is_nullable()) {
             return column;
@@ -151,11 +149,11 @@ public:
 
     bool has_large_column() const override { return _data_column->has_large_column(); }
 
-    bool append_strings(const Slice* data, size_t size) override;
+    bool append_strings(const Buffer<Slice>& strs) override;
 
-    bool append_strings_overflow(const Slice* data, size_t size, size_t max_length) override;
+    bool append_strings_overflow(const Buffer<Slice>& strs, size_t max_length) override;
 
-    bool append_continuous_strings(const Slice* data, size_t size) override;
+    bool append_continuous_strings(const Buffer<Slice>& strs) override;
 
     bool append_continuous_fixed_length_strings(const char* data, size_t size, int fixed_length) override;
 
@@ -251,7 +249,7 @@ public:
         _has_null = true;
         return true;
     }
-    ColumnPtr replicate(const Buffer<uint32_t>& offsets) override;
+    ColumnPtr replicate(const std::vector<uint32_t>& offsets) override;
 
     size_t memory_usage() const override {
         return _data_column->memory_usage() + _null_column->memory_usage() + sizeof(bool);
@@ -314,9 +312,8 @@ public:
         return ss.str();
     }
 
-    Status capacity_limit_reached() const override {
-        RETURN_IF_ERROR(_data_column->capacity_limit_reached());
-        return _null_column->capacity_limit_reached();
+    bool capacity_limit_reached(std::string* msg = nullptr) const override {
+        return _data_column->capacity_limit_reached(msg) || _null_column->capacity_limit_reached(msg);
     }
 
     void check_or_die() const override;

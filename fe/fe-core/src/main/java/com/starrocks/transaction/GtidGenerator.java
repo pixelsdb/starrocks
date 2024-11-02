@@ -81,4 +81,3 @@ public class GtidGenerator {
         return System.currentTimeMillis();
     }
 }
-

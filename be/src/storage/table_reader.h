@@ -21,7 +21,6 @@
 #include "storage/chunk_iterator.h"
 #include "storage/column_predicate.h"
 #include "storage/tablet.h"
-#include "util/internal_service_recoverable_stub.h"
 
 namespace starrocks {
 
@@ -29,7 +28,7 @@ class OlapTablePartitionParam;
 class OlapTableLocationParam;
 class StarRocksNodesInfo;
 class LocalTabletReader;
-class PInternalService_RecoverableStub;
+class PInternalService_Stub;
 
 namespace serde {
 struct ProtobufChunkMeta;
@@ -121,9 +120,9 @@ private:
                                     const std::vector<std::string>& value_columns, std::vector<bool>& found,
                                     Chunk& values, SchemaPtr& value_schema);
 
-    Status _tablet_multi_get_rpc(const std::shared_ptr<PInternalService_RecoverableStub>& stub, int64_t tablet_id,
-                                 int64_t version, Chunk& keys, const std::vector<std::string>& value_columns,
-                                 std::vector<bool>& found, Chunk& values, SchemaPtr& value_schema);
+    Status _tablet_multi_get_rpc(PInternalService_Stub* stub, int64_t tablet_id, int64_t version, Chunk& keys,
+                                 const std::vector<std::string>& value_columns, std::vector<bool>& found, Chunk& values,
+                                 SchemaPtr& value_schema);
     // fields for local tablet reader
     std::unique_ptr<LocalTableReaderParams> _local_params;
     std::unique_ptr<LocalTabletReader> _local_tablet_reader;

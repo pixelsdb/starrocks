@@ -27,7 +27,6 @@ import com.starrocks.catalog.Table;
 import com.starrocks.common.AnalysisException;
 import com.starrocks.common.Pair;
 import com.starrocks.common.util.UnionFind;
-import com.starrocks.connector.TableVersionRange;
 import com.starrocks.server.GlobalStateMgr;
 import com.starrocks.sql.optimizer.MaterializationContext;
 import com.starrocks.sql.optimizer.OptExpression;
@@ -63,11 +62,9 @@ import com.starrocks.sql.optimizer.operator.scalar.CallOperator;
 import com.starrocks.sql.optimizer.operator.scalar.ColumnRefOperator;
 import com.starrocks.sql.optimizer.operator.scalar.ScalarOperator;
 import com.starrocks.sql.optimizer.rewrite.ReplaceColumnRefRewriter;
-import org.apache.iceberg.Snapshot;
 
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 
 // used in SPJG mv union rewrite
@@ -242,10 +239,6 @@ public class OptExpressionDuplicator {
                         return null;
                     }
                     scanBuilder.setTable(currentTable);
-                    TableVersionRange versionRange = TableVersionRange.withEnd(
-                            Optional.ofNullable(((IcebergTable) currentTable).getNativeTable().currentSnapshot())
-                                    .map(Snapshot::snapshotId));
-                    scanBuilder.setTableVersionRange(versionRange);
                 }
             }
 

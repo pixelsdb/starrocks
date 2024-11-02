@@ -4,7 +4,7 @@ displayed_sidebar: docs
 
 # month
 
-
+## 功能
 
 返回指定日期中的月份。
 

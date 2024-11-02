@@ -141,7 +141,7 @@ public:
     bool enable_resource_group() const { return _workgroup != nullptr; }
 
     // STREAM MV
-    Status reset_epoch();
+    [[nodiscard]] Status reset_epoch();
     void set_is_stream_pipeline(bool is_stream_pipeline) { _is_stream_pipeline = is_stream_pipeline; }
     bool is_stream_pipeline() const { return _is_stream_pipeline; }
     void count_down_epoch_pipeline(RuntimeState* state, size_t val = 1);
@@ -246,7 +246,7 @@ public:
     FragmentContext* get_or_register(const TUniqueId& fragment_id);
     FragmentContextPtr get(const TUniqueId& fragment_id);
 
-    Status register_ctx(const TUniqueId& fragment_id, FragmentContextPtr fragment_ctx);
+    [[nodiscard]] Status register_ctx(const TUniqueId& fragment_id, FragmentContextPtr fragment_ctx);
     void unregister(const TUniqueId& fragment_id);
 
     void cancel(const Status& status);

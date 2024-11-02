@@ -16,8 +16,8 @@ package com.starrocks.authentication;
 import com.google.common.base.Strings;
 import com.starrocks.mysql.MysqlPassword;
 import com.starrocks.mysql.privilege.AuthPlugin;
+import com.starrocks.mysql.privilege.Password;
 import com.starrocks.mysql.security.LdapSecurity;
-import com.starrocks.sql.ast.UserAuthOption;
 import com.starrocks.sql.ast.UserIdentity;
 
 import java.nio.charset.StandardCharsets;
@@ -27,13 +27,11 @@ public class LDAPAuthProviderForNative implements AuthenticationProvider {
     public static final String PLUGIN_NAME = AuthPlugin.AUTHENTICATION_LDAP_SIMPLE.name();
 
     @Override
-    public UserAuthenticationInfo analyzeAuthOption(UserIdentity userIdentity, UserAuthOption userAuthOption)
-            throws AuthenticationException {
+    public UserAuthenticationInfo validAuthenticationInfo(UserIdentity userIdentity,
+                                                          String password, String textForAuthPlugin) {
         UserAuthenticationInfo info = new UserAuthenticationInfo();
-        info.setAuthPlugin(PLUGIN_NAME);
         info.setPassword(MysqlPassword.EMPTY_PASSWORD);
-        info.setOrigUserHost(userIdentity.getUser(), userIdentity.getHost());
-        info.setTextForAuthPlugin(userAuthOption == null ? null : userAuthOption.getAuthString());
+        info.setTextForAuthPlugin(textForAuthPlugin);
         return info;
     }
 
@@ -55,5 +53,16 @@ public class LDAPAuthProviderForNative implements AuthenticationProvider {
                 throw new AuthenticationException("Failed to authenticate for [user: " + user + "] by ldap");
             }
         }
+    }
+
+    @Override
+    public UserAuthenticationInfo upgradedFromPassword(UserIdentity userIdentity, Password password)
+            throws AuthenticationException {
+        UserAuthenticationInfo ret = new UserAuthenticationInfo();
+        ret.setPassword(password.getPassword());
+        ret.setAuthPlugin(PLUGIN_NAME);
+        ret.setOrigUserHost(userIdentity.getUser(), userIdentity.getHost());
+        ret.setTextForAuthPlugin(password.getUserForAuthPlugin());
+        return ret;
     }
 }

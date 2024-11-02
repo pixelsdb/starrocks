@@ -35,6 +35,7 @@ public class MaterializedViewWithMultiStageTest extends MaterializedViewTest {
     @Test
     public void testViewDeltaJoinUKFK17() {
         // set join derive rewrite in view delta
+        setTracLogModule("Optimizer");
         String mv = "select emps.empid, emps.deptno, dependents.name from emps\n"
                 + "left outer join depts b on (emps.deptno=b.deptno)\n"
                 + "left outer join dependents using (empid)";

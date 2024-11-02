@@ -25,11 +25,9 @@ import static com.starrocks.catalog.system.SystemTable.NAME_CHAR_LEN;
 import static com.starrocks.catalog.system.SystemTable.builder;
 
 public class RoutineLoadJobsSystemTable {
-    public static final String NAME = "routine_load_jobs";
-
     public static SystemTable create() {
         return new SystemTable(SystemId.ROUTINE_LOAD_JOBS_ID,
-                NAME,
+                "routine_load_jobs",
                 Table.TableType.SCHEMA,
                 builder()
                         .column("ID", ScalarType.createType(PrimitiveType.BIGINT))

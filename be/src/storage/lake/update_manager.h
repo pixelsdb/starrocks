@@ -42,6 +42,18 @@ class UpdateManager;
 struct AutoIncrementPartialUpdateState;
 using IndexEntry = DynamicCache<uint64_t, LakePrimaryIndex>::Entry;
 
+class LakeDelvecLoader : public DelvecLoader {
+public:
+    LakeDelvecLoader(UpdateManager* update_mgr, const MetaFileBuilder* pk_builder, bool fill_cache)
+            : _update_mgr(update_mgr), _pk_builder(pk_builder), _fill_cache(fill_cache) {}
+    Status load(const TabletSegmentId& tsid, int64_t version, DelVectorPtr* pdelvec);
+
+private:
+    UpdateManager* _update_mgr = nullptr;
+    const MetaFileBuilder* _pk_builder = nullptr;
+    bool _fill_cache = false;
+};
+
 class PersistentIndexBlockCache {
 public:
     explicit PersistentIndexBlockCache(MemTracker* mem_tracker, int64_t cache_limit);
@@ -78,7 +90,7 @@ private:
 
 class UpdateManager {
 public:
-    UpdateManager(std::shared_ptr<LocationProvider> location_provider, MemTracker* mem_tracker);
+    UpdateManager(LocationProvider* location_provider, MemTracker* mem_tracker);
     ~UpdateManager();
     void set_tablet_mgr(TabletManager* tablet_mgr) { _tablet_mgr = tablet_mgr; }
     void set_cache_expire_ms(int64_t expire_ms) { _cache_expire_ms = expire_ms; }
@@ -239,7 +251,7 @@ private:
     // compaction cache
     DynamicCache<string, CompactionState> _compaction_cache;
     std::atomic<int64_t> _last_clear_expired_cache_millis = 0;
-    std::shared_ptr<LocationProvider> _location_provider;
+    LocationProvider* _location_provider = nullptr;
     TabletManager* _tablet_mgr = nullptr;
 
     // memory checkers

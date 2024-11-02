@@ -191,6 +191,5 @@ FailPointRegisterer::FailPointRegisterer(FailPoint* fp) {
 }
 
 DEFINE_FAIL_POINT(random_error);
-DEFINE_FAIL_POINT(output_stream_io_error);
 
 } // namespace starrocks::failpoint

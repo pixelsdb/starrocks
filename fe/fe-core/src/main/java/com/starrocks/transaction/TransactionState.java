@@ -245,8 +245,6 @@ public class TransactionState implements Writable {
     private long finishTime;
     @SerializedName("rs")
     private String reason = "";
-    @SerializedName("gtid")
-    private long globalTransactionId;
 
     // whether this txn is finished using new mechanism
     // this field needs to be persisted, so we shared the serialization field with `reason`.
@@ -259,10 +257,6 @@ public class TransactionState implements Writable {
     // error replica ids
     @SerializedName("er")
     private Set<Long> errorReplicas;
-
-    @SerializedName("ctl")
-    private boolean useCombinedTxnLog;
-
     private final CountDownLatch latch;
 
     // these states need not be serialized
@@ -402,10 +396,6 @@ public class TransactionState implements Writable {
         this.traceParent = TraceManager.toTraceParent(txnSpan.getSpanContext());
     }
 
-    public void setCallbackId(long callbackId) {
-        this.callbackId = callbackId;
-    }
-
     public void setErrorReplicas(Set<Long> newErrorReplicas) {
         this.errorReplicas = newErrorReplicas;
     }
@@ -480,10 +470,6 @@ public class TransactionState implements Writable {
 
     public long getTransactionId() {
         return transactionId;
-    }
-
-    public long getGlobalTransactionId() {
-        return globalTransactionId;
     }
 
     public String getLabel() {
@@ -657,10 +643,6 @@ public class TransactionState implements Writable {
         return this.latch.await(timeout, unit);
     }
 
-    public void setGlobalTransactionId(long globalTransactionId) {
-        this.globalTransactionId = globalTransactionId;
-    }
-
     public void setPrepareTime(long prepareTime) {
         this.prepareTime = prepareTime;
     }
@@ -809,25 +791,6 @@ public class TransactionState implements Writable {
         return sb.toString();
     }
 
-    public String getBrief() {
-        StringBuilder sb = new StringBuilder("TransactionState. ");
-        sb.append("txn_id: ").append(transactionId);
-        sb.append(", db id: ").append(dbId);
-        sb.append(", table id list: ").append(StringUtils.join(tableIdList, ","));
-        sb.append(", error replicas num: ").append(errorReplicas.size());
-        sb.append(", replica ids: ").append(Joiner.on(",").join(errorReplicas.stream().limit(5).toArray()));
-        if (commitTime > prepareTime) {
-            sb.append(", write cost: ").append(commitTime - prepareTime).append("ms");
-        }
-        if (finishTime > commitTime && commitTime > 0) {
-            sb.append(", publish total cost: ").append(finishTime - commitTime).append("ms");
-        }
-        if (finishTime > prepareTime) {
-            sb.append(", total cost: ").append(finishTime - prepareTime).append("ms");
-        }
-        return sb.toString();
-    }
-
     public LoadJobSourceType getSourceType() {
         return sourceType;
     }
@@ -906,7 +869,6 @@ public class TransactionState implements Writable {
         for (long backendId : publishBackends) {
             PublishVersionTask task = new PublishVersionTask(backendId,
                     this.getTransactionId(),
-                    this.getGlobalTransactionId(),
                     this.getDbId(),
                     commitTime,
                     partitionVersions,
@@ -937,7 +899,7 @@ public class TransactionState implements Writable {
 
     public boolean checkCanFinish() {
         // finishChecker may require refresh if table/partition is dropped, or index is changed caused by Alter job
-        Database db = GlobalStateMgr.getCurrentState().getLocalMetastore().getDb(dbId);
+        Database db = GlobalStateMgr.getCurrentState().getDb(dbId);
         if (db == null) {
             // consider txn finished if db is dropped
             return true;
@@ -1017,14 +979,6 @@ public class TransactionState implements Writable {
 
     public void setWriteDurationMs(long writeDurationMs) {
         this.writeDurationMs = writeDurationMs;
-    }
-
-    public void setUseCombinedTxnLog(boolean useCombinedTxnLog) {
-        this.useCombinedTxnLog = useCombinedTxnLog;
-    }
-
-    public boolean isUseCombinedTxnLog() {
-        return useCombinedTxnLog;
     }
 
     public ConcurrentMap<String, TOlapTablePartition> getPartitionNameToTPartition() {

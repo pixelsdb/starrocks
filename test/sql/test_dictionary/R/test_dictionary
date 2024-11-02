@@ -617,7 +617,7 @@ DROP DICTIONARY test_dictionary_definition_7;
 DROP TABLE t_dictionary_definition;
 -- result:
 -- !result
--- name: test_dictionary_error @slow
+-- name: test_dictionary_error
 CREATE TABLE `t_dictionary_error` (
   `id1` BIGINT NOT NULL COMMENT "",
   `id2` BIGINT NOT NULL COMMENT "",
@@ -1154,7 +1154,7 @@ function: wait_refresh_dictionary_finish("test_dictionary_common_expression", "F
 -- result:
 None
 -- !result
-[UC]explain select dictionary_get("test_dictionary_common_expression", id1)[1],dictionary_get("test_dictionary_common_expression", id1)[2],dictionary_get("test_dictionary_common_expression", id1)[3] FROM t_dictionary_common_expression;
+explain SELECT dictionary_get("test_dictionary_common_expression", id1)[1],dictionary_get("test_dictionary_common_expression", id1)[2],dictionary_get("test_dictionary_common_expression", id1)[3] FROM t_dictionary_common_expression;
 -- result:
 [REGEX]*common*
 -- !result

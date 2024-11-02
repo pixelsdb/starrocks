@@ -65,10 +65,10 @@ public class RenameMaterializedViewLogTest {
         in.close();
         new Expectations() {
             {
-                globalStateMgr.getLocalMetastore().getDb(anyLong);
+                globalStateMgr.getDb(anyLong);
                 result = db;
 
-                GlobalStateMgr.getCurrentState().getLocalMetastore().getTable(db.getId(), anyLong);
+                db.getTable(anyLong);
                 result = table;
             }
         };

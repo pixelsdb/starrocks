@@ -27,12 +27,9 @@ import com.starrocks.sql.optimizer.operator.OperatorType;
 import com.starrocks.sql.optimizer.operator.OperatorVisitor;
 import com.starrocks.sql.optimizer.operator.scalar.ColumnRefOperator;
 import com.starrocks.sql.optimizer.operator.scalar.ScalarOperator;
-import com.starrocks.sql.optimizer.property.DomainProperty;
-import org.apache.commons.collections4.CollectionUtils;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
 
 public class LogicalTableFunctionOperator extends LogicalOperator {
@@ -113,16 +110,6 @@ public class LogicalTableFunctionOperator extends LogicalOperator {
         }
         return new RowOutputInfo(outputInfoList, fnResultColRefs);
     }
-
-    @Override
-    public DomainProperty deriveDomainProperty(List<OptExpression> inputs) {
-        if (CollectionUtils.isEmpty(inputs)) {
-            return new DomainProperty(Map.of());
-        }
-        return inputs.get(0).getDomainProperty();
-    }
-
-
 
     @Override
     public <R, C> R accept(OperatorVisitor<R, C> visitor, C context) {

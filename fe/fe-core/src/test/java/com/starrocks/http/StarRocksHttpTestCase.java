@@ -116,19 +116,17 @@ public abstract class StarRocksHttpTestCase {
     public static final String DB_NAME = "testDb";
     public static final String TABLE_NAME = "testTbl";
 
-    protected static final String ES_TABLE_NAME = "es_table";
-
     protected static long testBackendId1 = 1000;
     protected static long testBackendId2 = 1001;
     protected static long testBackendId3 = 1002;
 
-    protected static long testReplicaId1 = 2000;
-    protected static long testReplicaId2 = 2001;
-    protected static long testReplicaId3 = 2002;
+    private static long testReplicaId1 = 2000;
+    private static long testReplicaId2 = 2001;
+    private static long testReplicaId3 = 2002;
 
     protected static long testDbId = 100L;
     protected static long testTableId = 200L;
-    protected static long testPartitionId = 201L;
+    private static long testPartitionId = 201L;
     public static long testIndexId = testTableId; // the base indexid == tableid
     protected static long tabletId = 400L;
 
@@ -139,6 +137,7 @@ public abstract class StarRocksHttpTestCase {
 
     protected static String URI;
     protected static String BASE_URL;
+
     protected static final String AUTH_KEY = "Authorization";
     protected String rootAuth = Credentials.basic("root", "");
 
@@ -278,7 +277,7 @@ public abstract class StarRocksHttpTestCase {
         db.registerTableUnlocked(table);
         OlapTable table1 = newTable(TABLE_NAME + 1);
         db.registerTableUnlocked(table1);
-        EsTable esTable = newEsTable(ES_TABLE_NAME);
+        EsTable esTable = newEsTable("es_table");
         db.registerTableUnlocked(esTable);
         OlapTable newEmptyTable = newEmptyTable("test_empty_table");
         db.registerTableUnlocked(newEmptyTable);
@@ -288,15 +287,23 @@ public abstract class StarRocksHttpTestCase {
 
         new Expectations(globalStateMgr) {
             {
+                globalStateMgr.getDb(db.getId());
+                minTimes = 0;
+                result = db;
+
+                globalStateMgr.getDb(DB_NAME);
+                minTimes = 0;
+                result = db;
+
                 globalStateMgr.isLeader();
                 minTimes = 0;
                 result = true;
 
-                globalStateMgr.getLocalMetastore().getDb("emptyDb");
+                globalStateMgr.getDb("emptyDb");
                 minTimes = 0;
                 result = null;
 
-                globalStateMgr.getLocalMetastore().getDb(anyString);
+                globalStateMgr.getDb(anyString);
                 minTimes = 0;
                 result = new Database();
 
@@ -316,13 +323,13 @@ public abstract class StarRocksHttpTestCase {
 
         new Expectations(localMetastore) {
             {
-                localMetastore.getDb("testDb");
+                localMetastore.listDbNames();
                 minTimes = 0;
-                result = db;
+                result = Lists.newArrayList("testDb");
 
-                localMetastore.getDb(testDbId);
+                localMetastore.getFullNameToDb();
                 minTimes = 0;
-                result = db;
+                result = nameToDb;
             }
         };
 
@@ -338,7 +345,7 @@ public abstract class StarRocksHttpTestCase {
         db.registerTableUnlocked(table);
         OlapTable table1 = newTable(TABLE_NAME + 1);
         db.registerTableUnlocked(table1);
-        EsTable esTable = newEsTable(ES_TABLE_NAME);
+        EsTable esTable = newEsTable("es_table");
         db.registerTableUnlocked(esTable);
         OlapTable newEmptyTable = newEmptyTable("test_empty_table");
         db.registerTableUnlocked(newEmptyTable);
@@ -348,9 +355,25 @@ public abstract class StarRocksHttpTestCase {
 
         new Expectations(globalStateMgr) {
             {
+                globalStateMgr.getDb(db.getId());
+                minTimes = 0;
+                result = db;
+
+                globalStateMgr.getDb(DB_NAME);
+                minTimes = 0;
+                result = db;
+
                 globalStateMgr.isLeader();
                 minTimes = 0;
                 result = true;
+
+                globalStateMgr.getDb("emptyDb");
+                minTimes = 0;
+                result = null;
+
+                globalStateMgr.getDb(anyString);
+                minTimes = 0;
+                result = new Database();
 
                 globalStateMgr.getLoadInstance();
                 minTimes = 0;
@@ -363,10 +386,6 @@ public abstract class StarRocksHttpTestCase {
                 globalStateMgr.getMetadataMgr();
                 minTimes = 0;
                 result = metadataMgr;
-
-                globalStateMgr.getLocalMetastore();
-                minTimes = 0;
-                result = localMetastore;
             }
         };
 
@@ -385,18 +404,7 @@ public abstract class StarRocksHttpTestCase {
                 result = newEmptyTable;
             }
         };
-
-        new Expectations(localMetastore) {
-            {
-                localMetastore.getDb("testDb");
-                minTimes = 0;
-                result = db;
-
-                localMetastore.getDb(testDbId);
-                minTimes = 0;
-                result = db;
-            }
-        };
+        ;
 
         return globalStateMgr;
     }
@@ -443,12 +451,12 @@ public abstract class StarRocksHttpTestCase {
     }
 
     @Before
-    public void setUp() throws Exception {
+    public void setUp() {
         GlobalStateMgr globalStateMgr = newDelegateCatalog();
         setUpWithGlobalStateMgr(globalStateMgr);
     }
 
-    public void setUpWithCatalog() throws Exception {
+    public void setUpWithCatalog() {
         GlobalStateMgr globalStateMgr = newDelegateGlobalStateMgr();
         setUpWithGlobalStateMgr(globalStateMgr);
 
@@ -481,7 +489,7 @@ public abstract class StarRocksHttpTestCase {
         };
     }
 
-    private void setUpWithGlobalStateMgr(GlobalStateMgr globalStateMgr) throws Exception {
+    protected void setUpWithGlobalStateMgr(GlobalStateMgr globalStateMgr) {
         SystemInfoService systemInfoService = new SystemInfoService();
         TabletInvertedIndex tabletInvertedIndex = new TabletInvertedIndex();
         NodeMgr nodeMgr = new NodeMgr();
@@ -547,7 +555,7 @@ public abstract class StarRocksHttpTestCase {
         httpServer.shutDown();
     }
 
-    protected void doSetUp() throws Exception {
+    protected void doSetUp() {
 
     }
 

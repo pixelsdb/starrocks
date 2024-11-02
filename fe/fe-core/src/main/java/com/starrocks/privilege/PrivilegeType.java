@@ -77,11 +77,6 @@ public class PrivilegeType {
     public static final PrivilegeType CREATE_STORAGE_VOLUME = new PrivilegeType(27, "CREATE STORAGE VOLUME");
     public static final PrivilegeType CREATE_PIPE = new PrivilegeType(28, "CREATE PIPE");
 
-    /**
-     * NOTICE: PrivilegeType cannot use a value exceeding 20000, please follow the above sequence number
-     */
-    public static final PrivilegeType CREATE_WAREHOUSE = new PrivilegeType(20004, "CREATE WAREHOUSE");
-
     public static final Set<PrivilegeType> VALID_PRIVILEGE_TYPE = new ImmutableSet.Builder<PrivilegeType>().add(
             GRANT,
             NODE,
@@ -110,8 +105,7 @@ public class PrivilegeType {
             CREATE_RESOURCE_GROUP,
             CREATE_EXTERNAL_CATALOG,
             CREATE_STORAGE_VOLUME,
-            CREATE_PIPE,
-            CREATE_WAREHOUSE
+            CREATE_PIPE
     ).build();
 
     public static final Map<String, PrivilegeType> NAME_TO_PRIVILEGE = VALID_PRIVILEGE_TYPE.stream().collect(Collectors.toMap(

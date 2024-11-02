@@ -46,7 +46,6 @@ public:
                                                           workgroup::WorkGroupType::WG_DEFAULT);
         dummy_wg->init();
         dummy_wg->set_shared_executors(ExecEnv::GetInstance()->workgroup_manager()->shared_executors());
-
         dummy_dir_mgr = std::make_unique<spill::DirManager>();
         ASSERT_OK(dummy_dir_mgr->init(path));
 

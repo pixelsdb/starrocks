@@ -27,10 +27,9 @@ import com.starrocks.catalog.TabletInvertedIndex;
 import com.starrocks.catalog.TabletMeta;
 import com.starrocks.common.Config;
 import com.starrocks.lake.CommitRateLimiter;
-import com.starrocks.lake.TxnInfoHelper;
 import com.starrocks.lake.compaction.CompactionMgr;
 import com.starrocks.proto.AbortTxnRequest;
-import com.starrocks.proto.TxnInfoPB;
+import com.starrocks.proto.TxnTypePB;
 import com.starrocks.rpc.BrpcProxy;
 import com.starrocks.server.GlobalStateMgr;
 import com.starrocks.system.ComputeNode;
@@ -211,20 +210,23 @@ public class LakeTableTxnStateListener implements TransactionStateListener {
     }
 
     private void abortTxnSkipCleanup(TransactionState txnState) {
-        List<TxnInfoPB> txnInfos = Collections.singletonList(TxnInfoHelper.fromTransactionState(txnState));
+        List<Long> txnIds = Collections.singletonList(txnState.getTransactionId());
+        List<TxnTypePB> txnTypes = Collections.singletonList(txnState.getTransactionType().toProto());
         List<ComputeNode> nodes = getAllAliveNodes();
         for (ComputeNode node : nodes) { // Send abortTxn() request to all nodes
             AbortTxnRequest request = new AbortTxnRequest();
+            request.txnIds = txnIds;
+            request.txnTypes = txnTypes;
             request.skipCleanup = true;
             request.tabletIds = null; // unused when skipCleanup is true
-            request.txnInfos = txnInfos;
 
             sendAbortTxnRequestIgnoreResponse(request, node);
         }
     }
 
     private void abortTxnWithCleanup(TransactionState txnState) {
-        List<TxnInfoPB> txnInfos = Collections.singletonList(TxnInfoHelper.fromTransactionState(txnState));
+        List<Long> txnIds = Collections.singletonList(txnState.getTransactionId());
+        List<TxnTypePB> txnTypes = Collections.singletonList(txnState.getTransactionType().toProto());
         Map<Long, List<Long>> tabletGroup = new HashMap<>();
         for (TabletCommitInfo info : txnState.getTabletCommitInfos()) {
             tabletGroup.computeIfAbsent(info.getBackendId(), k -> Lists.newArrayList()).add(info.getTabletId());
@@ -239,7 +241,8 @@ public class LakeTableTxnStateListener implements TransactionStateListener {
                 continue;
             }
             AbortTxnRequest request = new AbortTxnRequest();
-            request.txnInfos = txnInfos;
+            request.txnIds = txnIds;
+            request.txnTypes = txnTypes;
             request.tabletIds = entry.getValue();
             request.skipCleanup = false;
 
@@ -249,7 +252,8 @@ public class LakeTableTxnStateListener implements TransactionStateListener {
         // Send abortTxn() request to rest nodes
         for (ComputeNode node : allNodes.values()) {
             AbortTxnRequest request = new AbortTxnRequest();
-            request.txnInfos = txnInfos;
+            request.txnIds = txnIds;
+            request.txnTypes = txnTypes;
             request.skipCleanup = true;
             request.tabletIds = null; // unused when skipCleanup is true
 

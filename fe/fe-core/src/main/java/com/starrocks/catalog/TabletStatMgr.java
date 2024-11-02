@@ -39,7 +39,6 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.starrocks.catalog.MaterializedIndex.IndexExtState;
 import com.starrocks.common.Config;
-import com.starrocks.common.Pair;
 import com.starrocks.common.util.FrontendDaemon;
 import com.starrocks.common.util.concurrent.lock.LockType;
 import com.starrocks.common.util.concurrent.lock.Locker;
@@ -104,20 +103,20 @@ public class TabletStatMgr extends FrontendDaemon {
         long start = System.currentTimeMillis();
         List<Long> dbIds = GlobalStateMgr.getCurrentState().getLocalMetastore().getDbIds();
         for (Long dbId : dbIds) {
-            Database db = GlobalStateMgr.getCurrentState().getLocalMetastore().getDb(dbId);
+            Database db = GlobalStateMgr.getCurrentState().getDb(dbId);
             if (db == null) {
                 continue;
             }
             Locker locker = new Locker();
-            for (Table table : GlobalStateMgr.getCurrentState().getLocalMetastore().getTables(db.getId())) {
+            for (Table table : db.getTables()) {
                 long totalRowCount = 0L;
                 if (!table.isNativeTableOrMaterializedView()) {
                     continue;
                 }
 
                 // NOTE: calculate the row first with read lock, then update the stats with write lock
-                locker.lockTableWithIntensiveDbLock(db.getId(), table.getId(), LockType.READ);
-                Map<Pair<Long, Long>, Long> indexRowCountMap = Maps.newHashMap();
+                locker.lockTableWithIntensiveDbLock(db, table.getId(), LockType.READ);
+                Map<Long, Long> indexRowCountMap = Maps.newHashMap();
                 try {
                     OlapTable olapTable = (OlapTable) table;
                     for (Partition partition : olapTable.getAllPartitions()) {
@@ -130,8 +129,7 @@ public class TabletStatMgr extends FrontendDaemon {
                                 for (Tablet tablet : index.getTablets()) {
                                     indexRowCount += tablet.getRowCount(version);
                                 } // end for tablets
-                                indexRowCountMap.put(Pair.create(physicalPartition.getId(), index.getId()),
-                                        indexRowCount);
+                                indexRowCountMap.put(index.getId(), indexRowCount);
                                 if (!olapTable.isTempPartition(partition.getId())) {
                                     totalRowCount += indexRowCount;
                                 }
@@ -141,19 +139,18 @@ public class TabletStatMgr extends FrontendDaemon {
                     LOG.debug("finished to set row num for table: {} in database: {}",
                             table.getName(), db.getFullName());
                 } finally {
-                    locker.unLockTableWithIntensiveDbLock(db.getId(), table.getId(), LockType.READ);
+                    locker.unLockTableWithIntensiveDbLock(db, table, LockType.READ);
                 }
 
                 // update
-                locker.lockTableWithIntensiveDbLock(db.getId(), table.getId(), LockType.WRITE);
+                locker.lockTableWithIntensiveDbLock(db, table.getId(), LockType.WRITE);
                 try {
                     OlapTable olapTable = (OlapTable) table;
                     for (Partition partition : olapTable.getAllPartitions()) {
                         for (PhysicalPartition physicalPartition : partition.getSubPartitions()) {
                             for (MaterializedIndex index :
                                     physicalPartition.getMaterializedIndices(IndexExtState.VISIBLE)) {
-                                Long indexRowCount =
-                                        indexRowCountMap.get(Pair.create(physicalPartition.getId(), index.getId()));
+                                Long indexRowCount = indexRowCountMap.get(index.getId());
                                 if (indexRowCount != null) {
                                     index.setRowCount(indexRowCount);
                                 }
@@ -162,7 +159,7 @@ public class TabletStatMgr extends FrontendDaemon {
                     }
                     adjustStatUpdateRows(table.getId(), totalRowCount);
                 } finally {
-                    locker.unLockTableWithIntensiveDbLock(db.getId(), table.getId(), LockType.WRITE);
+                    locker.unLockTableWithIntensiveDbLock(db, table, LockType.WRITE);
                 }
             }
         }
@@ -226,12 +223,12 @@ public class TabletStatMgr extends FrontendDaemon {
 
         List<Long> dbIds = GlobalStateMgr.getCurrentState().getLocalMetastore().getDbIds();
         for (Long dbId : dbIds) {
-            Database db = GlobalStateMgr.getCurrentState().getLocalMetastore().getDb(dbId);
+            Database db = GlobalStateMgr.getCurrentState().getDb(dbId);
             if (db == null) {
                 continue;
             }
 
-            List<Table> tables = GlobalStateMgr.getCurrentState().getLocalMetastore().getTables(db.getId());
+            List<Table> tables = db.getTables();
             for (Table table : tables) {
                 if (table.isCloudNativeTableOrMaterializedView()) {
                     updateLakeTableTabletStat(db, (OlapTable) table);
@@ -250,11 +247,11 @@ public class TabletStatMgr extends FrontendDaemon {
     @NotNull
     private Collection<PhysicalPartition> getPartitions(@NotNull Database db, @NotNull OlapTable table) {
         Locker locker = new Locker();
-        locker.lockDatabase(db.getId(), LockType.READ);
+        locker.lockDatabase(db, LockType.READ);
         try {
             return table.getPhysicalPartitions();
         } finally {
-            locker.unLockDatabase(db.getId(), LockType.READ);
+            locker.unLockDatabase(db, LockType.READ);
         }
     }
 
@@ -266,14 +263,14 @@ public class TabletStatMgr extends FrontendDaemon {
         String tableName = table.getName();
         long partitionId = partition.getId();
         Locker locker = new Locker();
-        locker.lockDatabase(db.getId(), LockType.READ);
+        locker.lockDatabase(db, LockType.READ);
         try {
             long visibleVersion = partition.getVisibleVersion();
             long visibleVersionTime = partition.getVisibleVersionTime();
             List<Tablet> tablets = new ArrayList<>(partition.getBaseIndex().getTablets());
             return new PartitionSnapshot(dbName, tableName, partitionId, visibleVersion, visibleVersionTime, tablets);
         } finally {
-            locker.unLockDatabase(db.getId(), LockType.READ);
+            locker.unLockDatabase(db, LockType.READ);
         }
     }
 

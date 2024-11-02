@@ -59,7 +59,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 public final class MVPCTRefreshListPartitioner extends MVPCTRefreshPartitioner {
@@ -76,7 +75,7 @@ public final class MVPCTRefreshListPartitioner extends MVPCTRefreshPartitioner {
     public boolean syncAddOrDropPartitions() throws LockTimeoutException {
         // collect mv partition items with lock
         Locker locker = new Locker();
-        if (!locker.tryLockDatabase(db.getId(), LockType.READ, Config.mv_refresh_try_lock_timeout_ms, TimeUnit.MILLISECONDS)) {
+        if (!locker.tryLockDatabase(db, LockType.READ, Config.mv_refresh_try_lock_timeout_ms)) {
             throw new LockTimeoutException("Failed to lock database: " + db.getFullName() + " in syncPartitionsForList");
         }
 
@@ -88,7 +87,7 @@ public final class MVPCTRefreshListPartitioner extends MVPCTRefreshPartitioner {
                 return false;
             }
         } finally {
-            locker.unLockDatabase(db.getId(), LockType.READ);
+            locker.unLockDatabase(db, LockType.READ);
         }
 
         {

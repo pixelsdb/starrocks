@@ -96,6 +96,7 @@ import static com.starrocks.common.util.UnitTestUtil.TABLE_NAME;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 
+
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 public class RestoreJobMaterializedViewTest {
 
@@ -184,7 +185,7 @@ public class RestoreJobMaterializedViewTest {
                 minTimes = 0;
                 result = globalStateMgr;
 
-                globalStateMgr.getLocalMetastore().getDb(anyLong);
+                globalStateMgr.getDb(anyLong);
                 minTimes = 0;
                 result = db;
 
@@ -192,19 +193,15 @@ public class RestoreJobMaterializedViewTest {
                 minTimes = 0;
                 result = sqlParser;
 
-                globalStateMgr.getLocalMetastore().getTable(UnitTestUtil.DB_NAME, MATERIALIZED_VIEW_NAME);
-                minTimes = 0;
-                result = db.getTable(MATERIALIZED_VIEW_NAME);
-
                 globalStateMgr.getEditLog();
                 minTimes = 0;
                 result = editLog;
 
-                //GlobalStateMgr.getCurrentState().getNodeMgr().getClusterInfo();
-                //minTimes = 0;
-                //result = systemInfoService;
+                // GlobalStateMgr.getCurrentState().getNodeMgr().getClusterInfo();
+                // minTimes = 0;
+                // result = systemInfoService;
 
-                globalStateMgr.getLocalMetastore().mayGetDb(anyLong);
+                globalStateMgr.mayGetDb(anyLong);
                 minTimes = 0;
                 result = Optional.of(db);
 
@@ -253,24 +250,24 @@ public class RestoreJobMaterializedViewTest {
             }
         };
         new MockUp<MarkedCountDownLatch>() {
-            @Mock
-            boolean await(long timeout, TimeUnit unit) {
-                return true;
-            }
-        };
+                @Mock
+                boolean await(long timeout, TimeUnit unit) {
+                    return true;
+                }
+            };
 
         new MockUp<ConnectContext>() {
-            @Mock
-            GlobalStateMgr getGlobalStateMgr() {
-                return globalStateMgr;
-            }
-        };
+                @Mock
+                GlobalStateMgr getGlobalStateMgr() {
+                    return globalStateMgr;
+                }
+            };
         new MockUp<GlobalStateMgr>() {
-            @Mock
-            BackupHandler getBackupHandler() {
-                return backupHandler;
-            }
-        };
+                @Mock
+                BackupHandler getBackupHandler() {
+                    return backupHandler;
+                }
+            };
 
         new MockUp<HdfsUtil>() {
             @Mock
@@ -316,7 +313,7 @@ public class RestoreJobMaterializedViewTest {
         Deencapsulation.setField(globalStateMgr, "backupHandler", backupHandler);
         systemInfoService = new SystemInfoService();
         db = UnitTestUtil.createDbWithMaterializedView(dbId, tblId, partId, idxId, tabletId,
-                    backendId, version, KeysType.DUP_KEYS);
+                backendId, version, KeysType.DUP_KEYS);
         mvRestoreContext = new MvRestoreContext();
         setUpMocker();
     }
@@ -372,8 +369,8 @@ public class RestoreJobMaterializedViewTest {
         }
 
         RestoreJob job = new RestoreJob(label, "2018-01-01 01:01:01", db.getId(), db.getFullName(),
-                    jobInfo, false, 3, 100000,
-                    globalStateMgr, repo.getId(), backupMeta, mvRestoreContext);
+                jobInfo, false, 3, 100000,
+                globalStateMgr, repo.getId(), backupMeta, mvRestoreContext);
         job.setRepo(repo);
 
         // add job into mvRestoreContext
@@ -415,7 +412,7 @@ public class RestoreJobMaterializedViewTest {
             TStatus taskStatus = new TStatus(TStatusCode.OK);
             TBackend tBackend = new TBackend("", 0, 1);
             TFinishTaskRequest request = new TFinishTaskRequest(tBackend, TTaskType.MAKE_SNAPSHOT,
-                        task.getSignature(), taskStatus);
+                    task.getSignature(), taskStatus);
             request.setSnapshot_path(snapshotPath);
             Assert.assertTrue(job.finishTabletSnapshotTask(task, request));
         }
@@ -448,7 +445,7 @@ public class RestoreJobMaterializedViewTest {
             TStatus taskStatus = new TStatus(TStatusCode.OK);
             TBackend tBackend = new TBackend("", 0, 1);
             TFinishTaskRequest request = new TFinishTaskRequest(tBackend, TTaskType.MAKE_SNAPSHOT,
-                        agentTask.getSignature(), taskStatus);
+                    agentTask.getSignature(), taskStatus);
             request.setDownloaded_tablet_ids(downloadedTabletIds);
             Assert.assertTrue(job.finishTabletDownloadTask((DownloadTask) agentTask, request));
         }
@@ -480,7 +477,7 @@ public class RestoreJobMaterializedViewTest {
             TStatus taskStatus = new TStatus(TStatusCode.OK);
             TBackend tBackend = new TBackend("", 0, 1);
             TFinishTaskRequest request = new TFinishTaskRequest(tBackend, TTaskType.MAKE_SNAPSHOT,
-                        agentTask.getSignature(), taskStatus);
+                    agentTask.getSignature(), taskStatus);
             job.finishDirMoveTask((DirMoveTask) agentTask, request);
         }
 
@@ -534,7 +531,7 @@ public class RestoreJobMaterializedViewTest {
         new MockUp<MetadataMgr>() {
             @Mock
             public Table getTable(String catalogName, String dbName, String tblName) {
-                return GlobalStateMgr.getCurrentState().getLocalMetastore().getTable(db.getFullName(), tblName);
+                return db.getTable(tblName);
             }
         };
         // gen BackupJobInfo
@@ -549,7 +546,7 @@ public class RestoreJobMaterializedViewTest {
     }
 
     private void assertMVActiveEquals(String mvName, boolean expect) {
-        Table mvTable = GlobalStateMgr.getCurrentState().getLocalMetastore().getTable(db.getFullName(), mvName);
+        Table mvTable = db.getTable(mvName);
         Assert.assertTrue(mvTable != null);
         Assert.assertTrue(mvTable.isMaterializedView());
         MaterializedView mv = (MaterializedView) mvTable;

@@ -83,27 +83,27 @@ public class DbsProcDirTest {
     public void testLookupNormal() throws AnalysisException {
         new Expectations(globalStateMgr) {
             {
-                globalStateMgr.getLocalMetastore().getDb("db1");
+                globalStateMgr.getDb("db1");
                 minTimes = 0;
                 result = db1;
 
-                globalStateMgr.getLocalMetastore().getDb("db2");
+                globalStateMgr.getDb("db2");
                 minTimes = 0;
                 result = db2;
 
-                globalStateMgr.getLocalMetastore().getDb("db3");
+                globalStateMgr.getDb("db3");
                 minTimes = 0;
                 result = null;
 
-                globalStateMgr.getLocalMetastore().getDb(db1.getId());
+                globalStateMgr.getDb(db1.getId());
                 minTimes = 0;
                 result = db1;
 
-                globalStateMgr.getLocalMetastore().getDb(db2.getId());
+                globalStateMgr.getDb(db2.getId());
                 minTimes = 0;
                 result = db2;
 
-                globalStateMgr.getLocalMetastore().getDb(anyLong);
+                globalStateMgr.getDb(anyLong);
                 minTimes = 0;
                 result = null;
             }
@@ -164,27 +164,27 @@ public class DbsProcDirTest {
                 minTimes = 0;
                 result = Lists.newArrayList("db1", "db2");
 
-                globalStateMgr.getLocalMetastore().getDb("db1");
+                globalStateMgr.getDb("db1");
                 minTimes = 0;
                 result = db1;
 
-                globalStateMgr.getLocalMetastore().getDb("db2");
+                globalStateMgr.getDb("db2");
                 minTimes = 0;
                 result = db2;
 
-                globalStateMgr.getLocalMetastore().getDb("db3");
+                globalStateMgr.getDb("db3");
                 minTimes = 0;
                 result = null;
 
-                globalStateMgr.getLocalMetastore().getDb(db1.getId());
+                globalStateMgr.getDb(db1.getId());
                 minTimes = 0;
                 result = db1;
 
-                globalStateMgr.getLocalMetastore().getDb(db2.getId());
+                globalStateMgr.getDb(db2.getId());
                 minTimes = 0;
                 result = db2;
 
-                globalStateMgr.getLocalMetastore().getDb(anyLong);
+                globalStateMgr.getDb(anyLong);
                 minTimes = 0;
                 result = null;
             }

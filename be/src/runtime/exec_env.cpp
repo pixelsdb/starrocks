@@ -41,6 +41,7 @@
 #include "agent/agent_server.h"
 #include "agent/master_info.h"
 #include "block_cache/block_cache.h"
+#include "column/column_pool.h"
 #include "common/config.h"
 #include "common/configbase.h"
 #include "common/logging.h"
@@ -52,6 +53,7 @@
 #include "exec/workgroup/scan_executor.h"
 #include "exec/workgroup/scan_task_queue.h"
 #include "exec/workgroup/work_group.h"
+#include "exprs/jit/jit_engine.h"
 #include "fs/fs_s3.h"
 #include "gen_cpp/BackendService.h"
 #include "gen_cpp/TFileBrokerService.h"
@@ -89,7 +91,6 @@
 #include "storage/storage_engine.h"
 #include "storage/tablet_schema_map.h"
 #include "storage/update_manager.h"
-#include "udf/python/env.h"
 #include "util/bfd_parser.h"
 #include "util/brpc_stub_cache.h"
 #include "util/cpu_info.h"
@@ -98,10 +99,6 @@
 #include "util/pretty_printer.h"
 #include "util/priority_thread_pool.hpp"
 #include "util/starrocks_metrics.h"
-
-#ifdef STARROCKS_JIT_ENABLE
-#include "exprs/jit/jit_engine.h"
-#endif
 
 namespace starrocks {
 
@@ -237,6 +234,7 @@ Status GlobalEnv::_init_mem_tracker() {
     int64_t compaction_mem_limit = calc_max_compaction_memory(_process_mem_tracker->limit());
     _compaction_mem_tracker = regist_tracker(compaction_mem_limit, "compaction", _process_mem_tracker.get());
     _schema_change_mem_tracker = regist_tracker(-1, "schema_change", _process_mem_tracker.get());
+    _column_pool_mem_tracker = regist_tracker(-1, "column_pool", _process_mem_tracker.get());
     _page_cache_mem_tracker = regist_tracker(-1, "page_cache", _process_mem_tracker.get());
     _jit_cache_mem_tracker = regist_tracker(-1, "jit_cache", _process_mem_tracker.get());
     int32_t update_mem_percent = std::max(std::min(100, config::update_memory_limit_percent), 0);
@@ -250,6 +248,8 @@ Status GlobalEnv::_init_mem_tracker() {
 
     MemChunkAllocator::init_instance(_chunk_allocator_mem_tracker.get(), config::chunk_reserved_bytes_limit);
 
+    SetMemTrackerForColumnPool op(_column_pool_mem_tracker);
+    ForEach<ColumnPoolList>(op);
     _init_storage_page_cache(); // TODO: move to StorageEngine
     return Status::OK();
 }
@@ -493,11 +493,6 @@ Status ExecEnv::init(const std::vector<StorePath>& store_paths, bool as_cn) {
     _runtime_filter_cache = new RuntimeFilterCache(8);
     RETURN_IF_ERROR(_runtime_filter_cache->init());
     _profile_report_worker = new ProfileReportWorker(this);
-    auto runtime_filter_event_func = [] {
-        auto pool = ExecEnv::GetInstance()->runtime_filter_worker();
-        return (pool == nullptr) ? 0U : pool->queue_size();
-    };
-    REGISTER_GAUGE_STARROCKS_METRIC(runtime_filter_event_queue_len, runtime_filter_event_func);
 
     _backend_client_cache->init_metrics(StarRocksMetrics::instance()->metrics(), "backend");
     _frontend_client_cache->init_metrics(StarRocksMetrics::instance()->metrics(), "frontend");
@@ -511,8 +506,8 @@ Status ExecEnv::init(const std::vector<StorePath>& store_paths, bool as_cn) {
         exit(-1);
     }
 
-#if defined(USE_STAROS) && !defined(BE_TEST) && !defined(BUILD_FORMAT_LIB)
-    _lake_location_provider = std::make_shared<lake::StarletLocationProvider>();
+#if defined(USE_STAROS) && !defined(BE_TEST)
+    _lake_location_provider = new lake::StarletLocationProvider();
     _lake_update_manager =
             new lake::UpdateManager(_lake_location_provider, GlobalEnv::GetInstance()->update_mem_tracker());
     _lake_tablet_manager =
@@ -528,7 +523,7 @@ Status ExecEnv::init(const std::vector<StorePath>& store_paths, bool as_cn) {
     }
 
 #elif defined(BE_TEST)
-    _lake_location_provider = std::make_shared<lake::FixedLocationProvider>(_store_paths.front().path);
+    _lake_location_provider = new lake::FixedLocationProvider(_store_paths.front().path);
     _lake_update_manager =
             new lake::UpdateManager(_lake_location_provider, GlobalEnv::GetInstance()->update_mem_tracker());
     _lake_tablet_manager =
@@ -553,16 +548,11 @@ Status ExecEnv::init(const std::vector<StorePath>& store_paths, bool as_cn) {
     _spill_dir_mgr = std::make_shared<spill::DirManager>();
     RETURN_IF_ERROR(_spill_dir_mgr->init(config::spill_local_storage_dir));
 
-#ifdef STARROCKS_JIT_ENABLE
     auto jit_engine = JITEngine::get_instance();
     status = jit_engine->init();
     if (!status.ok()) {
         LOG(WARNING) << "Failed to init JIT engine: " << status.message();
     }
-#endif
-
-    RETURN_IF_ERROR(PythonEnvManager::getInstance().init(config::python_envs));
-    PythonEnvManager::getInstance().start_background_cleanup_thread();
 
     return Status::OK();
 }
@@ -656,8 +646,6 @@ void ExecEnv::stop() {
 #ifndef BE_TEST
     close_s3_clients();
 #endif
-
-    PythonEnvManager::getInstance().close();
 }
 
 void ExecEnv::destroy() {
@@ -705,6 +693,7 @@ void ExecEnv::destroy() {
     SAFE_DELETE(_stream_mgr);
     SAFE_DELETE(_external_scan_context_mgr);
     SAFE_DELETE(_lake_tablet_manager);
+    SAFE_DELETE(_lake_location_provider);
     SAFE_DELETE(_lake_update_manager);
     SAFE_DELETE(_lake_replication_txn_manager);
     SAFE_DELETE(_cache_mgr);
@@ -714,26 +703,20 @@ void ExecEnv::destroy() {
 }
 
 void ExecEnv::_wait_for_fragments_finish() {
-    size_t max_loop_secs = config::loop_count_wait_fragments_finish * 10;
-    if (max_loop_secs == 0) {
+    size_t max_loop_cnt_cfg = config::loop_count_wait_fragments_finish;
+    if (max_loop_cnt_cfg == 0) {
         return;
     }
 
-    size_t running_fragments = _get_running_fragments_count();
-    size_t loop_secs = 0;
+    size_t running_fragments = _fragment_mgr->running_fragment_count();
+    size_t loop_cnt = 0;
 
-    while (running_fragments > 0 && loop_secs < max_loop_secs) {
-        LOG(INFO) << running_fragments << " fragment(s) are still running...";
-        sleep(1);
-        running_fragments = _get_running_fragments_count();
-        loop_secs++;
+    while (running_fragments && loop_cnt < max_loop_cnt_cfg) {
+        DLOG(INFO) << running_fragments << " fragment(s) are still running...";
+        sleep(10);
+        running_fragments = _fragment_mgr->running_fragment_count();
+        loop_cnt++;
     }
-}
-
-size_t ExecEnv::_get_running_fragments_count() const {
-    // fragment is registered in _fragment_mgr in non-pipeline env
-    // while _query_context_mgr is used in pipeline engine.
-    return _fragment_mgr->running_fragment_count() + _query_context_mgr->size();
 }
 
 void ExecEnv::wait_for_finish() {

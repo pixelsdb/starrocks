@@ -29,7 +29,6 @@
 #include "util/url_parser.h"
 
 namespace starrocks {
-class RegexpSplit;
 
 struct PadState {
     bool is_const;
@@ -403,13 +402,6 @@ public:
 
     static StatusOr<ColumnPtr> regexp_replace_use_hyperscan(StringFunctionsState* state, const Columns& columns);
     static StatusOr<ColumnPtr> regexp_replace_use_hyperscan_vec(StringFunctionsState* state, const Columns& columns);
-
-    /**
-     * @param: [string_value, pattern, max_split]
-     * @paramType: [BinaryColumn, BinaryColumn, IntColumn]
-     * @return: Array<BinaryColumn>
-     */
-    DEFINE_VECTORIZED_FN(regexp_split);
 
     /**
      * @param: [string_value, pattern_value, replace_value]

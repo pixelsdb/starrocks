@@ -142,8 +142,8 @@ public class ColumnPrivilege {
 
                 if (table instanceof View) {
                     try {
-                        // for privilege checking, treat connector view as table
-                        if (table.isConnectorView()) {
+                        // for privilege checking, treat hive view as table
+                        if (table.getType() == Table.TableType.HIVE_VIEW) {
                             Authorizer.checkTableAction(context.getCurrentUserIdentity(), context.getCurrentRoleIds(),
                                     tableName, PrivilegeType.SELECT);
                         } else {

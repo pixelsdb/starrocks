@@ -295,18 +295,18 @@ public class AlterReplicaTask extends AgentTask implements Runnable {
      *      And because alter request report success, it means that we can increase replica's version to X.
      */
     public void handleFinishAlterTask() throws Exception {
-        Database db = GlobalStateMgr.getCurrentState().getLocalMetastore().getDb(getDbId());
+        Database db = GlobalStateMgr.getCurrentState().getDb(getDbId());
         if (db == null) {
             throw new MetaNotFoundException("database " + getDbId() + " does not exist");
         }
 
-        OlapTable tbl = (OlapTable) GlobalStateMgr.getCurrentState().getLocalMetastore().getTable(db.getId(), getTableId());
+        OlapTable tbl = (OlapTable) db.getTable(getTableId());
         if (tbl == null) {
             throw new MetaNotFoundException("tbl " + getTableId() + " does not exist");
         }
 
         Locker locker = new Locker();
-        locker.lockTablesWithIntensiveDbLock(db.getId(), Lists.newArrayList(tbl.getId()), LockType.WRITE);
+        locker.lockTablesWithIntensiveDbLock(db, Lists.newArrayList(tbl.getId()), LockType.WRITE);
         try {
             PhysicalPartition partition = tbl.getPhysicalPartition(getPartitionId());
             if (partition == null) {
@@ -347,7 +347,7 @@ public class AlterReplicaTask extends AgentTask implements Runnable {
                 LOG.info("after handle alter task tablet: {}, replica: {}", getSignature(), replica);
             }
         } finally {
-            locker.unLockTablesWithIntensiveDbLock(db.getId(), Lists.newArrayList(tbl.getId()), LockType.WRITE);
+            locker.unLockTablesWithIntensiveDbLock(db, Lists.newArrayList(tbl.getId()), LockType.WRITE);
         }
         setFinished(true);
     }

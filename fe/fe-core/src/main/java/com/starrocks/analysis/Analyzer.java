@@ -229,11 +229,11 @@ public class Analyzer {
     }
 
     public Table getTable(TableName tblName) {
-        Database db = globalState.globalStateMgr.getLocalMetastore().getDb(tblName.getDb());
+        Database db = globalState.globalStateMgr.getDb(tblName.getDb());
         if (db == null) {
             return null;
         }
-        return GlobalStateMgr.getCurrentState().getLocalMetastore().getTable(db.getFullName(), tblName.getTbl());
+        return db.getTable(tblName.getTbl());
     }
 
     public TupleDescriptor getTupleDesc(TupleId id) {

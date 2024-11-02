@@ -17,6 +17,7 @@
 #include <memory>
 #include <utility>
 
+#include "column/column_pool.h"
 #include "column/vectorized_fwd.h"
 #include "common/status.h"
 #include "exec/olap_scan_node.h"
@@ -69,7 +70,7 @@ Status TabletScanner::init(RuntimeState* runtime_state, const TabletScannerParam
         _prj_iter = new_projection_iterator(output_schema, _reader);
     }
 
-    if (!_conjunct_ctxs.empty() || !_pred_tree.empty()) {
+    if (!_conjunct_ctxs.empty() || !_predicates.empty()) {
         _expr_filter_timer = ADD_TIMER(_parent->_runtime_profile, "ExprFilterTime");
     }
 
@@ -117,6 +118,8 @@ void TabletScanner::close(RuntimeState* state) {
     _reader.reset();
     _predicate_free_pool.clear();
     Expr::close(_conjunct_ctxs, state);
+    // Reduce the memory usage if the the average string size is greater than 512.
+    release_large_columns<BinaryColumn>(state->chunk_size() * 512);
     _is_closed = true;
 }
 
@@ -146,7 +149,7 @@ Status TabletScanner::_init_reader_params(const std::vector<OlapScanRange*>* key
     _params.use_page_cache = _runtime_state->use_page_cache();
     auto parser = _pool.add(new PredicateParser(_tablet_schema));
 
-    ASSIGN_OR_RETURN(auto pred_tree, _parent->_conjuncts_manager->get_predicate_tree(parser, _predicate_free_pool));
+    ASSIGN_OR_RETURN(auto pred_tree, _parent->_conjuncts_manager.get_predicate_tree(parser, _predicate_free_pool));
 
     // Improve for select * from table limit x, x is small
     if (pred_tree.empty() && _parent->_limit != -1 && _parent->_limit < runtime_state()->chunk_size()) {
@@ -162,8 +165,16 @@ Status TabletScanner::_init_reader_params(const std::vector<OlapScanRange*>* key
     _params.pred_tree = PredicateTree::create(std::move(pushdown_pred_root));
     _pred_tree = PredicateTree::create(std::move(non_pushdown_pred_root));
 
-    GlobalDictPredicatesRewriter not_pushdown_predicate_rewriter(*_params.global_dictmaps);
-    RETURN_IF_ERROR(not_pushdown_predicate_rewriter.rewrite_predicate(&_pool, _pred_tree));
+    for (const auto& [_, col_nodes] : _pred_tree.root().col_children_map()) {
+        for (const auto& col_node : col_nodes) {
+            _predicates.add(col_node.col_pred());
+        }
+    }
+    // TODO(liuzihe): support OR predicate.
+    DCHECK(_pred_tree.root().compound_children().empty());
+
+    GlobalDictPredicatesRewriter not_pushdown_predicate_rewriter(_predicates, *_params.global_dictmaps);
+    RETURN_IF_ERROR(not_pushdown_predicate_rewriter.rewrite_predicate(&_pool));
 
     // Range
     for (auto key_range : *key_ranges) {
@@ -276,11 +287,11 @@ Status TabletScanner::get_chunk(RuntimeState* state, Chunk* chunk) {
             chunk->set_slot_id_to_index(slot->id(), column_index);
         }
 
-        if (!_pred_tree.empty()) {
+        if (!_predicates.empty()) {
             SCOPED_TIMER(_expr_filter_timer);
             size_t nrows = chunk->num_rows();
             _selection.resize(nrows);
-            RETURN_IF_ERROR(_pred_tree.evaluate(chunk, _selection.data(), 0, nrows));
+            RETURN_IF_ERROR(_predicates.evaluate(chunk, _selection.data(), 0, nrows));
             chunk->filter(_selection);
             DCHECK_CHUNK(chunk);
         }

@@ -224,6 +224,8 @@ public class StreamLoadScanNodeTest {
         scanNode.getNodeExplainString("", TExplainLevel.NORMAL);
         TPlanNode planNode = new TPlanNode();
         scanNode.toThrift(planNode);
+
+        Assert.assertEquals(1, scanNode.getNumInstances());
         Assert.assertEquals(1, scanNode.getScanRangeLocations(0).size());
     }
 

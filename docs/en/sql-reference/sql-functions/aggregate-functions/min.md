@@ -4,7 +4,7 @@ displayed_sidebar: docs
 
 # min
 
-
+## Description
 
 Returns the minimum value of the expr expression.
 

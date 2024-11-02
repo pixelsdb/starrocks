@@ -118,6 +118,8 @@ abstract public class PlanNode extends TreeNode<PlanNode> {
     // sum of tupleIds' avgSerializedSizes; set in computeStats()
     protected float avgRowSize;
 
+    protected int numInstances;
+
     protected Map<ColumnRefOperator, ColumnStatistic> columnStatistics;
 
     // For vector query engine
@@ -138,9 +140,6 @@ abstract public class PlanNode extends TreeNode<PlanNode> {
     protected Set<Integer> localRfWaitingSet = Sets.newHashSet();
     protected ExprSubstitutionMap outputSmap;
 
-    // set if you want to collect execution statistics for this plan node
-    protected boolean needCollectExecStats = false;
-
     protected PlanNode(PlanNodeId id, ArrayList<TupleId> tupleIds, String planNodeName) {
         this.id = id;
         this.limit = -1;
@@ -148,6 +147,7 @@ abstract public class PlanNode extends TreeNode<PlanNode> {
         this.tupleIds = Lists.newArrayList(tupleIds);
         this.cardinality = -1;
         this.planNodeName = planNodeName;
+        this.numInstances = 1;
     }
 
     protected PlanNode(PlanNodeId id, String planNodeName) {
@@ -156,6 +156,7 @@ abstract public class PlanNode extends TreeNode<PlanNode> {
         this.tupleIds = Lists.newArrayList();
         this.cardinality = -1;
         this.planNodeName = planNodeName;
+        this.numInstances = 1;
     }
 
     /**
@@ -169,6 +170,7 @@ abstract public class PlanNode extends TreeNode<PlanNode> {
         this.conjuncts = Expr.cloneList(node.conjuncts, null);
         this.cardinality = -1;
         this.planNodeName = planNodeName;
+        this.numInstances = 1;
     }
 
     public List<RuntimeFilterDescription> getProbeRuntimeFilters() {
@@ -691,6 +693,14 @@ abstract public class PlanNode extends TreeNode<PlanNode> {
         return getVerboseExplain(exprs, TExplainLevel.VERBOSE);
     }
 
+    public int getNumInstances() {
+        return numInstances;
+    }
+
+    public void setNumInstances(int numInstances) {
+        this.numInstances = numInstances;
+    }
+
     public void appendTrace(StringBuilder sb) {
         sb.append(planNodeName);
         if (!children.isEmpty()) {
@@ -1007,13 +1017,5 @@ abstract public class PlanNode extends TreeNode<PlanNode> {
     // disable optimize depends on physical order
     // eg: sortedStreamingAGG/ PerBucketCompute
     public void disablePhysicalPropertyOptimize() {
-    }
-
-    public void forceCollectExecStats() {
-        this.needCollectExecStats = true;
-    }
-
-    public boolean needCollectExecStats() {
-        return needCollectExecStats;
     }
 }

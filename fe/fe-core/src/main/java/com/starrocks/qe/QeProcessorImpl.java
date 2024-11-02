@@ -166,7 +166,6 @@ public final class QeProcessorImpl implements QeProcessor, MemoryTrackable {
             }
             final String queryIdStr = DebugUtil.printId(info.getConnectContext().getExecutionId());
             final QueryStatisticsItem item = new QueryStatisticsItem.Builder()
-                    .customQueryId(context.getCustomQueryId())
                     .queryId(queryIdStr)
                     .executionId(info.getConnectContext().getExecutionId())
                     .queryStartTime(info.getStartExecTime())
@@ -196,8 +195,7 @@ public final class QeProcessorImpl implements QeProcessor, MemoryTrackable {
         final TReportExecStatusResult result = new TReportExecStatusResult();
         final QueryInfo info = coordinatorMap.get(params.query_id);
         if (info == null) {
-            // query is already removed which is acceptable
-            LOG.debug("ReportExecStatus() failed, query does not exist, fragment_instance_id={}, query_id={},",
+            LOG.info("ReportExecStatus() failed, query does not exist, fragment_instance_id={}, query_id={},",
                     DebugUtil.printId(params.fragment_instance_id), DebugUtil.printId(params.query_id));
             result.setStatus(new TStatus(TStatusCode.NOT_FOUND));
             result.status.addToError_msgs("query id " + DebugUtil.printId(params.query_id) + " not found");

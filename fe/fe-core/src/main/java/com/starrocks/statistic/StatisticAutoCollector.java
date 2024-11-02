@@ -74,7 +74,7 @@ public class StatisticAutoCollector extends FrontendDaemon {
     }
 
     @VisibleForTesting
-    public List<StatisticsCollectJob> runJobs() {
+    protected List<StatisticsCollectJob> runJobs() {
         List<StatisticsCollectJob> result = Lists.newArrayList();
 
         // TODO: define the priority in the job instead

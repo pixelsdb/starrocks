@@ -32,17 +32,14 @@ public class DropFunctionStmt extends DdlStmt {
     // set after analyzed
     private FunctionSearchDesc functionSearchDesc;
 
-    private final boolean dropIfExists;
-
-    public DropFunctionStmt(FunctionName functionName, FunctionArgsDef argsDef, boolean dropIfExists) {
-        this(functionName, argsDef, NodePosition.ZERO, dropIfExists);
+    public DropFunctionStmt(FunctionName functionName, FunctionArgsDef argsDef) {
+        this(functionName, argsDef, NodePosition.ZERO);
     }
 
-    public DropFunctionStmt(FunctionName functionName, FunctionArgsDef argsDef, NodePosition pos, boolean dropIfExists) {
+    public DropFunctionStmt(FunctionName functionName, FunctionArgsDef argsDef, NodePosition pos) {
         super(pos);
         this.functionName = functionName;
         this.argsDef = argsDef;
-        this.dropIfExists = dropIfExists;
     }
 
     public FunctionName getFunctionName() {
@@ -55,10 +52,6 @@ public class DropFunctionStmt extends DdlStmt {
 
     public void setFunctionSearchDesc(FunctionSearchDesc functionSearchDesc) {
         this.functionSearchDesc = functionSearchDesc;
-    }
-
-    public boolean dropIfExists() {
-        return dropIfExists;
     }
 
     @Override

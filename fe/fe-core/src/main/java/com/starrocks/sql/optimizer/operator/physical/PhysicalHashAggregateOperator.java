@@ -58,7 +58,7 @@ public class PhysicalHashAggregateOperator extends PhysicalOperator {
     private final boolean isSplit;
 
     // TODO introduce builder mode to change these fields to final fields
-    // flag for this aggregate operator's parent had been pruned
+    // flg for this aggregate operator's parent had been pruned
     private boolean mergedLocalAgg;
 
     private boolean useSortAgg = false;
@@ -68,9 +68,6 @@ public class PhysicalHashAggregateOperator extends PhysicalOperator {
     private boolean withoutColocateRequirement = false;
 
     private DataSkewInfo distinctColumnDataSkew = null;
-
-    private boolean forcePreAggregation = false;
-
     public PhysicalHashAggregateOperator(AggType type,
                                          List<ColumnRefOperator> groupBys,
                                          List<ColumnRefOperator> partitionByColumns,
@@ -88,22 +85,6 @@ public class PhysicalHashAggregateOperator extends PhysicalOperator {
         this.limit = limit;
         this.predicate = predicate;
         this.projection = projection;
-    }
-
-    public PhysicalHashAggregateOperator(PhysicalHashAggregateOperator aggregateOperator) {
-        this(aggregateOperator.getType(),
-                aggregateOperator.getGroupBys(),
-                aggregateOperator.getPartitionByColumns(),
-                aggregateOperator.getAggregations(),
-                aggregateOperator.isSplit(),
-                aggregateOperator.getLimit(),
-                aggregateOperator.getPredicate(),
-                aggregateOperator.getProjection());
-        this.mergedLocalAgg = aggregateOperator.mergedLocalAgg;
-        this.useSortAgg = aggregateOperator.useSortAgg;
-        this.usePerBucketOptmize = aggregateOperator.usePerBucketOptmize;
-        this.withoutColocateRequirement = aggregateOperator.withoutColocateRequirement;
-        this.distinctColumnDataSkew = aggregateOperator.distinctColumnDataSkew;
     }
 
     public List<ColumnRefOperator> getGroupBys() {
@@ -161,7 +142,7 @@ public class PhysicalHashAggregateOperator extends PhysicalOperator {
 
     public String getNeededPreaggregationMode() {
         String mode = ConnectContext.get().getSessionVariable().getStreamingPreaggregationMode();
-        if (canUseStreamingPreAgg() && (type.isDistinctLocal() || hasRemovedDistinctFunc() || forcePreAggregation)) {
+        if (canUseStreamingPreAgg() && (type.isDistinctLocal() || hasRemovedDistinctFunc())) {
             mode = SessionVariableConstants.FORCE_PREAGGREGATION;
         }
         return mode;
@@ -197,10 +178,6 @@ public class PhysicalHashAggregateOperator extends PhysicalOperator {
 
     public DataSkewInfo getDistinctColumnDataSkew() {
         return distinctColumnDataSkew;
-    }
-
-    public void setForcePreAggregation(boolean forcePreAggregation) {
-        this.forcePreAggregation = forcePreAggregation;
     }
 
     @Override

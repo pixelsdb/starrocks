@@ -4,7 +4,7 @@ displayed_sidebar: docs
 
 # hll_union_agg
 
-
+## 功能
 
 该函数将多个 HLL 类型数据合并成一个 HLL。
 

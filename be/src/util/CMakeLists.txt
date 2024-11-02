@@ -64,6 +64,7 @@ set(UTIL_FILES
   url_parser.cpp
   url_coding.cpp
   mysql_row_buffer.cpp
+  error_util.cc
   spinlock.cc
   file_util.cpp
   filesystem_util.cc
@@ -104,7 +105,6 @@ set(UTIL_FILES
   bthreads/future.h
   bthreads/future_impl.cpp
   hash_util.cpp
-  internal_service_recoverable_stub.cpp
 )
 
 add_library(Util STATIC

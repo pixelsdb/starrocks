@@ -4,7 +4,7 @@ displayed_sidebar: docs
 
 # hll_cardinality
 
-
+## 功能
 
 用于计算 HLL 类型值的基数。
 

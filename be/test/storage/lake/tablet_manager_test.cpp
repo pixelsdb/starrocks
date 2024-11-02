@@ -40,7 +40,6 @@
 // NOTE: intend to put the following header to the end of the include section
 // so that our `gutil/dynamic_annotations.h` takes precedence of the absl's.
 // NOLINTNEXTLINE
-#include "script/script.h"
 #include "service/staros_worker.h"
 
 namespace starrocks {
@@ -55,7 +54,7 @@ public:
         std::vector<starrocks::StorePath> paths;
         CHECK_OK(starrocks::parse_conf_store_paths(starrocks::config::storage_root_path, &paths));
         _test_dir = paths[0].path + "/lake";
-        _location_provider = std::make_shared<lake::FixedLocationProvider>(_test_dir);
+        _location_provider = new lake::FixedLocationProvider(_test_dir);
         CHECK_OK(FileSystem::Default()->create_dir_recursive(_location_provider->metadata_root_location(1)));
         CHECK_OK(FileSystem::Default()->create_dir_recursive(_location_provider->txn_log_root_location(1)));
         CHECK_OK(FileSystem::Default()->create_dir_recursive(_location_provider->segment_root_location(1)));
@@ -66,12 +65,13 @@ public:
 
     void TearDown() override {
         delete _tablet_manager;
-        FileSystem::Default()->delete_dir_recursive(_test_dir);
+        delete _location_provider;
+        (void)FileSystem::Default()->delete_dir_recursive(_test_dir);
     }
 
     starrocks::lake::TabletManager* _tablet_manager{nullptr};
     std::string _test_dir;
-    std::shared_ptr<lake::LocationProvider> _location_provider{nullptr};
+    lake::LocationProvider* _location_provider{nullptr};
     std::unique_ptr<MemTracker> _mem_tracker;
     std::unique_ptr<lake::UpdateManager> _update_manager;
 };
@@ -88,8 +88,6 @@ TEST_F(LakeTabletManagerTest, tablet_meta_write_and_read) {
     rowset_meta_pb->set_num_rows(5);
     EXPECT_OK(_tablet_manager->put_tablet_metadata(metadata));
     EXPECT_OK(_tablet_manager->tablet_metadata_exists(12345, 2));
-    string result;
-    ASSERT_TRUE(execute_script("System.print(StorageEngine.get_lake_tablet_metadata_json(12345,2))", result).ok());
     auto res = _tablet_manager->get_tablet_metadata(12345, 2);
     EXPECT_TRUE(res.ok());
     EXPECT_EQ(res.value()->id(), 12345);
@@ -613,8 +611,8 @@ TCreateTabletReq build_create_tablet_request(int64_t tablet_id, int64_t index_id
 TEST_F(LakeTabletManagerTest, test_multi_partition_schema_file) {
     const static int kNumPartition = 4;
     const static int64_t kIndexId = 123454321;
-    auto lp = std::make_shared<PartitionedLocationProvider>(_test_dir, kNumPartition);
-    _tablet_manager->TEST_set_location_provider(lp);
+    auto lp = std::make_unique<PartitionedLocationProvider>(_test_dir, kNumPartition);
+    _tablet_manager->TEST_set_location_provider(lp.get());
     for (int i = 0; i < 10; i++) {
         auto req = build_create_tablet_request(next_id(), kIndexId);
         ASSERT_OK(_tablet_manager->create_tablet(req));

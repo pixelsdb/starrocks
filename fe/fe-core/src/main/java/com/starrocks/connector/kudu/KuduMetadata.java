@@ -26,11 +26,9 @@ import com.starrocks.catalog.Type;
 import com.starrocks.common.Pair;
 import com.starrocks.connector.ColumnTypeConverter;
 import com.starrocks.connector.ConnectorMetadata;
-import com.starrocks.connector.GetRemoteFilesParams;
 import com.starrocks.connector.HdfsEnvironment;
 import com.starrocks.connector.RemoteFileDesc;
 import com.starrocks.connector.RemoteFileInfo;
-import com.starrocks.connector.TableVersionRange;
 import com.starrocks.connector.exception.StarRocksConnectorException;
 import com.starrocks.connector.hive.HivePartitionStats;
 import com.starrocks.connector.hive.IHiveMetastore;
@@ -257,7 +255,9 @@ public class KuduMetadata implements ConnectorMetadata {
     }
 
     @Override
-    public List<RemoteFileInfo> getRemoteFiles(Table table, GetRemoteFilesParams params) {
+    public List<RemoteFileInfo> getRemoteFileInfos(Table table, List<PartitionKey> partitionKeys,
+                                                   long snapshotId, ScalarOperator predicate,
+                                                   List<String> fieldNames, long limit) {
         RemoteFileInfo remoteFileInfo = new RemoteFileInfo();
         KuduTable kuduTable = (KuduTable) table;
         String kuduTableName = getKuduFullTableName(kuduTable);
@@ -268,11 +268,11 @@ public class KuduMetadata implements ConnectorMetadata {
             throw new RuntimeException(e);
         }
         KuduScanToken.KuduScanTokenBuilder builder = kuduClient.newScanTokenBuilder(nativeTable);
-        builder.setProjectedColumnNames(params.getFieldNames());
-        if (params.getLimit() > 0) {
-            builder.limit(params.getLimit());
+        builder.setProjectedColumnNames(fieldNames);
+        if (limit > 0) {
+            builder.limit(limit);
         }
-        addConstraintPredicates(nativeTable, builder, params.getPredicate());
+        addConstraintPredicates(nativeTable, builder, predicate);
         List<KuduScanToken> tokens = builder.build();
         List<RemoteFileDesc> remoteFileDescs = ImmutableList.of(
                 KuduRemoteFileDesc.createKuduRemoteFileDesc(tokens));
@@ -306,8 +306,7 @@ public class KuduMetadata implements ConnectorMetadata {
                                          Map<ColumnRefOperator, Column> columns,
                                          List<PartitionKey> partitionKeys,
                                          ScalarOperator predicate,
-                                         long limit,
-                                         TableVersionRange versionRange) {
+                                         long limit) {
         Statistics.Builder builder = Statistics.builder();
         for (ColumnRefOperator columnRefOperator : columns.keySet()) {
             builder.addColumnStatistic(columnRefOperator, ColumnStatistic.unknown());

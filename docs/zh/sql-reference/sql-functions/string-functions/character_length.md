@@ -4,7 +4,7 @@ displayed_sidebar: docs
 
 # character_length
 
-
+## 功能
 
 返回字符串的长度。
 

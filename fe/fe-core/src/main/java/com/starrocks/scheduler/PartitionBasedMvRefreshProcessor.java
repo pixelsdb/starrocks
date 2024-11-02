@@ -26,7 +26,6 @@ import com.google.common.util.concurrent.Uninterruptibles;
 import com.starrocks.catalog.BaseTableInfo;
 import com.starrocks.catalog.Column;
 import com.starrocks.catalog.Database;
-import com.starrocks.catalog.HiveTable;
 import com.starrocks.catalog.MaterializedView;
 import com.starrocks.catalog.OlapTable;
 import com.starrocks.catalog.Partition;
@@ -39,7 +38,6 @@ import com.starrocks.common.AnalysisException;
 import com.starrocks.common.Config;
 import com.starrocks.common.FeConstants;
 import com.starrocks.common.MaterializedViewExceptions;
-import com.starrocks.common.Pair;
 import com.starrocks.common.UserException;
 import com.starrocks.common.profile.Timer;
 import com.starrocks.common.profile.Tracers;
@@ -52,15 +50,12 @@ import com.starrocks.common.util.concurrent.lock.LockTimeoutException;
 import com.starrocks.common.util.concurrent.lock.LockType;
 import com.starrocks.common.util.concurrent.lock.Locker;
 import com.starrocks.connector.ConnectorPartitionTraits;
-import com.starrocks.connector.HivePartitionDataInfo;
 import com.starrocks.connector.PartitionUtil;
-import com.starrocks.connector.TableUpdateArbitrator;
 import com.starrocks.metric.IMaterializedViewMetricsEntity;
 import com.starrocks.metric.MaterializedViewMetricsRegistry;
 import com.starrocks.qe.ConnectContext;
 import com.starrocks.qe.SessionVariable;
 import com.starrocks.qe.StmtExecutor;
-import com.starrocks.scheduler.mv.MVPCTMetaRepairer;
 import com.starrocks.scheduler.mv.MVPCTRefreshListPartitioner;
 import com.starrocks.scheduler.mv.MVPCTRefreshNonPartitioner;
 import com.starrocks.scheduler.mv.MVPCTRefreshPartitioner;
@@ -283,8 +278,8 @@ public class PartitionBasedMvRefreshProcessor extends BaseTaskRunProcessor {
             throws AnalysisException, LockTimeoutException {
         Set<String> mvToRefreshedPartitions = null;
         Locker locker = new Locker();
-        if (!locker.tryLockTableWithIntensiveDbLock(db.getId(), materializedView.getId(),
-                LockType.READ, Config.mv_refresh_try_lock_timeout_ms, TimeUnit.MILLISECONDS)) {
+        if (!locker.tryLockTableWithIntensiveDbLock(db, materializedView, LockType.READ, Config.mv_refresh_try_lock_timeout_ms,
+                TimeUnit.MILLISECONDS)) {
             LOG.warn("Failed to lock database: {} in checkMvToRefreshedPartitions for mv refresh {}", db.getFullName(),
                     materializedView.getName());
             throw new LockTimeoutException("Failed to lock database: " + db.getFullName());
@@ -308,7 +303,7 @@ public class PartitionBasedMvRefreshProcessor extends BaseTaskRunProcessor {
                     materializedView.getName(), partitionRefreshNumber, mvToRefreshedPartitions, mvPotentialPartitionNames,
                     mvContext.getNextPartitionStart(), mvContext.getNextPartitionEnd(), mvContext.getNextPartitionValues());
         } finally {
-            locker.unLockTableWithIntensiveDbLock(db.getId(), materializedView.getId(), LockType.READ);
+            locker.unLockTableWithIntensiveDbLock(db, materializedView, LockType.READ);
         }
         return mvToRefreshedPartitions;
     }
@@ -585,9 +580,9 @@ public class PartitionBasedMvRefreshProcessor extends BaseTaskRunProcessor {
             mvSessionVariable.setQueryTimeoutS(MV_DEFAULT_QUERY_TIMEOUT);
         }
 
-        // set insert_max_filter_ratio by default
-        if (!isMVPropertyContains(SessionVariable.INSERT_MAX_FILTER_RATIO)) {
-            mvSessionVariable.setInsertMaxFilterRatio(Config.mv_refresh_fail_on_filter_data ? 0 : 1);
+        // set enable_insert_strict by default
+        if (!isMVPropertyContains(SessionVariable.ENABLE_INSERT_STRICT)) {
+            mvSessionVariable.setEnableInsertStrict(Config.enable_mv_refresh_insert_strict);
         }
         // enable profile by default for mv refresh task
         if (!isMVPropertyContains(SessionVariable.ENABLE_PROFILE)) {
@@ -725,7 +720,6 @@ public class PartitionBasedMvRefreshProcessor extends BaseTaskRunProcessor {
         List<BaseTableInfo> baseTableInfos = materializedView.getBaseTableInfos();
         // use it if refresh external table fails
         ConnectContext connectContext = context.getCtx();
-        List<Pair<Table, BaseTableInfo>> toRepairTables = new ArrayList<>();
         for (BaseTableInfo baseTableInfo : baseTableInfos) {
             Optional<Database> dbOpt = GlobalStateMgr.getCurrentState().getMetadataMgr().getDatabase(baseTableInfo);
             if (dbOpt.isEmpty()) {
@@ -734,8 +728,8 @@ public class PartitionBasedMvRefreshProcessor extends BaseTaskRunProcessor {
                 throw new DmlException("database " + baseTableInfo.getDbInfoStr() + " do not exist.");
             }
 
-            Optional<Table> optTable = MvUtils.getTable(baseTableInfo);
-            if (optTable.isEmpty()) {
+            Table table = MvUtils.getTableChecked(baseTableInfo);
+            if (table == null) {
                 LOG.warn("table {} do not exist when refreshing materialized view:{}",
                         baseTableInfo.getTableInfoStr(), materializedView.getName());
                 materializedView.setInactiveAndReason(
@@ -744,8 +738,7 @@ public class PartitionBasedMvRefreshProcessor extends BaseTaskRunProcessor {
             }
 
             // refresh old table
-            Table table = optTable.get();
-            if (table.isNativeTableOrMaterializedView() || table.isConnectorView()) {
+            if (table.isNativeTableOrMaterializedView() || table.isHiveView()) {
                 LOG.debug("No need to refresh table:{} because it is native table or materialized view or connector view",
                         baseTableInfo.getTableInfoStr());
                 continue;
@@ -766,33 +759,6 @@ public class PartitionBasedMvRefreshProcessor extends BaseTaskRunProcessor {
             }
             // should clear query cache
             connectContext.getGlobalStateMgr().getMetadataMgr().removeQueryMetadata();
-
-            // check new table
-            Optional<Table> optNewTable = MvUtils.getTable(baseTableInfo);
-            if (optNewTable.isEmpty()) {
-                LOG.warn("table {} does not exist after refreshing materialized view:{}",
-                        baseTableInfo.getTableInfoStr(), materializedView.getName());
-                materializedView.setInactiveAndReason(
-                        MaterializedViewExceptions.inactiveReasonForBaseTableNotExists(baseTableInfo.getTableName()));
-                throw new DmlException("Materialized view base table: %s not exist.", baseTableInfo.getTableInfoStr());
-            }
-
-            Table newTable = optNewTable.get();
-            if ((newTable instanceof HiveTable)
-                    && ((HiveTable) newTable).getHiveTableType() == HiveTable.HiveTableType.EXTERNAL_TABLE) {
-                toRepairTables.add(Pair.create(newTable, baseTableInfo));
-            } else {
-                LOG.info("Table:{} is not an hive external table, no need to repair",
-                        baseTableInfo.getTableInfoStr());
-            }
-        }
-
-        // do repair if needed
-        if (!toRepairTables.isEmpty()) {
-            MVPCTMetaRepairer repairer = new MVPCTMetaRepairer(db, materializedView);
-            for (Pair<Table, BaseTableInfo> pair : toRepairTables) {
-                repairer.repairTableIfNeeded(pair.first, pair.second);
-            }
         }
     }
 
@@ -807,7 +773,7 @@ public class PartitionBasedMvRefreshProcessor extends BaseTaskRunProcessor {
         LOG.info("start to update meta for mv:{}", materializedView.getName());
 
         // check
-        Table mv = GlobalStateMgr.getCurrentState().getLocalMetastore().getTable(db.getId(), materializedView.getId());
+        Table mv = db.getTable(materializedView.getId());
         if (mv == null) {
             throw new DmlException(
                     "update meta failed. materialized view:" + materializedView.getName() + " not exist");
@@ -842,7 +808,7 @@ public class PartitionBasedMvRefreshProcessor extends BaseTaskRunProcessor {
             LOG.warn("update final meta failed after mv refreshed:", DebugUtil.getRootStackTrace(e));
             throw e;
         } finally {
-            locker.unLockTableWithIntensiveDbLock(db.getId(), materializedView.getId(), LockType.WRITE);
+            locker.unLockTableWithIntensiveDbLock(db, materializedView, LockType.WRITE);
         }
 
         // update mv status message
@@ -864,12 +830,12 @@ public class PartitionBasedMvRefreshProcessor extends BaseTaskRunProcessor {
         Map<String, String> properties = context.getProperties();
         // NOTE: mvId is set in Task's properties when creating
         long mvId = Long.parseLong(properties.get(MV_ID));
-        db = GlobalStateMgr.getCurrentState().getLocalMetastore().getDb(context.ctx.getDatabase());
+        db = GlobalStateMgr.getCurrentState().getDb(context.ctx.getDatabase());
         if (db == null) {
             LOG.warn("database {} do not exist when refreshing materialized view:{}", context.ctx.getDatabase(), mvId);
             throw new DmlException("database " + context.ctx.getDatabase() + " do not exist.");
         }
-        Table table = GlobalStateMgr.getCurrentState().getLocalMetastore().getTable(db.getId(), mvId);
+        Table table = db.getTable(mvId);
         if (table == null) {
             LOG.warn("materialized view:{} in database:{} do not exist when refreshing", mvId,
                     context.ctx.getDatabase());
@@ -1049,11 +1015,11 @@ public class PartitionBasedMvRefreshProcessor extends BaseTaskRunProcessor {
             BaseTableInfo baseTableInfo = snapshotInfo.getBaseTableInfo();
             Table snapshotTable = snapshotInfo.getBaseTable();
 
-            Optional<Table> optTable = MvUtils.getTableWithIdentifier(baseTableInfo);
-            if (optTable.isEmpty()) {
+            Optional<Table> tableOptional = MvUtils.getTableWithIdentifier(baseTableInfo);
+            if (tableOptional.isEmpty()) {
                 return true;
             }
-            Table table = optTable.get();
+            Table table = tableOptional.get();
             if (snapshotTable.isOlapOrCloudNativeTable()) {
                 OlapTable snapShotOlapTable = (OlapTable) snapshotTable;
                 PartitionInfo snapshotPartitionInfo = snapShotOlapTable.getPartitionInfo();
@@ -1398,27 +1364,8 @@ public class PartitionBasedMvRefreshProcessor extends BaseTaskRunProcessor {
                         selectedPartitionNames);
         for (int index = 0; index < selectedPartitionNames.size(); ++index) {
             long modifiedTime = partitions.get(index).getModifiedTime();
-            String partitionName = selectedPartitionNames.get(index);
-            MaterializedView.BasePartitionInfo basePartitionInfo =
-                    new MaterializedView.BasePartitionInfo(-1, modifiedTime, modifiedTime);
-            TableUpdateArbitrator.UpdateContext updateContext = new TableUpdateArbitrator.UpdateContext(
-                    table,
-                    -1,
-                    Lists.newArrayList(partitionName));
-            if (table instanceof HiveTable
-                    && ((HiveTable) table).getHiveTableType() == HiveTable.HiveTableType.EXTERNAL_TABLE) {
-                TableUpdateArbitrator arbitrator = TableUpdateArbitrator.create(updateContext);
-                if (arbitrator != null) {
-                    Map<String, Optional<HivePartitionDataInfo>> partitionDataInfos = arbitrator.getPartitionDataInfos();
-                    Preconditions.checkState(partitionDataInfos.size() == 1);
-                    if (partitionDataInfos.get(partitionName).isPresent()) {
-                        HivePartitionDataInfo hivePartitionDataInfo = partitionDataInfos.get(partitionName).get();
-                        basePartitionInfo.setExtLastFileModifiedTime(hivePartitionDataInfo.getLastFileModifiedTime());
-                        basePartitionInfo.setFileNumber(hivePartitionDataInfo.getFileNumber());
-                    }
-                }
-            }
-            partitionInfos.put(partitionName, basePartitionInfo);
+            partitionInfos.put(selectedPartitionNames.get(index),
+                    new MaterializedView.BasePartitionInfo(-1, modifiedTime, modifiedTime));
         }
         return partitionInfos;
     }

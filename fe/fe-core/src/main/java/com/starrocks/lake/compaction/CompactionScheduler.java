@@ -256,7 +256,7 @@ public class CompactionScheduler extends Daemon {
     }
 
     private CompactionJob startCompaction(PartitionIdentifier partitionIdentifier) {
-        Database db = stateMgr.getLocalMetastore().getDb(partitionIdentifier.getDbId());
+        Database db = stateMgr.getDb(partitionIdentifier.getDbId());
         if (db == null) {
             compactionManager.removePartition(partitionIdentifier);
             return null;
@@ -269,12 +269,11 @@ public class CompactionScheduler extends Daemon {
         Map<Long, List<Long>> beToTablets;
 
         Locker locker = new Locker();
-        locker.lockDatabase(db.getId(), LockType.READ);
+        locker.lockDatabase(db, LockType.READ);
 
         try {
             // lake table or lake materialized view
-            table = (OlapTable) GlobalStateMgr.getCurrentState().getLocalMetastore()
-                        .getTable(db.getId(), partitionIdentifier.getTableId());
+            table = (OlapTable) db.getTable(partitionIdentifier.getTableId());
             // Compact a table of SCHEMA_CHANGE state does not make much sense, because the compacted data
             // will not be used after the schema change job finished.
             if (table != null && table.getState() == OlapTable.OlapTableState.SCHEMA_CHANGE) {
@@ -308,7 +307,7 @@ public class CompactionScheduler extends Daemon {
             LOG.error("Unknown error: {}", e.getMessage());
             return null;
         } finally {
-            locker.unLockDatabase(db.getId(), LockType.READ);
+            locker.unLockDatabase(db, LockType.READ);
         }
 
         long nextCompactionInterval = MIN_COMPACTION_INTERVAL_MS_ON_SUCCESS;
@@ -402,7 +401,7 @@ public class CompactionScheduler extends Daemon {
             throws UserException {
         List<TabletCommitInfo> commitInfoList = job.buildTabletCommitInfo();
 
-        Database db = stateMgr.getLocalMetastore().getDb(partition.getDbId());
+        Database db = stateMgr.getDb(partition.getDbId());
         if (db == null) {
             throw new MetaNotFoundException("database not exist");
         }
@@ -416,7 +415,7 @@ public class CompactionScheduler extends Daemon {
                 .getTransactionState(db.getId(), job.getTxnId());
         List<Long> tableIdList = transactionState.getTableIdList();
         Locker locker = new Locker();
-        locker.lockTablesWithIntensiveDbLock(db.getId(), tableIdList, LockType.WRITE);
+        locker.lockTablesWithIntensiveDbLock(db, tableIdList, LockType.WRITE);
         try {
             CompactionTxnCommitAttachment attachment = null;
             if (forceCommit) { // do not write extra info if no need to force commit
@@ -425,7 +424,7 @@ public class CompactionScheduler extends Daemon {
             waiter = transactionMgr.commitTransaction(db.getId(), job.getTxnId(), commitInfoList,
                     Collections.emptyList(), attachment);
         } finally {
-            locker.unLockTablesWithIntensiveDbLock(db.getId(), tableIdList, LockType.WRITE);
+            locker.unLockTablesWithIntensiveDbLock(db, tableIdList, LockType.WRITE);
         }
         job.setVisibleStateWaiter(waiter);
         job.setCommitTs(System.currentTimeMillis());

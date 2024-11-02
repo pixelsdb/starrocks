@@ -102,8 +102,7 @@ Status TabletReader::prepare() {
     SCOPED_RAW_TIMER(&_stats.get_rowsets_ns);
     Status st = Status::OK();
     // Non-empty rowsets indicate that it is captured before creating this TabletReader.
-    // _use_gtid is used to indicate that the rowsets are captured by gtid.
-    if (_rowsets.empty() && !_use_gtid) {
+    if (_rowsets.empty()) {
         std::shared_lock l(_tablet->get_header_lock());
         st = _tablet->capture_consistent_rowsets(_version, &_rowsets);
         if (!st.ok()) {
@@ -286,8 +285,6 @@ Status TabletReader::_init_collector_for_pk_index_read() {
     rs_opts.runtime_range_pruner = _reader_params->runtime_range_pruner;
     // single row fetch, no need to use delvec
     rs_opts.is_primary_keys = false;
-    rs_opts.use_vector_index = _reader_params->use_vector_index;
-    rs_opts.vector_search_option = _reader_params->vector_search_option;
 
     rs_opts.rowid_range_option = std::make_shared<RowidRangeOption>();
     auto rowid_range = std::make_shared<SparseRange<>>();
@@ -344,9 +341,9 @@ Status TabletReader::get_segment_iterators(const TabletReaderParams& params, std
     RETURN_IF_ERROR(parse_seek_range(_tablet_schema, params.range, params.end_range, params.start_key, params.end_key,
                                      &rs_opts.ranges, &_mempool));
     rs_opts.pred_tree = params.pred_tree;
-    PredicateTree pred_tree_for_zone_map;
-    RETURN_IF_ERROR(ZonemapPredicatesRewriter::rewrite_predicate_tree(&_obj_pool, rs_opts.pred_tree,
-                                                                      rs_opts.pred_tree_for_zone_map));
+    auto cid_to_preds = rs_opts.pred_tree.get_immediate_column_predicate_map();
+    RETURN_IF_ERROR(ZonemapPredicatesRewriter::rewrite_predicate_map(&_obj_pool, cid_to_preds,
+                                                                     &rs_opts.predicates_for_zone_map));
     rs_opts.sorted = (keys_type != DUP_KEYS && keys_type != PRIMARY_KEYS) && !params.skip_aggregation;
     rs_opts.reader_type = params.reader_type;
     rs_opts.chunk_size = params.chunk_size;
@@ -360,8 +357,6 @@ Status TabletReader::get_segment_iterators(const TabletReaderParams& params, std
     rs_opts.unused_output_column_ids = params.unused_output_column_ids;
     rs_opts.runtime_range_pruner = params.runtime_range_pruner;
     rs_opts.column_access_paths = params.column_access_paths;
-    rs_opts.use_vector_index = params.use_vector_index;
-    rs_opts.vector_search_option = params.vector_search_option;
     if (keys_type == KeysType::PRIMARY_KEYS) {
         rs_opts.is_primary_keys = true;
         rs_opts.version = _version.second;

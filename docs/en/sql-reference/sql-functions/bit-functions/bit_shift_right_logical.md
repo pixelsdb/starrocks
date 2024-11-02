@@ -4,7 +4,7 @@ displayed_sidebar: docs
 
 # bit_shift_right
 
-
+## Description
 
 Shifts the binary representation of a numeric expression to the right by a specified number of bits.
 

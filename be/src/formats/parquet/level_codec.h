@@ -14,12 +14,7 @@
 
 #pragma once
 
-#include <glog/logging.h>
-#include <string.h>
-
-#include <algorithm>
 #include <cstdint>
-#include <vector>
 
 #include "common/status.h"
 #include "formats/parquet/types.h"
@@ -27,7 +22,6 @@
 #include "util/bit_stream_utils.h"
 #include "util/rle_encoding.h"
 #include "util/runtime_profile.h"
-#include "util/stopwatch.hpp"
 
 namespace starrocks {
 class Slice;

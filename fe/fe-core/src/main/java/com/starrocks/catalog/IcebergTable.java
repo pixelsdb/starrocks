@@ -20,6 +20,7 @@ import com.google.common.base.Objects;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
+import com.google.common.collect.Sets;
 import com.google.gson.annotations.SerializedName;
 import com.starrocks.analysis.DescriptorTable;
 import com.starrocks.analysis.Expr;
@@ -42,6 +43,7 @@ import org.apache.iceberg.BaseTable;
 import org.apache.iceberg.PartitionField;
 import org.apache.iceberg.PartitionSpec;
 import org.apache.iceberg.Schema;
+import org.apache.iceberg.Snapshot;
 import org.apache.iceberg.SortField;
 import org.apache.iceberg.types.Types;
 import org.apache.logging.log4j.LogManager;
@@ -54,6 +56,8 @@ import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 
@@ -65,16 +69,18 @@ import static org.apache.iceberg.TableProperties.DEFAULT_FILE_FORMAT_DEFAULT;
 public class IcebergTable extends Table {
     private static final Logger LOG = LogManager.getLogger(IcebergTable.class);
 
+    private Optional<Snapshot> snapshot = null;
+    private static final String JSON_KEY_ICEBERG_DB = "database";
+    private static final String JSON_KEY_ICEBERG_TABLE = "table";
+    private static final String JSON_KEY_RESOURCE_NAME = "resource";
+    private static final String JSON_KEY_ICEBERG_PROPERTIES = "icebergProperties";
     private static final String PARQUET_FORMAT = "parquet";
-    public static final String DATA_SEQUENCE_NUMBER = "$data_sequence_number";
-    public static final String SPEC_ID = "$spec_id";
-    public static final String EQUALITY_DELETE_TABLE_COMMENT = "equality_delete_table_comment";
 
     private String catalogName;
     @SerializedName(value = "dn")
-    protected String remoteDbName;
+    private String remoteDbName;
     @SerializedName(value = "tn")
-    protected String remoteTableName;
+    private String remoteTableName;
     @SerializedName(value = "rn")
     private String resourceName;
     @SerializedName(value = "prop")
@@ -85,6 +91,7 @@ public class IcebergTable extends Table {
 
     private final AtomicLong partitionIdGen = new AtomicLong(0L);
 
+    private Set<Integer> identifierFieldIds = Sets.newHashSet();
 
     public IcebergTable() {
         super(TableType.ICEBERG);
@@ -118,6 +125,15 @@ public class IcebergTable extends Table {
 
     public String getRemoteTableName() {
         return remoteTableName;
+    }
+
+    public Optional<Snapshot> getSnapshot() {
+        if (snapshot != null) {
+            return snapshot;
+        } else {
+            snapshot = Optional.ofNullable(getNativeTable().currentSnapshot());
+            return snapshot;
+        }
     }
 
     @Override
@@ -211,6 +227,10 @@ public class IcebergTable extends Table {
                 (isV2Format() && getNativeTable().spec().specId() > 0);
     }
 
+    public void resetSnapshot() {
+        snapshot = null;
+    }
+
     public boolean isV2Format() {
         return ((BaseTable) getNativeTable()).operations().current().formatVersion() > 1;
     }
@@ -251,10 +271,6 @@ public class IcebergTable extends Table {
     @Override
     public boolean isUnPartitioned() {
         return ((BaseTable) getNativeTable()).operations().current().spec().isUnpartitioned();
-    }
-
-    public boolean isPartitioned() {
-        return !isUnPartitioned();
     }
 
     public List<String> getPartitionColumnNames() {
@@ -302,7 +318,10 @@ public class IcebergTable extends Table {
         }
         return nativeTable;
     }
-
+    
+    public void setIdentifierFieldIds(Set<Integer> identifierFieldIds) {
+        this.identifierFieldIds = identifierFieldIds;
+    }
 
     @Override
     public TTableDescriptor toThrift(List<DescriptorTable.ReferencedPartitionInfo> partitions) {
@@ -319,6 +338,18 @@ public class IcebergTable extends Table {
 
         tIcebergTable.setIceberg_schema(IcebergApiConverter.getTIcebergSchema(nativeTable.schema()));
         tIcebergTable.setPartition_column_names(getPartitionColumnNames());
+
+        Set<Integer> identifierIds = nativeTable.schema().identifierFieldIds();
+        if (identifierIds.isEmpty()) {
+            identifierIds = this.identifierFieldIds;
+        }
+
+        if (!identifierIds.isEmpty()) {
+            tIcebergTable.setIceberg_equal_delete_schema(IcebergApiConverter.getTIcebergSchema(
+                    new Schema(identifierIds.stream()
+                            .map(id -> nativeTable.schema().findField(id))
+                            .collect(Collectors.toList()))));
+        }
 
         if (!partitions.isEmpty()) {
             TPartitionMap tPartitionMap = new TPartitionMap();
@@ -368,11 +399,6 @@ public class IcebergTable extends Table {
 
     @Override
     public boolean supportPreCollectMetadata() {
-        return true;
-    }
-
-    @Override
-    public boolean isTemporal() {
         return true;
     }
 

@@ -22,7 +22,6 @@
 #include "common/statusor.h"
 #include "gen_cpp/olap_file.pb.h"
 #include "gutil/macros.h"
-#include "storage/lake/delta_writer_finish_mode.h"
 
 namespace starrocks {
 class MemTracker;
@@ -31,8 +30,7 @@ class SlotDescriptor;
 
 namespace starrocks {
 class Chunk;
-class TxnLogPB;
-} // namespace starrocks
+}
 
 namespace starrocks::lake {
 
@@ -46,10 +44,8 @@ class AsyncDeltaWriter {
     friend class AsyncDeltaWriterBuilder;
 
 public:
-    using TxnLogPtr = std::shared_ptr<const TxnLogPB>;
     using Ptr = std::unique_ptr<AsyncDeltaWriter>;
     using Callback = std::function<void(Status st)>;
-    using FinishCallback = std::function<void(StatusOr<TxnLogPtr> res)>;
 
     explicit AsyncDeltaWriter(AsyncDeltaWriterImpl* impl) : _impl(impl) {}
 
@@ -62,7 +58,7 @@ public:
     // same Status as the first call.
     //
     // [thread-safe]
-    Status open();
+    [[nodiscard]] Status open();
 
     // REQUIRE:
     //  - |chunk| and |indexes| must be kept alive until |cb| been invoked
@@ -83,9 +79,7 @@ public:
     // [thread-safe]
     //
     // TODO: Change signature to `Future<Status> finish()`
-    void finish(FinishCallback cb) { finish(DeltaWriterFinishMode::kWriteTxnLog, cb); }
-
-    void finish(DeltaWriterFinishMode mode, FinishCallback cb);
+    void finish(Callback cb);
 
     // This method will wait for all running tasks completed.
     //
@@ -108,7 +102,7 @@ public:
 
     [[nodiscard]] bool is_immutable() const;
 
-    Status check_immutable();
+    [[nodiscard]] Status check_immutable();
 
     [[nodiscard]] int64_t last_write_ts() const;
 

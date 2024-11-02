@@ -17,15 +17,12 @@ package com.starrocks.connector.paimon;
 import com.google.common.collect.Lists;
 import com.starrocks.catalog.Column;
 import com.starrocks.catalog.PaimonTable;
+import com.starrocks.catalog.PartitionKey;
 import com.starrocks.catalog.ScalarType;
 import com.starrocks.catalog.Table;
 import com.starrocks.catalog.Type;
-import com.starrocks.connector.ConnectorProperties;
-import com.starrocks.connector.ConnectorType;
-import com.starrocks.connector.GetRemoteFilesParams;
 import com.starrocks.connector.HdfsEnvironment;
 import com.starrocks.connector.RemoteFileInfo;
-import com.starrocks.connector.TableVersionRange;
 import com.starrocks.credential.CloudConfiguration;
 import com.starrocks.credential.CloudType;
 import com.starrocks.server.MetadataMgr;
@@ -35,6 +32,7 @@ import com.starrocks.sql.optimizer.OptimizerContext;
 import com.starrocks.sql.optimizer.base.ColumnRefFactory;
 import com.starrocks.sql.optimizer.operator.logical.LogicalPaimonScanOperator;
 import com.starrocks.sql.optimizer.operator.scalar.ColumnRefOperator;
+import com.starrocks.sql.optimizer.operator.scalar.ScalarOperator;
 import com.starrocks.sql.optimizer.rule.transformation.ExternalScanPartitionPruneRule;
 import mockit.Expectations;
 import mockit.Mock;
@@ -97,8 +95,7 @@ public class PaimonMetadataTest {
 
     @Before
     public void setUp() {
-        this.metadata = new PaimonMetadata("paimon_catalog", new HdfsEnvironment(), paimonNativeCatalog,
-                new ConnectorProperties(ConnectorType.PAIMON));
+        this.metadata = new PaimonMetadata("paimon_catalog", new HdfsEnvironment(), paimonNativeCatalog);
 
         BinaryRow row1 = new BinaryRow(2);
         BinaryRowWriter writer = new BinaryRowWriter(row1, 10);
@@ -254,15 +251,15 @@ public class PaimonMetadataTest {
                 result = mockRecordReader;
             }
         };
-        List<String> result = metadata.listPartitionNames("db1", "tbl1", TableVersionRange.empty());
+        List<String> result = metadata.listPartitionNames("db1", "tbl1", -1);
         Assert.assertEquals(2, result.size());
         List<String> expections = Lists.newArrayList("year=2020/month=1", "year=2020/month=2");
         Assertions.assertThat(result).hasSameElementsAs(expections);
     }
 
     @Test
-    public void testGetRemoteFiles(@Mocked FileStoreTable paimonNativeTable,
-                                   @Mocked ReadBuilder readBuilder)
+    public void testGetRemoteFileInfos(@Mocked FileStoreTable paimonNativeTable,
+                                       @Mocked ReadBuilder readBuilder)
             throws Catalog.TableNotExistException {
         new MockUp<PaimonMetadata>() {
             @Mock
@@ -282,8 +279,7 @@ public class PaimonMetadataTest {
         };
         PaimonTable paimonTable = (PaimonTable) metadata.getTable("db1", "tbl1");
         List<String> requiredNames = Lists.newArrayList("f2", "dt");
-        List<RemoteFileInfo> result =
-                metadata.getRemoteFiles(paimonTable, GetRemoteFilesParams.newBuilder().setFieldNames(requiredNames).build());
+        List<RemoteFileInfo> result = metadata.getRemoteFileInfos(paimonTable, null, -1, null, requiredNames, -1);
         Assert.assertEquals(1, result.size());
         Assert.assertEquals(1, result.get(0).getFiles().size());
         PaimonRemoteFileDesc desc = (PaimonRemoteFileDesc) result.get(0).getFiles().get(0);
@@ -411,7 +407,9 @@ public class PaimonMetadataTest {
     public void testPrunePaimonPartition() {
         new MockUp<MetadataMgr>() {
             @Mock
-            public List<RemoteFileInfo> getRemoteFiles(Table table, GetRemoteFilesParams params) {
+            public List<RemoteFileInfo> getRemoteFileInfos(String catalogName, Table table, List<PartitionKey> partitionKeys,
+                                                           long snapshotId, ScalarOperator predicate, List<String> fieldNames,
+                                                           long limit) {
                 return Lists.newArrayList(RemoteFileInfo.builder()
                         .setFiles(Lists.newArrayList(PaimonRemoteFileDesc.createPamonRemoteFileDesc(
                                 new PaimonSplitsInfo(null, Lists.newArrayList((Split) splits.get(0))))))

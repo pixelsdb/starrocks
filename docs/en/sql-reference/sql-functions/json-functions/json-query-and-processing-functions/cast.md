@@ -4,7 +4,7 @@ displayed_sidebar: docs
 
 # cast
 
-
+## Description
 
 Converts a value between the JSON type and SQL type.
 

@@ -14,30 +14,22 @@
 
 #include "formats/parquet/group_reader.h"
 
-#include <glog/logging.h>
-
-#include <algorithm>
 #include <memory>
-#include <utility>
+#include <sstream>
 
-#include "column/chunk.h"
+#include "column/column_helper.h"
 #include "common/config.h"
 #include "common/status.h"
 #include "exec/exec_node.h"
 #include "exec/hdfs_scanner.h"
 #include "exprs/expr.h"
 #include "exprs/expr_context.h"
-#include "exprs/function_context.h"
-#include "formats/parquet/metadata.h"
 #include "formats/parquet/page_index_reader.h"
-#include "formats/parquet/schema.h"
 #include "gutil/strings/substitute.h"
 #include "runtime/types.h"
 #include "simd/simd.h"
 #include "storage/chunk_helper.h"
 #include "util/defer_op.h"
-#include "util/runtime_profile.h"
-#include "util/stopwatch.hpp"
 #include "utils.h"
 
 namespace starrocks::parquet {
@@ -171,13 +163,8 @@ Status GroupReader::get_next(ChunkPtr* chunk, size_t* row_count) {
             ChunkPtr lazy_chunk = _create_read_chunk(_lazy_column_indices);
 
             if (has_filter) {
-                Range<uint64_t> lazy_read_range = r.filter(&chunk_filter);
-                // if all data is filtered, we have skipped early.
-                DCHECK(lazy_read_range.span_size() > 0);
-                Filter lazy_filter = {chunk_filter.begin() + lazy_read_range.begin() - r.begin(),
-                                      chunk_filter.begin() + lazy_read_range.end() - r.begin()};
-                RETURN_IF_ERROR(_read_range(_lazy_column_indices, lazy_read_range, &lazy_filter, &lazy_chunk));
-                lazy_chunk->filter_range(lazy_filter, 0, lazy_read_range.span_size());
+                RETURN_IF_ERROR(_read_range(_lazy_column_indices, r, &chunk_filter, &lazy_chunk));
+                lazy_chunk->filter_range(chunk_filter, 0, count);
             } else {
                 RETURN_IF_ERROR(_read_range(_lazy_column_indices, r, nullptr, &lazy_chunk));
             }
@@ -189,11 +176,12 @@ Status GroupReader::get_next(ChunkPtr* chunk, size_t* row_count) {
             active_chunk->merge(std::move(*lazy_chunk));
         }
 
-        *row_count = active_chunk->num_rows();
+        _read_chunk->swap_chunk(*active_chunk);
+        *row_count = _read_chunk->num_rows();
 
         SCOPED_RAW_TIMER(&_param.stats->group_dict_decode_ns);
         // convert from _read_chunk to chunk.
-        RETURN_IF_ERROR(_fill_dst_chunk(active_chunk, chunk));
+        RETURN_IF_ERROR(_fill_dst_chunk(_read_chunk, chunk));
         break;
     }
 
@@ -209,7 +197,8 @@ Status GroupReader::_read_range(const std::vector<int>& read_columns, const Rang
     for (int col_idx : read_columns) {
         auto& column = _param.read_cols[col_idx];
         SlotId slot_id = column.slot_id();
-        RETURN_IF_ERROR(_column_readers[slot_id]->read_range(range, filter, (*chunk)->get_column_by_slot_id(slot_id)));
+        RETURN_IF_ERROR(
+                _column_readers[slot_id]->read_range(range, filter, (*chunk)->get_column_by_slot_id(slot_id).get()));
     }
 
     return Status::OK();
@@ -219,14 +208,14 @@ StatusOr<size_t> GroupReader::_read_range_round_by_round(const Range<uint64_t>& 
                                                          ChunkPtr* chunk) {
     const std::vector<int>& read_order = _column_read_order_ctx->get_column_read_order();
     size_t round_cost = 0;
-    double first_selectivity = -1;
-    DeferOp defer([&]() { _column_read_order_ctx->update_ctx(round_cost, first_selectivity); });
+    DeferOp defer([&]() { _column_read_order_ctx->update_ctx(round_cost); });
     size_t hit_count = 0;
     for (int col_idx : read_order) {
         auto& column = _param.read_cols[col_idx];
         round_cost += _column_read_order_ctx->get_column_cost(col_idx);
         SlotId slot_id = column.slot_id();
-        RETURN_IF_ERROR(_column_readers[slot_id]->read_range(range, filter, (*chunk)->get_column_by_slot_id(slot_id)));
+        RETURN_IF_ERROR(
+                _column_readers[slot_id]->read_range(range, filter, (*chunk)->get_column_by_slot_id(slot_id).get()));
 
         if (std::find(_dict_column_indices.begin(), _dict_column_indices.end(), col_idx) !=
             _dict_column_indices.end()) {
@@ -254,7 +243,6 @@ StatusOr<size_t> GroupReader::_read_range_round_by_round(const Range<uint64_t>& 
                 break;
             }
         }
-        first_selectivity = first_selectivity < 0 ? hit_count * 1.0 / filter->size() : first_selectivity;
     }
 
     return hit_count;
@@ -348,7 +336,6 @@ void GroupReader::_process_columns_and_conjunct_ctxs() {
             } else {
                 _active_column_indices.emplace_back(read_col_idx);
             }
-            _column_readers[slot_id]->set_can_lazy_decode(true);
         }
         ++read_col_idx;
     }
@@ -429,6 +416,7 @@ void GroupReader::_init_read_chunk() {
     }
     size_t chunk_size = _param.chunk_size;
     _read_chunk = ChunkHelper::new_chunk(read_slots, chunk_size);
+    _init_chunk_dict_column(&_read_chunk);
 }
 
 void GroupReader::_use_as_dict_filter_column(int col_idx, SlotId slot_id, std::vector<std::string>& sub_field_path) {
@@ -456,6 +444,17 @@ Status GroupReader::_rewrite_conjunct_ctxs_to_predicates(bool* is_group_filtered
     return Status::OK();
 }
 
+void GroupReader::_init_chunk_dict_column(ChunkPtr* chunk) {
+    // replace dict filter column
+    for (int col_idx : _dict_column_indices) {
+        const auto& column = _param.read_cols[col_idx];
+        SlotId slot_id = column.slot_id();
+        for (const auto& sub_field_path : _dict_column_sub_field_paths[col_idx]) {
+            _column_readers[slot_id]->init_dict_column((*chunk)->get_column_by_slot_id(slot_id), sub_field_path, 0);
+        }
+    }
+}
+
 StatusOr<bool> GroupReader::_filter_chunk_with_dict_filter(ChunkPtr* chunk, Filter* filter) {
     if (_dict_column_indices.size() == 0) {
         return false;
@@ -471,7 +470,7 @@ StatusOr<bool> GroupReader::_filter_chunk_with_dict_filter(ChunkPtr* chunk, Filt
     return true;
 }
 
-Status GroupReader::_fill_dst_chunk(ChunkPtr& read_chunk, ChunkPtr* chunk) {
+Status GroupReader::_fill_dst_chunk(const ChunkPtr& read_chunk, ChunkPtr* chunk) {
     read_chunk->check_or_die();
     for (const auto& column : _param.read_cols) {
         SlotId slot_id = column.slot_id();

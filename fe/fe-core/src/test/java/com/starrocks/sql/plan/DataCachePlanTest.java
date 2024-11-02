@@ -16,6 +16,7 @@ package com.starrocks.sql.plan;
 
 import com.starrocks.common.Pair;
 import com.starrocks.datacache.DataCacheMgr;
+import com.starrocks.planner.PlanNodeId;
 import com.starrocks.qe.DDLStmtExecutor;
 import com.starrocks.qe.DefaultCoordinator;
 import com.starrocks.sql.analyzer.AnalyzeTestUtil;
@@ -23,7 +24,7 @@ import com.starrocks.sql.ast.ClearDataCacheRulesStmt;
 import com.starrocks.sql.ast.CreateDataCacheRuleStmt;
 import com.starrocks.sql.ast.DropDataCacheRuleStmt;
 import com.starrocks.sql.parser.NodePosition;
-import com.starrocks.thrift.TScanRangeParams;
+import com.starrocks.thrift.TScanRangeLocations;
 import com.starrocks.utframe.UtFrameUtils;
 import org.junit.After;
 import org.junit.Assert;
@@ -63,8 +64,9 @@ public class DataCachePlanTest extends PlanTestBase {
 
         String executeSql = "select * from hive0.datacache_db.normal_table;";
         Pair<String, DefaultCoordinator> pair = UtFrameUtils.getPlanAndStartScheduling(connectContext, executeSql);
-        List<TScanRangeParams> tScanRangeLocations = collectAllScanRangeParams(pair.second);
-        Assert.assertEquals(-1, tScanRangeLocations.get(0).scan_range.hdfs_scan_range.getDatacache_options().getPriority());
+        TScanRangeLocations tScanRangeLocations = pair.second.getFragments().get(1).collectScanNodes()
+                .get(new PlanNodeId(0)).getScanRangeLocations(100).get(0);
+        Assert.assertEquals(-1, tScanRangeLocations.scan_range.hdfs_scan_range.getDatacache_options().getPriority());
 
         // clear rule
         ClearDataCacheRulesStmt clearDataCacheRulesStmt = new ClearDataCacheRulesStmt(NodePosition.ZERO);
@@ -72,8 +74,9 @@ public class DataCachePlanTest extends PlanTestBase {
 
         executeSql = "select * from hive0.datacache_db.normal_table;";
         pair = UtFrameUtils.getPlanAndStartScheduling(connectContext, executeSql);
-        tScanRangeLocations = collectAllScanRangeParams(pair.second);
-        Assert.assertFalse(tScanRangeLocations.get(0).scan_range.hdfs_scan_range.isSetDatacache_options());
+        tScanRangeLocations = pair.second.getFragments().get(1).collectScanNodes()
+                .get(new PlanNodeId(0)).getScanRangeLocations(100).get(0);
+        Assert.assertFalse(tScanRangeLocations.scan_range.hdfs_scan_range.isSetDatacache_options());
     }
 
     @Test
@@ -85,10 +88,11 @@ public class DataCachePlanTest extends PlanTestBase {
 
         String executeSql = "select * from hive0.datacache_db.single_partition_table;";
         Pair<String, DefaultCoordinator> pair = UtFrameUtils.getPlanAndStartScheduling(connectContext, executeSql);
-        List<TScanRangeParams> tScanRangeLocationsList = collectAllScanRangeParams(pair.second);
+        List<TScanRangeLocations> tScanRangeLocationsList = pair.second.getFragments().get(1).collectScanNodes()
+                .get(new PlanNodeId(0)).getScanRangeLocations(100);
         Assert.assertEquals(8, tScanRangeLocationsList.size());
         for (int i = 0; i < tScanRangeLocationsList.size(); i++) {
-            TScanRangeParams tScanRangeLocations = tScanRangeLocationsList.get(i);
+            TScanRangeLocations tScanRangeLocations = tScanRangeLocationsList.get(i);
             if (tScanRangeLocations.scan_range.hdfs_scan_range.partition_id == 6 ||
                     tScanRangeLocations.scan_range.hdfs_scan_range.partition_id == 7) {
                 Assert.assertEquals(-1,
@@ -104,9 +108,10 @@ public class DataCachePlanTest extends PlanTestBase {
 
         executeSql = "select * from hive0.datacache_db.single_partition_table;";
         pair = UtFrameUtils.getPlanAndStartScheduling(connectContext, executeSql);
-        tScanRangeLocationsList = collectAllScanRangeParams(pair.second);
+        tScanRangeLocationsList = pair.second.getFragments().get(1).collectScanNodes()
+                .get(new PlanNodeId(0)).getScanRangeLocations(100);
         Assert.assertEquals(8, tScanRangeLocationsList.size());
-        for (TScanRangeParams tScanRangeLocations : tScanRangeLocationsList) {
+        for (TScanRangeLocations tScanRangeLocations : tScanRangeLocationsList) {
             Assert.assertFalse(tScanRangeLocations.scan_range.hdfs_scan_range.isSetDatacache_options());
         }
     }
@@ -121,10 +126,11 @@ public class DataCachePlanTest extends PlanTestBase {
 
         String executeSql = "select * from hive0.datacache_db.multi_partition_table;";
         Pair<String, DefaultCoordinator> pair = UtFrameUtils.getPlanAndStartScheduling(connectContext, executeSql);
-        List<TScanRangeParams> tScanRangeLocationsList = collectAllScanRangeParams(pair.second);
+        List<TScanRangeLocations> tScanRangeLocationsList = pair.second.getFragments().get(1).collectScanNodes()
+                .get(new PlanNodeId(0)).getScanRangeLocations(100);
         Assert.assertEquals(8, tScanRangeLocationsList.size());
         for (int i = 0; i < tScanRangeLocationsList.size(); i++) {
-            TScanRangeParams tScanRangeLocations = tScanRangeLocationsList.get(i);
+            TScanRangeLocations tScanRangeLocations = tScanRangeLocationsList.get(i);
             if (tScanRangeLocations.scan_range.hdfs_scan_range.partition_id == 7) {
                 Assert.assertEquals(-1,
                         tScanRangeLocations.scan_range.hdfs_scan_range.getDatacache_options().getPriority());
@@ -137,9 +143,10 @@ public class DataCachePlanTest extends PlanTestBase {
         dataCacheMgr.clearRules();
         executeSql = "select * from hive0.datacache_db.multi_partition_table;";
         pair = UtFrameUtils.getPlanAndStartScheduling(connectContext, executeSql);
-        tScanRangeLocationsList = collectAllScanRangeParams(pair.second);
+        tScanRangeLocationsList = pair.second.getFragments().get(1).collectScanNodes()
+                .get(new PlanNodeId(0)).getScanRangeLocations(100);
         Assert.assertEquals(8, tScanRangeLocationsList.size());
-        for (TScanRangeParams tScanRangeLocations : tScanRangeLocationsList) {
+        for (TScanRangeLocations tScanRangeLocations : tScanRangeLocationsList) {
             Assert.assertFalse(tScanRangeLocations.scan_range.hdfs_scan_range.isSetDatacache_options());
         }
     }
@@ -155,9 +162,10 @@ public class DataCachePlanTest extends PlanTestBase {
 
         String executeSql = "select * from hive0.datacache_db.multi_partition_table;";
         Pair<String, DefaultCoordinator> pair = UtFrameUtils.getPlanAndStartScheduling(connectContext, executeSql);
-        List<TScanRangeParams> tScanRangeLocationsList = collectAllScanRangeParams(pair.second);
+        List<TScanRangeLocations> tScanRangeLocationsList = pair.second.getFragments().get(1).collectScanNodes()
+                .get(new PlanNodeId(0)).getScanRangeLocations(100);
         Assert.assertEquals(8, tScanRangeLocationsList.size());
-        for (TScanRangeParams tScanRangeLocations : tScanRangeLocationsList) {
+        for (TScanRangeLocations tScanRangeLocations : tScanRangeLocationsList) {
             Assert.assertFalse(tScanRangeLocations.scan_range.hdfs_scan_range.isSetDatacache_options());
         }
     }

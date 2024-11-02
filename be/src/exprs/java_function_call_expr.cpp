@@ -27,6 +27,7 @@
 #include "column/vectorized_fwd.h"
 #include "common/status.h"
 #include "common/statusor.h"
+#include "exprs/anyval_util.h"
 #include "exprs/function_context.h"
 #include "gutil/casts.h"
 #include "jni.h"
@@ -132,11 +133,11 @@ Status JavaFunctionCallExpr::prepare(RuntimeState* state, ExprContext* context) 
         return Status::InternalError("Not Found function id for " + _fn.name.function_name);
     }
 
-    FunctionContext::TypeDesc return_type = _type;
+    FunctionContext::TypeDesc return_type = AnyValUtil::column_type_to_type_desc(_type);
     std::vector<FunctionContext::TypeDesc> args_types;
 
     for (Expr* child : _children) {
-        args_types.push_back(child->type());
+        args_types.push_back(AnyValUtil::column_type_to_type_desc(child->type()));
     }
 
     // todo: varargs use for allocate slice memory, need compute buffer size

@@ -4,7 +4,7 @@ displayed_sidebar: docs
 
 # milliseconds_diff
 
-
+## Description
 
 Returns the time difference between the start date and end date in milliseconds.
 

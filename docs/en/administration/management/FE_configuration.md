@@ -1090,24 +1090,6 @@ ADMIN SET FRONTEND CONFIG ("key" = "value");
 - Description: Whether to enable the metadata recovery mode. When this mode is enabled, if part of the cluster metadata is lost, it can be restored based on the information from BE. Currently, only the version information of partitions can be restored.
 - Introduced in: v3.3.0
 
-##### black_host_history_sec
-
-- Default: 2 * 60
-- Type: Int
-- Unit: Seconds
-- Is mutable: Yes
-- Description: The time duration for retaining historical connection failures of BE nodes in the BE Blacklist. If a BE node is added to the BE Blacklist automatically, StarRocks will assess its connectivity and judge whether it can be removed from the BE Blacklist. Within `black_host_history_sec`, only if a blacklisted BE node has fewer connection failures than the threshold set in `black_host_connect_failures_within_time`, it can be removed from the BE Blacklist.
-- Introduced in: v3.3.0
-
-##### black_host_connect_failures_within_time
-
-- Default: 5
-- Type: Int
-- Unit: -
-- Is mutable: Yes
-- Description: The threshold of connection failures allowed for a blacklisted BE node. If a BE node is added to the BE Blacklist automatically, StarRocks will assess its connectivity and judge whether it can be removed from the BE Blacklist. Within `black_host_history_sec`, only if a blacklisted BE node has fewer connection failures than the threshold set in `black_host_connect_failures_within_time`, it can be removed from the BE Blacklist.
-- Introduced in: v3.3.0
-
 #### lock_manager_enabled
 
 - Default: true
@@ -1124,6 +1106,24 @@ ADMIN SET FRONTEND CONFIG ("key" = "value");
 - Unit: -
 - Is mutable: No
 - Description: Whether to refine the granularity of metadata locks from the database level to the table level. After metadata locks are refined to the table level, lock conflicts and contentions can be reduced, which improves load and query concurrency. This parameter only takes effect when `lock_manager_enabled` is enabled.
+- Introduced in: v3.3.0
+
+##### black_host_history_sec
+
+- Default: 2 * 60
+- Type: Int
+- Unit: Seconds
+- Is mutable: Yes
+- Description: The time duration for retaining historical connection failures of BE nodes in the BE Blacklist. If a BE node is added to the BE Blacklist automatically, StarRocks will assess its connectivity and judge whether it can be removed from the BE Blacklist. Within `black_host_history_sec`, only if a blacklisted BE node has fewer connection failures than the threshold set in `black_host_connect_failures_within_time`, it can be removed from the BE Blacklist.
+- Introduced in: v3.3.0
+
+##### black_host_connect_failures_within_time
+
+- Default: 5
+- Type: Int
+- Unit: -
+- Is mutable: Yes
+- Description: The threshold of connection failures allowed for a blacklisted BE node. If a BE node is added to the BE Blacklist automatically, StarRocks will assess its connectivity and judge whether it can be removed from the BE Blacklist. Within `black_host_history_sec`, only if a blacklisted BE node has fewer connection failures than the threshold set in `black_host_connect_failures_within_time`, it can be removed from the BE Blacklist.
 - Introduced in: v3.3.0
 
 ##### enable_legacy_compatibility_for_replication
@@ -3705,9 +3705,9 @@ ADMIN SET FRONTEND CONFIG ("key" = "value");
 -->
 
 <!--
-##### max_partition_number_per_table
+##### max_automatic_partition_number
 
-- Default: 100000
+- Default: 4096
 - Type: Long
 - Unit: -
 - Is mutable: Yes
@@ -4576,9 +4576,9 @@ ADMIN SET FRONTEND CONFIG ("key" = "value");
 -->
 
 <!--
-##### load_profile_collect_threshold_second
+##### stream_load_profile_collect_second
 
-- Default: 0
+- Default: 10
 - Type: Long
 - Unit: Seconds
 - Is mutable: Yes
@@ -4864,50 +4864,38 @@ ADMIN SET FRONTEND CONFIG ("key" = "value");
 - Introduced in: -
 -->
 
-##### replication_interval_ms
-
-- Default: 100
-- Type: Int
-- Unit: -
-- Is mutable: No
-- Description: The minimum time interval at which the replication tasks are scheduled.
-- Introduced in: v3.3.5
-
+<!--
 ##### replication_max_parallel_table_count
 
 - Default: 100
 - Type: Int
-- Unit: -
+- Unit:
 - Is mutable: Yes
-- Description: The maximum number of concurrent data synchronization tasks allowed. StarRocks creates one synchronization task for each table.
-- Introduced in: v3.3.5
+- Description:
+- Introduced in: -
+-->
 
-##### replication_max_parallel_replica_count
+<!--
+##### replication_max_parallel_data_size_mb
 
 - Default: 10240
 - Type: Int
-- Unit: -
-- Is mutable: Yes
-- Description: The maximum number of tablet replicas allowed for concurrent synchronization.
-- Introduced in: v3.3.5
-
-##### replication_max_parallel_data_size_mb
-
-- Default: 1048576
-- Type: Int
 - Unit: MB
 - Is mutable: Yes
-- Description: The maximum size of data allowed for concurrent synchronization.
-- Introduced in: v3.3.5
+- Description:
+- Introduced in: -
+-->
 
+<!--
 ##### replication_transaction_timeout_sec
 
-- Default: 86400
+- Default: 24 * 60 * 60
 - Type: Int
 - Unit: Seconds
 - Is mutable: Yes
-- Description: The timeout duration for synchronization tasks.
-- Introduced in: v3.3.5
+- Description:
+- Introduced in: -
+-->
 
 ##### jdbc_meta_default_cache_enable
 
@@ -4953,15 +4941,6 @@ ADMIN SET FRONTEND CONFIG ("key" = "value");
 - Is mutable: Yes
 - Description: The maximum amount of time after which a connection for accessing a JDBC catalog times out. Timed-out connections are considered idle.
 - Introduced in: -
-
-##### query_detail_explain_level
-
-- Default: COSTS
-- Type: String
-- Unit: -
-- Is mutable: true
-- Description: The detail level of query plan returned by the EXPLAIN statement. Valid values: COSTS, NORMAL, VERBOSE.
-- Introduced in: v3.2.12, v3.3.5
 
 <!--
 ##### max_varchar_length

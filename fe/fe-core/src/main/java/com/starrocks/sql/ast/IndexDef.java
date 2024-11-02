@@ -18,7 +18,6 @@ import com.google.common.base.Strings;
 import com.starrocks.analysis.BloomFilterIndexUtil;
 import com.starrocks.analysis.InvertedIndexUtil;
 import com.starrocks.analysis.ParseNode;
-import com.starrocks.analysis.VectorIndexUtil;
 import com.starrocks.catalog.Column;
 import com.starrocks.catalog.KeysType;
 import com.starrocks.catalog.PrimitiveType;
@@ -178,8 +177,6 @@ public class IndexDef implements ParseNode {
             InvertedIndexUtil.checkInvertedIndexValid(column, properties, keysType);
         } else if (indexType == IndexType.NGRAMBF) {
             BloomFilterIndexUtil.checkNgramBloomFilterIndexValid(column, properties, keysType);
-        } else if (indexType == IndexType.VECTOR) {
-            VectorIndexUtil.checkVectorIndexValid(column, properties, keysType);
         } else {
             throw new SemanticException("Unsupported index type: " + indexType);
         }
@@ -188,8 +185,7 @@ public class IndexDef implements ParseNode {
     public enum IndexType {
         BITMAP,
         GIN("GIN"),
-        NGRAMBF("NGRAMBF"),
-        VECTOR("VECTOR");
+        NGRAMBF("NGRAMBF");
 
         IndexType(String name) {
             this.displayName = name;
@@ -211,8 +207,6 @@ public class IndexDef implements ParseNode {
                 index = IndexDef.IndexType.GIN;
             } else if (indexTypeContext.NGRAMBF() != null) {
                 index = IndexType.NGRAMBF;
-            } else if (indexTypeContext.VECTOR() != null) {
-                index = IndexType.VECTOR;
             } else {
                 throw new ParsingException("Not specify index type");
             }
@@ -221,7 +215,7 @@ public class IndexDef implements ParseNode {
 
         // Whether the index type is compatible with the new metadata
         public static boolean isCompatibleIndex(IndexType indexType) {
-            return indexType == GIN || indexType == VECTOR;
+            return indexType == GIN;
         }
     }
 }

@@ -4,7 +4,7 @@ displayed_sidebar: docs
 
 # sin
 
-
+## 功能
 
 计算参数 `x` 的正弦，`x` 为弧度值。
 

@@ -120,6 +120,7 @@ Status MemLimitedChunkQueue::push(const ChunkPtr& chunk) {
 #ifndef BE_TEST
     size_t in_memory_rows = _total_accumulated_rows - _flushed_accumulated_rows + _current_load_rows;
     size_t in_memory_bytes = _total_accumulated_bytes - _flushed_accumulated_bytes + _current_load_bytes;
+
     _peak_memory_rows_counter->set(in_memory_rows);
     _peak_memory_bytes_counter->set(in_memory_bytes);
 #endif

@@ -600,7 +600,7 @@ int ConnectorScanOperator::available_pickup_morsel_count() {
     return io_tasks;
 }
 
-Status ConnectorScanOperator::append_morsels(std::vector<MorselPtr>&& morsels) {
+void ConnectorScanOperator::append_morsels(std::vector<MorselPtr>&& morsels) {
     query_cache::TicketChecker* ticket_checker = _ticket_checker.get();
     if (ticket_checker != nullptr) {
         int64_t cached_owner_id = -1;
@@ -613,8 +613,7 @@ Status ConnectorScanOperator::append_morsels(std::vector<MorselPtr>&& morsels) {
             }
         }
     }
-    RETURN_IF_ERROR(_morsel_queue->append_morsels(std::move(morsels)));
-    return Status::OK();
+    _morsel_queue->append_morsels(std::move(morsels));
 }
 
 // ==================== ConnectorChunkSource ====================
@@ -729,17 +728,16 @@ Status ConnectorChunkSource::_open_data_source(RuntimeState* state, bool* mem_al
 
     ConnectorScanOperator* scan_op = down_cast<ConnectorScanOperator*>(_scan_op);
     if (scan_op->enable_adaptive_io_tasks()) {
-        ConnectorScanOperatorIOTasksMemLimiter* limiter = _get_io_tasks_mem_limiter();
-        MemTracker* mem_tracker = state->query_ctx()->connector_scan_mem_tracker();
-
         [[maybe_unused]] auto build_debug_string = [&](const std::string& action) {
             std::stringstream ss;
             ss << "try_mem_tracker. query_id = " << print_id(state->query_id())
                << ", op_id = " << _scan_op->get_plan_node_id() << "/" << _scan_op->get_driver_sequence() << ", "
-               << action << ". this = " << (void*)this << ", value = " << _request_mem_tracker_bytes
-               << ", running = " << limiter->update_running_chunk_source_count(0);
+               << action << ". this = " << (void*)this << ", value = " << _request_mem_tracker_bytes;
             return ss.str();
         };
+
+        ConnectorScanOperatorIOTasksMemLimiter* limiter = _get_io_tasks_mem_limiter();
+        MemTracker* mem_tracker = state->query_ctx()->connector_scan_mem_tracker();
 
         int retry = 3;
         while (retry > 0) {
@@ -879,7 +877,7 @@ Status ConnectorChunkSource::_read_chunk(RuntimeState* state, ChunkPtr* chunk) {
                 split_morsels.emplace_back(std::move(m));
             }
 
-            RETURN_IF_ERROR(scan_op->append_morsels(std::move(split_morsels)));
+            scan_op->append_morsels(std::move(split_morsels));
         }
     }
     return Status::EndOfFile("");

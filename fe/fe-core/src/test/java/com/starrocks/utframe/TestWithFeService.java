@@ -169,7 +169,7 @@ public abstract class TestWithFeService {
     }
 
     public void createDatabase(String db) throws Exception {
-        GlobalStateMgr.getCurrentState().getLocalMetastore().createDb(db);
+        GlobalStateMgr.getCurrentState().getMetadata().createDb(db);
     }
 
     public void useDatabase(String dbName) {

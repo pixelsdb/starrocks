@@ -4,6 +4,8 @@ displayed_sidebar: docs
 
 # rand, random
 
+## 功能
+
 返回一个 0 (包含) 到 1（不包含）之间的随机浮点数。
 
 ## 语法

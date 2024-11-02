@@ -19,8 +19,8 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
 import com.starrocks.common.Config;
 import com.starrocks.common.Pair;
-import com.starrocks.common.util.LogUtil;
 import com.starrocks.common.util.UUIDUtil;
+import com.starrocks.common.util.Util;
 import com.starrocks.common.util.concurrent.QueryableReentrantLock;
 import com.starrocks.memory.MemoryTrackable;
 import com.starrocks.qe.ConnectContext;
@@ -72,12 +72,11 @@ public class TaskRunManager implements MemoryTrackable {
         status.setPriority(option.getPriority());
         status.setMergeRedundant(option.isMergeRedundant());
         status.setProperties(option.getTaskRunProperties());
+        GlobalStateMgr.getCurrentState().getEditLog().logTaskRunCreateStatus(status);
         if (!arrangeTaskRun(taskRun, false)) {
             LOG.warn("Submit task run to pending queue failed, reject the submit:{}", taskRun);
             return new SubmitResult(null, SubmitResult.SubmitStatus.REJECTED);
         }
-        // Only log create task run status when it's not rejected and created.
-        GlobalStateMgr.getCurrentState().getEditLog().logTaskRunCreateStatus(status);
         return new SubmitResult(queryId, SubmitResult.SubmitStatus.SUBMITTED, taskRun.getFuture());
     }
 
@@ -255,7 +254,7 @@ public class TaskRunManager implements MemoryTrackable {
             if (!taskRunLock.tryLock(5, TimeUnit.SECONDS)) {
                 Thread owner = taskRunLock.getOwner();
                 if (owner != null) {
-                    LOG.warn("task run lock is held by: {}", () -> LogUtil.dumpThread(owner, 50));
+                    LOG.warn("task run lock is held by: {}", () -> Util.dumpThread(owner, 50));
                 } else {
                     LOG.warn("task run lock owner is null");
                 }

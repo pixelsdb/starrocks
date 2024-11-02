@@ -83,7 +83,6 @@ import com.starrocks.common.ConfigBase;
 import com.starrocks.common.DdlException;
 import com.starrocks.common.ErrorCode;
 import com.starrocks.common.ErrorReport;
-import com.starrocks.common.ErrorReportException;
 import com.starrocks.common.MetaNotFoundException;
 import com.starrocks.common.Pair;
 import com.starrocks.common.PatternMatcher;
@@ -147,7 +146,6 @@ import com.starrocks.server.MetadataMgr;
 import com.starrocks.server.RunMode;
 import com.starrocks.server.StorageVolumeMgr;
 import com.starrocks.server.TemporaryTableMgr;
-import com.starrocks.server.WarehouseManager;
 import com.starrocks.service.InformationSchemaDataSource;
 import com.starrocks.sql.ShowTemporaryTableStmt;
 import com.starrocks.sql.analyzer.AstToSQLBuilder;
@@ -231,8 +229,6 @@ import com.starrocks.sql.ast.UserIdentity;
 import com.starrocks.sql.ast.pipe.DescPipeStmt;
 import com.starrocks.sql.ast.pipe.PipeName;
 import com.starrocks.sql.ast.pipe.ShowPipeStmt;
-import com.starrocks.sql.ast.warehouse.ShowNodesStmt;
-import com.starrocks.sql.ast.warehouse.ShowWarehousesStmt;
 import com.starrocks.sql.common.MetaUtils;
 import com.starrocks.sql.optimizer.rule.transformation.materialization.MvUtils;
 import com.starrocks.statistic.AnalyzeJob;
@@ -246,7 +242,6 @@ import com.starrocks.system.SystemInfoService;
 import com.starrocks.thrift.TStatusCode;
 import com.starrocks.thrift.TTableInfo;
 import com.starrocks.transaction.GlobalTransactionMgr;
-import com.starrocks.warehouse.Warehouse;
 import org.apache.commons.collections4.CollectionUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -307,13 +302,13 @@ public class ShowExecutor {
         @Override
         public ShowResultSet visitShowMaterializedViewStatement(ShowMaterializedViewsStmt statement, ConnectContext context) {
             String dbName = statement.getDb();
-            Database db = GlobalStateMgr.getCurrentState().getLocalMetastore().getDb(dbName);
+            Database db = GlobalStateMgr.getCurrentState().getDb(dbName);
             MetaUtils.checkDbNullAndReport(db, dbName);
 
             List<MaterializedView> materializedViews = Lists.newArrayList();
             List<Pair<OlapTable, MaterializedIndexMeta>> singleTableMVs = Lists.newArrayList();
             Locker locker = new Locker();
-            locker.lockDatabase(db.getId(), LockType.READ);
+            locker.lockDatabase(db, LockType.READ);
             try {
                 PatternMatcher matcher = null;
                 if (statement.getPattern() != null) {
@@ -321,7 +316,7 @@ public class ShowExecutor {
                             CaseSensibility.TABLE.getCaseSensibility());
                 }
 
-                for (Table table : GlobalStateMgr.getCurrentState().getLocalMetastore().getTables(db.getId())) {
+                for (Table table : db.getTables()) {
                     if (table.isMaterializedView()) {
                         MaterializedView mvTable = (MaterializedView) table;
                         if (matcher != null && !matcher.match(mvTable.getName())) {
@@ -385,7 +380,7 @@ public class ShowExecutor {
                 LOG.warn("listMaterializedViews failed:", e);
                 throw e;
             } finally {
-                locker.unLockDatabase(db.getId(), LockType.READ);
+                locker.unLockDatabase(db, LockType.READ);
             }
         }
 
@@ -481,7 +476,7 @@ public class ShowExecutor {
             MetaUtils.checkDbNullAndReport(db, statement.getDb());
 
             Locker locker = new Locker();
-            locker.lockDatabase(db.getId(), LockType.READ);
+            locker.lockDatabase(db, LockType.READ);
             try {
                 List<String> tableNames = GlobalStateMgr.getCurrentState().getMetadataMgr().listTableNames(catalogName, dbName);
 
@@ -515,7 +510,7 @@ public class ShowExecutor {
                     tableMap.put(tableName, table.getMysqlType());
                 }
             } finally {
-                locker.unLockDatabase(db.getId(), LockType.READ);
+                locker.unLockDatabase(db, LockType.READ);
             }
 
             for (Map.Entry<String, String> entry : tableMap.entrySet()) {
@@ -553,7 +548,7 @@ public class ShowExecutor {
             MetaUtils.checkDbNullAndReport(db, showTemporaryTableStmt.getDb());
 
             Locker locker = new Locker();
-            locker.lockDatabase(db.getId(), LockType.READ);
+            locker.lockDatabase(db, LockType.READ);
             try {
                 TemporaryTableMgr temporaryTableMgr = GlobalStateMgr.getCurrentState().getTemporaryTableMgr();
                 List<String> tableNames = temporaryTableMgr.listTemporaryTables(sessionId, db.getId());
@@ -564,7 +559,7 @@ public class ShowExecutor {
                     rows.add(Lists.newArrayList(tableName));
                 }
             } finally {
-                locker.unLockDatabase(db.getId(), LockType.READ);
+                locker.unLockDatabase(db, LockType.READ);
             }
 
             for (Map.Entry<String, String> entry : tableMap.entrySet()) {
@@ -576,18 +571,18 @@ public class ShowExecutor {
         @Override
         public ShowResultSet visitShowTableStatusStatement(ShowTableStatusStmt statement, ConnectContext context) {
             List<List<String>> rows = Lists.newArrayList();
-            Database db = context.getGlobalStateMgr().getLocalMetastore().getDb(statement.getDb());
+            Database db = context.getGlobalStateMgr().getDb(statement.getDb());
             ZoneId currentTimeZoneId = TimeUtils.getTimeZone().toZoneId();
             if (db != null) {
                 Locker locker = new Locker();
-                locker.lockDatabase(db.getId(), LockType.READ);
+                locker.lockDatabase(db, LockType.READ);
                 try {
                     PatternMatcher matcher = null;
                     if (statement.getPattern() != null) {
                         matcher = PatternMatcher.createMysqlPattern(statement.getPattern(),
                                 CaseSensibility.TABLE.getCaseSensibility());
                     }
-                    for (Table table : GlobalStateMgr.getCurrentState().getLocalMetastore().getTables(db.getId())) {
+                    for (Table table : db.getTables()) {
                         if (matcher != null && !matcher.match(table.getName())) {
                             continue;
                         }
@@ -647,7 +642,7 @@ public class ShowExecutor {
                         rows.add(row);
                     }
                 } finally {
-                    locker.unLockDatabase(db.getId(), LockType.READ);
+                    locker.unLockDatabase(db, LockType.READ);
                 }
             }
             return new ShowResultSet(statement.getMetaData(), rows);
@@ -670,7 +665,7 @@ public class ShowExecutor {
 
             Database db;
             if (Strings.isNullOrEmpty(catalogName) || CatalogMgr.isInternalCatalog(catalogName)) {
-                db = context.getGlobalStateMgr().getLocalMetastore().getDb(dbName);
+                db = context.getGlobalStateMgr().getDb(dbName);
             } else {
                 db = GlobalStateMgr.getCurrentState().getMetadataMgr().getDb(catalogName, dbName);
             }
@@ -703,11 +698,11 @@ public class ShowExecutor {
         }
 
         private ShowResultSet showCreateInternalCatalogTable(ShowCreateTableStmt showStmt, ConnectContext connectContext) {
-            Database db = GlobalStateMgr.getCurrentState().getLocalMetastore().getDb(showStmt.getDb());
+            Database db = GlobalStateMgr.getCurrentState().getDb(showStmt.getDb());
             MetaUtils.checkDbNullAndReport(db, showStmt.getDb());
             List<List<String>> rows = Lists.newArrayList();
             Locker locker = new Locker();
-            locker.lockDatabase(db.getId(), LockType.READ);
+            locker.lockDatabase(db, LockType.READ);
             try {
                 Table table = MetaUtils.getSessionAwareTable(connectContext, db, showStmt.getTbl());
                 if (table == null) {
@@ -716,7 +711,7 @@ public class ShowExecutor {
                     } else {
                         // For Sync Materialized View, it is a mv index inside OLAP table,
                         // so we can not get it from database.
-                        for (Table tbl : GlobalStateMgr.getCurrentState().getLocalMetastore().getTables(db.getId())) {
+                        for (Table tbl : db.getTables()) {
                             if (tbl.getType() == Table.TableType.OLAP) {
                                 OlapTable olapTable = (OlapTable) tbl;
                                 List<MaterializedIndexMeta> visibleMaterializedViews =
@@ -774,7 +769,7 @@ public class ShowExecutor {
                     return new ShowResultSet(showStmt.getMetaData(), rows);
                 }
             } finally {
-                locker.unLockDatabase(db.getId(), LockType.READ);
+                locker.unLockDatabase(db, LockType.READ);
             }
         }
 
@@ -905,7 +900,7 @@ public class ShowExecutor {
             } else if (statement.getIsGlobal()) {
                 functions = context.getGlobalStateMgr().getGlobalFunctionMgr().getFunctions();
             } else {
-                Database db = context.getGlobalStateMgr().getLocalMetastore().getDb(statement.getDbName());
+                Database db = context.getGlobalStateMgr().getDb(statement.getDbName());
                 MetaUtils.checkDbNullAndReport(db, statement.getDbName());
                 functions = db.getFunctions();
             }
@@ -923,7 +918,7 @@ public class ShowExecutor {
                             continue;
                         }
                     } else if (!statement.getIsBuiltin()) {
-                        Database db = context.getGlobalStateMgr().getLocalMetastore().getDb(statement.getDbName());
+                        Database db = context.getGlobalStateMgr().getDb(statement.getDbName());
                         try {
                             Authorizer.checkAnyActionOnFunction(context.getCurrentUserIdentity(),
                                     context.getCurrentRoleIds(), db.getFullName(), function);
@@ -995,7 +990,7 @@ public class ShowExecutor {
             }
 
             Locker locker = new Locker();
-            locker.lockTablesWithIntensiveDbLock(db.getId(), Lists.newArrayList(table.getId()), LockType.READ);
+            locker.lockTablesWithIntensiveDbLock(db, Lists.newArrayList(table.getId()), LockType.READ);
             try {
                 PatternMatcher matcher = null;
                 if (statement.getPattern() != null) {
@@ -1040,7 +1035,7 @@ public class ShowExecutor {
                     }
                 }
             } finally {
-                locker.unLockTablesWithIntensiveDbLock(db.getId(), Lists.newArrayList(table.getId()), LockType.READ);
+                locker.unLockTablesWithIntensiveDbLock(db, Lists.newArrayList(table.getId()), LockType.READ);
             }
             return new ShowResultSet(statement.getMetaData(), rows);
         }
@@ -1053,7 +1048,7 @@ public class ShowExecutor {
             if (statement.isAll()) {
                 dbId = -1;
             } else {
-                Database db = globalStateMgr.getLocalMetastore().getDb(statement.getDbName());
+                Database db = globalStateMgr.getDb(statement.getDbName());
                 MetaUtils.checkDbNullAndReport(db, statement.getDbName());
                 dbId = db.getId();
             }
@@ -1307,7 +1302,7 @@ public class ShowExecutor {
         @Override
         public ShowResultSet visitShowDeleteStatement(ShowDeleteStmt statement, ConnectContext context) {
             GlobalStateMgr globalStateMgr = GlobalStateMgr.getCurrentState();
-            Database db = globalStateMgr.getLocalMetastore().getDb(statement.getDbName());
+            Database db = globalStateMgr.getDb(statement.getDbName());
             MetaUtils.checkDbNullAndReport(db, statement.getDbName());
             long dbId = db.getId();
 
@@ -1361,7 +1356,7 @@ public class ShowExecutor {
                 ErrorReport.reportSemanticException(ErrorCode.ERR_BAD_DB_ERROR, dbName);
             }
             Locker locker = new Locker();
-            locker.lockDatabase(db.getId(), LockType.READ);
+            locker.lockDatabase(db, LockType.READ);
             try {
                 String tableName = statement.getTableName();
                 List<List<String>> totalRows = statement.getResultRows();
@@ -1370,7 +1365,7 @@ public class ShowExecutor {
                     long totalReplicaCount = 0;
 
                     // sort by table name
-                    List<Table> tables = GlobalStateMgr.getCurrentState().getLocalMetastore().getTables(db.getId());
+                    List<Table> tables = db.getTables();
                     SortedSet<Table> sortedTables = new TreeSet<>(Comparator.comparing(Table::getName));
 
                     for (Table table : tables) {
@@ -1501,7 +1496,7 @@ public class ShowExecutor {
             } catch (AnalysisException e) {
                 throw new SemanticException(e.getMessage());
             } finally {
-                locker.unLockDatabase(db.getId(), LockType.READ);
+                locker.unLockDatabase(db, LockType.READ);
             }
             return new ShowResultSet(statement.getMetaData(), statement.getResultRows());
         }
@@ -1573,7 +1568,7 @@ public class ShowExecutor {
 
                 // check real meta
                 do {
-                    Database db = globalStateMgr.getLocalMetastore().getDb(dbId);
+                    Database db = globalStateMgr.getDb(dbId);
                     if (db == null) {
                         isSync = false;
                         break;
@@ -1581,9 +1576,9 @@ public class ShowExecutor {
                     dbName = db.getFullName();
 
                     Locker locker = new Locker();
-                    locker.lockDatabase(db.getId(), LockType.READ);
+                    locker.lockDatabase(db, LockType.READ);
                     try {
-                        Table table = GlobalStateMgr.getCurrentState().getLocalMetastore().getTable(db.getId(), tableId);
+                        Table table = db.getTable(tableId);
                         if (!(table instanceof OlapTable)) {
                             isSync = false;
                             break;
@@ -1638,7 +1633,7 @@ public class ShowExecutor {
                         }
 
                     } finally {
-                        locker.unLockDatabase(db.getId(), LockType.READ);
+                        locker.unLockDatabase(db, LockType.READ);
                     }
                 } while (false);
 
@@ -1649,11 +1644,11 @@ public class ShowExecutor {
                         partitionId.toString(), indexId.toString(),
                         isSync.toString(), detailCmd));
             } else {
-                Database db = globalStateMgr.getLocalMetastore().getDb(statement.getDbName());
+                Database db = globalStateMgr.getDb(statement.getDbName());
                 MetaUtils.checkDbNullAndReport(db, statement.getDbName());
 
                 Locker locker = new Locker();
-                locker.lockDatabase(db.getId(), LockType.READ);
+                locker.lockDatabase(db, LockType.READ);
                 try {
                     Table table = MetaUtils.getSessionAwareTable(
                             context, db, new TableName(statement.getDbName(), statement.getTableName()));
@@ -1758,7 +1753,7 @@ public class ShowExecutor {
                         rows.add(oneTablet);
                     }
                 } finally {
-                    locker.unLockDatabase(db.getId(), LockType.READ);
+                    locker.unLockDatabase(db, LockType.READ);
                 }
             }
 
@@ -1767,7 +1762,7 @@ public class ShowExecutor {
 
         @Override
         public ShowResultSet visitShowBackupStatement(ShowBackupStmt statement, ConnectContext context) {
-            Database filterDb = GlobalStateMgr.getCurrentState().getLocalMetastore().getDb(statement.getDbName());
+            Database filterDb = GlobalStateMgr.getCurrentState().getDb(statement.getDbName());
             List<List<String>> infos = Lists.newArrayList();
             List<Database> dbs = Lists.newArrayList();
 
@@ -1813,7 +1808,7 @@ public class ShowExecutor {
 
         @Override
         public ShowResultSet visitShowRestoreStatement(ShowRestoreStmt statement, ConnectContext context) {
-            Database filterDb = GlobalStateMgr.getCurrentState().getLocalMetastore().getDb(statement.getDbName());
+            Database filterDb = GlobalStateMgr.getCurrentState().getDb(statement.getDbName());
             List<List<String>> infos = Lists.newArrayList();
             List<Database> dbs = Lists.newArrayList();
 
@@ -1859,7 +1854,7 @@ public class ShowExecutor {
         @Override
         public ShowResultSet visitShowExportStatement(ShowExportStmt statement, ConnectContext context) {
             GlobalStateMgr globalStateMgr = GlobalStateMgr.getCurrentState();
-            Database db = globalStateMgr.getLocalMetastore().getDb(statement.getDbName());
+            Database db = globalStateMgr.getDb(statement.getDbName());
             MetaUtils.checkDbNullAndReport(db, statement.getDbName());
             long dbId = db.getId();
 
@@ -2089,12 +2084,12 @@ public class ShowExecutor {
         @Override
         public ShowResultSet visitShowDynamicPartitionStatement(ShowDynamicPartitionStmt statement, ConnectContext context) {
             List<List<String>> rows = Lists.newArrayList();
-            Database db = context.getGlobalStateMgr().getLocalMetastore().getDb(statement.getDb());
+            Database db = context.getGlobalStateMgr().getDb(statement.getDb());
             if (db != null) {
                 Locker locker = new Locker();
-                locker.lockDatabase(db.getId(), LockType.READ);
+                locker.lockDatabase(db, LockType.READ);
                 try {
-                    for (Table tbl : GlobalStateMgr.getCurrentState().getLocalMetastore().getTables(db.getId())) {
+                    for (Table tbl : db.getTables()) {
                         if (!(tbl instanceof OlapTable)) {
                             continue;
                         }
@@ -2144,7 +2139,7 @@ public class ShowExecutor {
                                 String.valueOf(dynamicPartitionScheduler.isInScheduler(db.getId(), olapTable.getId()))));
                     }
                 } finally {
-                    locker.unLockDatabase(db.getId(), LockType.READ);
+                    locker.unLockDatabase(db, LockType.READ);
                 }
                 return new ShowResultSet(statement.getMetaData(), rows);
             }
@@ -2155,7 +2150,7 @@ public class ShowExecutor {
         @Override
         public ShowResultSet visitShowIndexStatement(ShowIndexStmt statement, ConnectContext context) {
             List<List<String>> rows = Lists.newArrayList();
-            Database db = context.getGlobalStateMgr().getLocalMetastore().getDb(statement.getDbName());
+            Database db = context.getGlobalStateMgr().getDb(statement.getDbName());
             MetaUtils.checkDbNullAndReport(db, statement.getDbName());
             Table table = MetaUtils.getSessionAwareTable(context, db, statement.getTableName());
             if (table == null) {
@@ -2164,7 +2159,7 @@ public class ShowExecutor {
             }
 
             Locker locker = new Locker();
-            locker.lockTablesWithIntensiveDbLock(db.getId(), Lists.newArrayList(table.getId()), LockType.READ);
+            locker.lockTablesWithIntensiveDbLock(db, Lists.newArrayList(table.getId()), LockType.READ);
             try {
                 if (table instanceof OlapTable) {
                     List<Index> indexes = ((OlapTable) table).getIndexes();
@@ -2180,14 +2175,14 @@ public class ShowExecutor {
                     // do nothing
                 }
             } finally {
-                locker.unLockTablesWithIntensiveDbLock(db.getId(), Lists.newArrayList(table.getId()), LockType.READ);
+                locker.unLockTablesWithIntensiveDbLock(db, Lists.newArrayList(table.getId()), LockType.READ);
             }
             return new ShowResultSet(statement.getMetaData(), rows);
         }
 
         @Override
         public ShowResultSet visitShowTransactionStatement(ShowTransactionStmt statement, ConnectContext context) {
-            Database db = context.getGlobalStateMgr().getLocalMetastore().getDb(statement.getDbName());
+            Database db = context.getGlobalStateMgr().getDb(statement.getDbName());
             MetaUtils.checkDbNullAndReport(db, statement.getDbName());
 
             long txnId = statement.getTxnId();
@@ -2509,7 +2504,7 @@ public class ShowExecutor {
         public ShowResultSet visitShowPipeStatement(ShowPipeStmt statement, ConnectContext context) {
             List<List<Comparable>> rows = Lists.newArrayList();
             String dbName = statement.getDbName();
-            long dbId = GlobalStateMgr.getCurrentState().getLocalMetastore().mayGetDb(dbName)
+            long dbId = GlobalStateMgr.getCurrentState().mayGetDb(dbName)
                     .map(Database::getId)
                     .orElseThrow(() -> ErrorReport.buildSemanticException(ErrorCode.ERR_BAD_DB_ERROR, dbName));
             PipeManager pipeManager = GlobalStateMgr.getCurrentState().getPipeManager();
@@ -2678,78 +2673,6 @@ public class ShowExecutor {
         @Override
         public ShowResultSet visitShowBackendBlackListStatement(ShowBackendBlackListStmt statement, ConnectContext context) {
             List<List<String>> rows = SimpleScheduler.getHostBlacklist().getShowData();
-            return new ShowResultSet(statement.getMetaData(), rows);
-        }
-
-        @Override
-        public ShowResultSet visitShowWarehousesStatement(ShowWarehousesStmt statement, ConnectContext context) {
-            GlobalStateMgr globalStateMgr = GlobalStateMgr.getCurrentState();
-            WarehouseManager warehouseMgr = globalStateMgr.getWarehouseMgr();
-
-            if (RunMode.getCurrentRunMode() == RunMode.SHARED_NOTHING) {
-                throw ErrorReportException.report(ErrorCode.ERR_NOT_SUPPORTED_STATEMENT_IN_SHARED_NOTHING_MODE);
-            }
-
-            PatternMatcher matcher = null;
-            if (!statement.getPattern().isEmpty()) {
-                matcher = PatternMatcher.createMysqlPattern(statement.getPattern(),
-                        CaseSensibility.WAREHOUSE.getCaseSensibility());
-            }
-            PatternMatcher finalMatcher = matcher;
-
-            List<List<String>> rowSet = warehouseMgr.getAllWarehouses().stream()
-                    .filter(warehouse -> finalMatcher == null || finalMatcher.match(warehouse.getName()))
-                    .filter(warehouse -> {
-                        try {
-                            Authorizer.checkAnyActionOnWarehouse(context.getCurrentUserIdentity(),
-                                    context.getCurrentRoleIds(), warehouse.getName());
-                        } catch (AccessDeniedException e) {
-                            return false;
-                        }
-                        return true;
-                    }).sorted(Comparator.comparing(Warehouse::getId)).map(Warehouse::getWarehouseInfo)
-                    .collect(Collectors.toList());
-            return new ShowResultSet(statement.getMetaData(), rowSet);
-        }
-
-        @Override
-        public ShowResultSet visitShowNodesStatement(ShowNodesStmt statement, ConnectContext context) {
-            List<List<String>> rows = Lists.newArrayList();
-            WarehouseManager warehouseMgr = GlobalStateMgr.getCurrentState().getWarehouseMgr();
-
-            // filter by pattern or warehouseName
-            String warehouseName = null;
-            PatternMatcher matcher = null;
-            if (statement.getWarehouseName() != null) {
-                warehouseName = statement.getWarehouseName();
-            } else if (statement.getPattern() != null) {
-                matcher = PatternMatcher.createMysqlPattern(statement.getPattern(),
-                        CaseSensibility.WAREHOUSE.getCaseSensibility());
-            }
-
-            List<Warehouse> warehouseList = warehouseMgr.getAllWarehouses().stream().filter(
-                    warehouse -> {
-                        try {
-                            Authorizer.checkAnyActionOnWarehouse(context.getCurrentUserIdentity(),
-                                    context.getCurrentRoleIds(), warehouse.getName());
-                        } catch (AccessDeniedException e) {
-                            return false;
-                        }
-                        return true;
-                    }
-            ).collect(Collectors.toList());
-
-            for (Warehouse wh : warehouseList) {
-                if (warehouseName != null && !wh.getName().equalsIgnoreCase(warehouseName)) {
-                    continue;
-                }
-
-                if (matcher != null && !matcher.match(wh.getName())) {
-                    continue;
-                }
-
-                rows.addAll(wh.getWarehouseNodesInfo());
-            }
             return new ShowResultSet(statement.getMetaData(), rows);
         }
 

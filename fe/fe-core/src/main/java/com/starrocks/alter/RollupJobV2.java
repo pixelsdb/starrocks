@@ -255,7 +255,7 @@ public class RollupJobV2 extends AlterJobV2 implements GsonPostProcessable {
         Preconditions.checkState(jobState == JobState.PENDING, jobState);
 
         LOG.info("begin to send create rollup replica tasks. job: {}", jobId);
-        Database db = GlobalStateMgr.getCurrentState().getLocalMetastore().getDb(dbId);
+        Database db = GlobalStateMgr.getCurrentState().getDb(dbId);
         if (db == null) {
             throw new AlterCancelException("Database " + dbId + " does not exist");
         }
@@ -275,13 +275,12 @@ public class RollupJobV2 extends AlterJobV2 implements GsonPostProcessable {
         }
         MarkedCountDownLatch<Long, Long> countDownLatch = new MarkedCountDownLatch<Long, Long>(totalReplicaNum);
         createReplicaLatch = countDownLatch;
-        OlapTable tbl = (OlapTable) GlobalStateMgr.getCurrentState().getLocalMetastore().getTable(db.getId(), tableId);
+        OlapTable tbl = (OlapTable) db.getTable(tableId);
         if (tbl == null) {
             throw new AlterCancelException("Table " + tableId + " does not exist");
         }
 
-        try (AutoCloseableLock ignore =
-                    new AutoCloseableLock(new Locker(), db.getId(), Lists.newArrayList(tbl.getId()), LockType.READ)) {
+        try (AutoCloseableLock ignore = new AutoCloseableLock(new Locker(), db, Lists.newArrayList(tbl.getId()), LockType.READ)) {
             MaterializedIndexMeta index = tbl.getIndexMetaByIndexId(tbl.getBaseIndexId());
             Preconditions.checkState(tbl.getState() == OlapTableState.ROLLUP);
             for (Map.Entry<Long, MaterializedIndex> entry : this.physicalPartitionIdToRollupIndex.entrySet()) {
@@ -384,13 +383,13 @@ public class RollupJobV2 extends AlterJobV2 implements GsonPostProcessable {
 
         // create all rollup replicas success.
         // add rollup index to globalStateMgr
-        tbl = (OlapTable) GlobalStateMgr.getCurrentState().getLocalMetastore().getTable(db.getId(), tableId);
+        tbl = (OlapTable) db.getTable(tableId);
         if (tbl == null) {
             throw new AlterCancelException("Table " + tableId + " does not exist");
         }
         Preconditions.checkState(tbl.getState() == OlapTableState.ROLLUP);
         try (AutoCloseableLock ignore =
-                    new AutoCloseableLock(new Locker(), db.getId(), Lists.newArrayList(tbl.getId()), LockType.WRITE)) {
+                    new AutoCloseableLock(new Locker(), db, Lists.newArrayList(tbl.getId()), LockType.WRITE)) {
             addRollupIndexToCatalog(tbl);
         }
 
@@ -456,8 +455,7 @@ public class RollupJobV2 extends AlterJobV2 implements GsonPostProcessable {
         Expr newExpr = defineExpr.clone(smap);
         newExpr = newExpr.accept(visitor, null);
         newExpr = Expr.analyzeAndCastFold(newExpr);
-        Type newType = newExpr.getType();
-        if (!type.isFullyCompatible(newType)) {
+        if (!newExpr.getType().equals(type)) {
             newExpr = new CastExpr(type, newExpr);
         }
         return newExpr;
@@ -483,18 +481,17 @@ public class RollupJobV2 extends AlterJobV2 implements GsonPostProcessable {
         }
 
         LOG.info("previous transactions are all finished, begin to send rollup tasks. job: {}", jobId);
-        Database db = GlobalStateMgr.getCurrentState().getLocalMetastore().getDb(dbId);
+        Database db = GlobalStateMgr.getCurrentState().getDb(dbId);
         if (db == null) {
             throw new AlterCancelException("Databasee " + dbId + " does not exist");
         }
-        OlapTable tbl = (OlapTable) GlobalStateMgr.getCurrentState().getLocalMetastore().getTable(db.getId(), tableId);
+        OlapTable tbl = (OlapTable) db.getTable(tableId);
         if (tbl == null) {
             throw new AlterCancelException("Table " + tableId + " does not exist");
         }
 
         Map<Long, List<TColumn>> indexToThriftColumns = new HashMap<>();
-        try (AutoCloseableLock ignore =
-                    new AutoCloseableLock(new Locker(), db.getId(), Lists.newArrayList(tbl.getId()), LockType.READ)) {
+        try (AutoCloseableLock ignore = new AutoCloseableLock(new Locker(), db, Lists.newArrayList(tbl.getId()), LockType.READ)) {
             Preconditions.checkState(tbl.getState() == OlapTableState.ROLLUP);
             for (Map.Entry<Long, MaterializedIndex> entry : this.physicalPartitionIdToRollupIndex.entrySet()) {
                 long partitionId = entry.getKey();
@@ -655,12 +652,12 @@ public class RollupJobV2 extends AlterJobV2 implements GsonPostProcessable {
         // must check if db or table still exist first.
         // or if table is dropped, the tasks will never be finished,
         // and the job will be in RUNNING state forever.
-        Database db = GlobalStateMgr.getCurrentState().getLocalMetastore().getDb(dbId);
+        Database db = GlobalStateMgr.getCurrentState().getDb(dbId);
         if (db == null) {
             throw new AlterCancelException("Databasee " + dbId + " does not exist");
         }
 
-        OlapTable tbl = (OlapTable) GlobalStateMgr.getCurrentState().getLocalMetastore().getTable(db.getId(), tableId);
+        OlapTable tbl = (OlapTable) db.getTable(tableId);
         if (tbl == null) {
             throw new AlterCancelException("Table " + tableId + " does not exist");
         }
@@ -681,7 +678,7 @@ public class RollupJobV2 extends AlterJobV2 implements GsonPostProcessable {
          * we just check whether all rollup replicas are healthy.
          */
         try (AutoCloseableLock ignore =
-                    new AutoCloseableLock(new Locker(), db.getId(), Lists.newArrayList(tbl.getId()), LockType.WRITE)) {
+                    new AutoCloseableLock(new Locker(), db, Lists.newArrayList(tbl.getId()), LockType.WRITE)) {
             Preconditions.checkState(tbl.getState() == OlapTableState.ROLLUP);
             for (Map.Entry<Long, MaterializedIndex> entry : this.physicalPartitionIdToRollupIndex.entrySet()) {
                 long partitionId = entry.getKey();
@@ -790,12 +787,12 @@ public class RollupJobV2 extends AlterJobV2 implements GsonPostProcessable {
         AgentTaskQueue.removeBatchTask(rollupBatchTask, TTaskType.ALTER);
         // remove all rollup indexes, and set state to NORMAL
         TabletInvertedIndex invertedIndex = GlobalStateMgr.getCurrentState().getTabletInvertedIndex();
-        Database db = GlobalStateMgr.getCurrentState().getLocalMetastore().getDb(dbId);
+        Database db = GlobalStateMgr.getCurrentState().getDb(dbId);
         if (db != null) {
-            OlapTable tbl = (OlapTable) GlobalStateMgr.getCurrentState().getLocalMetastore().getTable(db.getId(), tableId);
+            OlapTable tbl = (OlapTable) db.getTable(tableId);
             if (tbl != null) {
                 try (AutoCloseableLock ignore =
-                            new AutoCloseableLock(new Locker(), db.getId(), Lists.newArrayList(tbl.getId()), LockType.WRITE)) {
+                            new AutoCloseableLock(new Locker(), db, Lists.newArrayList(tbl.getId()), LockType.WRITE)) {
                     for (Long partitionId : physicalPartitionIdToRollupIndex.keySet()) {
                         MaterializedIndex rollupIndex = physicalPartitionIdToRollupIndex.get(partitionId);
                         for (Tablet rollupTablet : rollupIndex.getTablets()) {
@@ -822,19 +819,19 @@ public class RollupJobV2 extends AlterJobV2 implements GsonPostProcessable {
      * These changes should be same as changes in RollupHander.processAddRollup()
      */
     private void replayPending(RollupJobV2 replayedJob) {
-        Database db = GlobalStateMgr.getCurrentState().getLocalMetastore().getDb(dbId);
+        Database db = GlobalStateMgr.getCurrentState().getDb(dbId);
         if (db == null) {
             // database may be dropped before replaying this log. just return
             return;
         }
 
-        OlapTable tbl = (OlapTable) GlobalStateMgr.getCurrentState().getLocalMetastore().getTable(db.getId(), tableId);
+        OlapTable tbl = (OlapTable) db.getTable(tableId);
         if (tbl == null) {
             // table may be dropped before replaying this log. just return
             return;
         }
 
-        try (AutoCloseableLock ignore = new AutoCloseableLock(new Locker(), db.getId(), Lists.newArrayList(tbl.getId()),
+        try (AutoCloseableLock ignore = new AutoCloseableLock(new Locker(), db, Lists.newArrayList(tbl.getId()),
                     LockType.WRITE)) {
             addTabletToInvertedIndex(tbl);
         }
@@ -870,19 +867,19 @@ public class RollupJobV2 extends AlterJobV2 implements GsonPostProcessable {
      * Should replay all changes in runPendingJob()
      */
     private void replayWaitingTxn(RollupJobV2 replayedJob) {
-        Database db = GlobalStateMgr.getCurrentState().getLocalMetastore().getDb(dbId);
+        Database db = GlobalStateMgr.getCurrentState().getDb(dbId);
         if (db == null) {
             // database may be dropped before replaying this log. just return
             return;
         }
-        OlapTable tbl = (OlapTable) GlobalStateMgr.getCurrentState().getLocalMetastore().getTable(db.getId(), tableId);
+        OlapTable tbl = (OlapTable) db.getTable(tableId);
         if (tbl == null) {
             // table may be dropped before replaying this log. just return
             return;
         }
 
         try (AutoCloseableLock ignore =
-                    new AutoCloseableLock(new Locker(), db.getId(), Lists.newArrayList(tbl.getId()), LockType.WRITE)) {
+                    new AutoCloseableLock(new Locker(), db, Lists.newArrayList(tbl.getId()), LockType.WRITE)) {
             addRollupIndexToCatalog(tbl);
         }
 
@@ -898,13 +895,13 @@ public class RollupJobV2 extends AlterJobV2 implements GsonPostProcessable {
      * Should replay all changes in runRuningJob()
      */
     private void replayFinished(RollupJobV2 replayedJob) {
-        Database db = GlobalStateMgr.getCurrentState().getLocalMetastore().getDb(dbId);
+        Database db = GlobalStateMgr.getCurrentState().getDb(dbId);
         if (db != null) {
-            OlapTable tbl = (OlapTable) GlobalStateMgr.getCurrentState().getLocalMetastore().getTable(db.getId(), tableId);
+            OlapTable tbl = (OlapTable) db.getTable(tableId);
             if (tbl != null) {
                 Preconditions.checkState(tbl.getState() == OlapTableState.ROLLUP);
                 try (AutoCloseableLock ignore
-                            = new AutoCloseableLock(new Locker(), db.getId(), Lists.newArrayList(tbl.getId()), LockType.WRITE)) {
+                            = new AutoCloseableLock(new Locker(), db, Lists.newArrayList(tbl.getId()), LockType.WRITE)) {
                     onFinished(tbl);
                 }
             }

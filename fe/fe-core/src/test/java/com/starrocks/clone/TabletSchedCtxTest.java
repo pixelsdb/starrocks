@@ -131,7 +131,7 @@ public class TabletSchedCtxTest {
         olapTable.setIndexMeta(INDEX_ID, TB_NAME, TB_BASE_SCHEMA, 0, SCHEMA_HASH, (short) 1, TStorageType.COLUMN,
                 KeysType.AGG_KEYS);
         olapTable.addPartition(partition);
-        Database db = new Database(DB_ID, "");
+        Database db = new Database();
         db.registerTableUnlocked(olapTable);
         GlobalStateMgr.getCurrentState().getLocalMetastore().getIdToDb().put(DB_ID, db);
 

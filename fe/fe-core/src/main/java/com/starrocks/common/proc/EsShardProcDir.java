@@ -55,7 +55,7 @@ public class EsShardProcDir implements ProcDirInterface {
 
         List<List<Comparable>> shardInfos = new ArrayList<List<Comparable>>();
         Locker locker = new Locker();
-        locker.lockDatabase(db.getId(), LockType.READ);
+        locker.lockDatabase(db, LockType.READ);
         try {
             // get infos
             EsShardPartitions esShardPartitions = esTable.getEsTablePartitions().getEsShardPartitions(indexName);
@@ -78,7 +78,7 @@ public class EsShardProcDir implements ProcDirInterface {
                 }
             }
         } finally {
-            locker.unLockDatabase(db.getId(), LockType.READ);
+            locker.unLockDatabase(db, LockType.READ);
         }
 
         // sort by tabletId, replicaId

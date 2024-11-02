@@ -4,7 +4,7 @@ displayed_sidebar: docs
 
 # second
 
-
+## Description
 
 Returns the second part for a given date. The return value ranges from 0 to 59.
 

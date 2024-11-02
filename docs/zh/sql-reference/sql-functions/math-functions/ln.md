@@ -4,7 +4,7 @@ displayed_sidebar: docs
 
 # ln, dlog1, log
 
-
+## 功能
 
 返回参数 `x` 的自然对数，以 e 为底数。
 

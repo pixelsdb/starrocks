@@ -151,8 +151,6 @@ public:
 
     static Status CapacityLimitExceed(std::string_view msg) { return Status(TStatusCode::CAPACITY_LIMIT_EXCEED, msg); }
 
-    static Status Shutdown(std::string_view msg) { return Status(TStatusCode::SHUTDOWN, msg); }
-
     static Status BigQueryCpuSecondLimitExceeded(std::string_view msg) {
         return Status(TStatusCode::BIG_QUERY_CPU_SECOND_LIMIT_EXCEEDED, msg);
     }
@@ -211,8 +209,6 @@ public:
     bool is_eagain() const { return code() == TStatusCode::SR_EAGAIN; }
 
     bool is_yield() const { return code() == TStatusCode::YIELD; }
-
-    bool is_shutdown() const { return code() == TStatusCode::SHUTDOWN; }
 
     // Convert into TStatus. Call this if 'status_container' contains an optional
     // TStatus field named 'status'. This also sets __isset.status.

@@ -134,10 +134,6 @@ public abstract class OptExpressionVisitor<R, C> {
         return visitPhysicalScan(optExpression, context);
     }
 
-    public R visitPhysicalIcebergEqualityDeleteScan(OptExpression optExpression, C context) {
-        return visitPhysicalScan(optExpression, context);
-    }
-
     public R visitPhysicalHudiScan(OptExpression optExpression, C context) {
         return visitPhysicalScan(optExpression, context);
     }

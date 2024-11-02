@@ -141,7 +141,7 @@ public class BinlogScanNode extends ScanNode {
                 if (dbId == -1) {
                     TabletMeta meta = invertedIndex.getTabletMeta(tablet.getId());
                     dbId = meta.getDbId();
-                    dbName = GlobalStateMgr.getCurrentState().getLocalMetastore().getDb(dbId).getFullName();
+                    dbName = GlobalStateMgr.getCurrentState().getDb(dbId).getFullName();
                 }
 
                 long tabletId = tablet.getId();
@@ -190,6 +190,10 @@ public class BinlogScanNode extends ScanNode {
         return scanRanges;
     }
 
+    @Override
+    public int getNumInstances() {
+        return scanRanges.size();
+    }
 
     @Override
     public boolean canDoReplicatedJoin() {

@@ -4,7 +4,7 @@ displayed_sidebar: docs
 
 # sinh
 
-
+## 功能
 
 计算输入数值的双曲正弦值。
 

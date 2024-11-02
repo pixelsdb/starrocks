@@ -40,16 +40,17 @@ import com.starrocks.thrift.TFeLocksReq;
 import com.starrocks.thrift.TFeLocksRes;
 import com.starrocks.thrift.TSchemaTableType;
 import org.apache.commons.collections4.CollectionUtils;
-import org.apache.commons.collections4.SetUtils;
+import org.apache.commons.collections4.ListUtils;
+import org.apache.commons.lang3.ThreadUtils;
 import org.apache.thrift.TException;
 
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.List;
-import java.util.Set;
 import java.util.stream.Collectors;
 
 public class SysFeLocks {
+
     public static final String NAME = "fe_locks";
 
     public static SystemTable create() {
@@ -133,7 +134,7 @@ public class SysFeLocks {
         lockItem.setLock_object(db.getFullName());
 
         Thread owner = lock.getOwner();
-        Set<Thread> sharedLockThreads = lock.getSharedLockThreads();
+        List<Long> sharedLockThreadIds = lock.getSharedLockThreadIds();
         long currentTime = System.currentTimeMillis();
 
         if (owner != null) {
@@ -145,16 +146,16 @@ public class SysFeLocks {
             lockItem.setThread_info(ownerInfo.toString());
 
             // wait start
-            long lockStartTime = lock.getExclusiveLockStartTimeMs();
+            long lockStartTime = lock.getExclusiveLockTime();
             lockItem.setStart_time(lockStartTime);
             lockItem.setHold_time_ms(currentTime - lockStartTime);
-        } else if (CollectionUtils.isNotEmpty(sharedLockThreads)) {
+        } else if (CollectionUtils.isNotEmpty(sharedLockThreadIds)) {
             lockItem.setLock_mode("SHARED");
             lockItem.setGranted(true);
 
             // lock start
-            long lockStart = SetUtils.emptyIfNull(sharedLockThreads).stream()
-                    .map(lock::getSharedLockStartTimeMs)
+            long lockStart = ListUtils.emptyIfNull(sharedLockThreadIds).stream()
+                    .map(lock::getSharedLockTime)
                     .filter(x -> x > 0)
                     .min(Comparator.naturalOrder()).orElse(0L);
             lockItem.setStart_time(lockStart);
@@ -162,10 +163,13 @@ public class SysFeLocks {
 
             // thread info
             JsonArray sharedLockInfo = new JsonArray();
-            for (Thread thread : SetUtils.emptyIfNull(sharedLockThreads)) {
+            for (long threadId : ListUtils.emptyIfNull(sharedLockThreadIds)) {
                 JsonObject lockInfo = new JsonObject();
-                lockInfo.addProperty("threadId", thread.getId());
-                lockInfo.addProperty("threadName", thread.getName());
+                lockInfo.addProperty("threadId", threadId);
+                Thread thread = ThreadUtils.findThreadById(threadId);
+                if (thread != null) {
+                    lockInfo.addProperty("threadName", thread.getName());
+                }
                 sharedLockInfo.add(lockInfo);
             }
             lockItem.setThread_info(sharedLockInfo.toString());
@@ -175,7 +179,17 @@ public class SysFeLocks {
         }
 
         // waiters
-        lockItem.setWaiter_list(LockChecker.getLockWaiterInfoJsonArray(lock.getQueuedThreads()).toString());
+        Collection<Thread> waiters = lock.getQueuedThreads();
+        JsonArray waiterIds = new JsonArray();
+        for (Thread th : CollectionUtils.emptyIfNull(waiters)) {
+            if (th != null) {
+                JsonObject waiter = new JsonObject();
+                waiter.addProperty("threadId", th.getId());
+                waiter.addProperty("threadName", th.getName());
+                waiterIds.add(waiter);
+            }
+        }
+        lockItem.setWaiter_list(waiterIds.toString());
 
         return lockItem;
     }

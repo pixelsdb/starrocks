@@ -148,10 +148,6 @@ public class MvRewriteContext {
         this.mvTableScanDescs = mvTableScanDescs;
     }
 
-    public boolean isInAggregatePushDown() {
-        return aggregatePushDownContext != null;
-    }
-
     public AggregatePushDownContext getAggregatePushDownContext() {
         return aggregatePushDownContext;
     }

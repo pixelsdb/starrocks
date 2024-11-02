@@ -34,6 +34,8 @@
 
 package com.starrocks.common.io;
 
+import com.starrocks.common.FeConstants;
+import com.starrocks.meta.MetaContext;
 import com.starrocks.persist.gson.GsonUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -45,12 +47,24 @@ public class DeepCopy {
     private static final Logger LOG = LogManager.getLogger(DeepCopy.class);
 
     public static <T> T copyWithGson(Object orig, Class<T> c) {
+        // Backup the current MetaContext before assigning a new one.
+        MetaContext oldContext = MetaContext.get();
+        MetaContext metaContext = new MetaContext();
+        metaContext.setStarRocksMetaVersion(FeConstants.STARROCKS_META_VERSION);
+        metaContext.setThreadLocalInfo();
         try {
             String origJsonStr = GsonUtils.GSON.toJson(orig);
             return GsonUtils.GSON.fromJson(origJsonStr, c);
         } catch (Exception e) {
             LOG.warn("failed to copy object.", e);
             return null;
+        } finally {
+            // Restore the old MetaContext.
+            if (oldContext != null) {
+                oldContext.setThreadLocalInfo();
+            } else {
+                MetaContext.remove();
+            }
         }
     }
 }

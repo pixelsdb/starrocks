@@ -57,16 +57,13 @@ public:
     // this TabletManager.
     // |cache_capacity| is the max number of bytes can be used by the
     // metadata cache.
-    explicit TabletManager(std::shared_ptr<LocationProvider> location_provider, UpdateManager* update_mgr,
-                           int64_t cache_capacity);
-
-    explicit TabletManager(std::shared_ptr<LocationProvider> location_provider, int64_t cache_capacity);
+    explicit TabletManager(LocationProvider* location_provider, UpdateManager* update_mgr, int64_t cache_capacity);
 
     ~TabletManager();
 
     DISALLOW_COPY_AND_MOVE(TabletManager);
 
-    Status create_tablet(const TCreateTabletReq& req);
+    [[nodiscard]] Status create_tablet(const TCreateTabletReq& req);
 
     StatusOr<Tablet> get_tablet(int64_t tablet_id);
 
@@ -80,9 +77,8 @@ public:
 
     StatusOr<TabletMetadataPtr> get_tablet_metadata(int64_t tablet_id, int64_t version, bool fill_cache = true);
 
+    // Do not use this function except in a list dir
     StatusOr<TabletMetadataPtr> get_tablet_metadata(const std::string& path, bool fill_cache = true);
-    StatusOr<TabletMetadataPtr> get_tablet_metadata(std::shared_ptr<FileSystem> fs, const std::string& path,
-                                                    bool fill_cache = true);
 
     TabletMetadataPtr get_latest_cached_tablet_metadata(int64_t tablet_id);
 
@@ -108,13 +104,9 @@ public:
 
     Status put_txn_vlog(const TxnLogPtr& log, int64_t version);
 
-    Status put_combined_txn_log(const CombinedTxnLogPB& logs);
-
     StatusOr<TxnLogPtr> get_txn_log(int64_t tablet_id, int64_t txn_id);
 
     StatusOr<TxnLogPtr> get_txn_log(const std::string& path, bool fill_cache = true);
-
-    StatusOr<CombinedTxnLogPtr> get_combined_txn_log(const std::string& path, bool fill_cache = true);
 
     StatusOr<TxnLogPtr> get_txn_slog(int64_t tablet_id, int64_t txn_id);
 
@@ -128,17 +120,13 @@ public:
                                                        const TabletMetadata* metadata);
 
 #ifdef USE_STAROS
-#if !defined(BUILD_FORMAT_LIB)
     bool is_tablet_in_worker(int64_t tablet_id);
-#else
-    bool is_tablet_in_worker(int64_t tablet_id) { return true; }
-#endif
 #endif // USE_STAROS
 
     void prune_metacache();
 
     // TODO: remove this method
-    std::shared_ptr<LocationProvider> TEST_set_location_provider(std::shared_ptr<LocationProvider> value) {
+    LocationProvider* TEST_set_location_provider(LocationProvider* value) {
         auto ret = _location_provider;
         _location_provider = value;
         return ret;
@@ -158,16 +146,15 @@ public:
 
     std::string txn_vlog_location(int64_t tablet_id, int64_t version) const;
 
-    std::string combined_txn_log_location(int64_t tablet_id, int64_t txn_id) const;
-
     std::string segment_location(int64_t tablet_id, std::string_view segment_name) const;
 
     std::string del_location(int64_t tablet_id, std::string_view del_name) const;
 
     std::string delvec_location(int64_t tablet_id, std::string_view delvec_filename) const;
 
-    const std::shared_ptr<LocationProvider> location_provider() { return _location_provider; }
     std::string sst_location(int64_t tablet_id, std::string_view sst_filename) const;
+
+    const LocationProvider* location_provider() const { return _location_provider; }
 
     UpdateManager* update_mgr();
 
@@ -208,8 +195,6 @@ public:
 
     Status create_schema_file(int64_t tablet_id, const TabletSchemaPB& schema_pb);
 
-    void stop();
-
 private:
     static std::string global_schema_cache_key(int64_t index_id);
     static std::string tablet_schema_cache_key(int64_t tablet_id);
@@ -218,23 +203,19 @@ private:
     StatusOr<TabletSchemaPtr> load_and_parse_schema_file(const std::string& path);
     StatusOr<TabletSchemaPtr> get_tablet_schema_by_id(int64_t tablet_id, int64_t schema_id);
 
-    StatusOr<TabletMetadataPtr> load_tablet_metadata(std::shared_ptr<FileSystem> fs,
-                                                     const std::string& metadata_location, bool fill_cache);
     Status put_tablet_metadata(const TabletMetadataPtr& metadata, const std::string& metadata_location);
     StatusOr<TabletMetadataPtr> load_tablet_metadata(const std::string& metadata_location, bool fill_cache);
     StatusOr<TxnLogPtr> load_txn_log(const std::string& txn_log_location, bool fill_cache);
-    StatusOr<CombinedTxnLogPtr> load_combined_txn_log(const std::string& path, bool fill_cache);
 
-    std::shared_ptr<LocationProvider> _location_provider;
+    LocationProvider* _location_provider;
     std::unique_ptr<Metacache> _metacache;
     std::unique_ptr<CompactionScheduler> _compaction_scheduler;
-    UpdateManager* _update_mgr = nullptr;
+    UpdateManager* _update_mgr;
 
     std::shared_mutex _meta_lock;
     std::unordered_map<int64_t, int64_t> _tablet_in_writing_size;
 
     bthreads::singleflight::Group<std::string, StatusOr<TabletSchemaPtr>> _schema_group;
-    bthreads::singleflight::Group<std::string, StatusOr<CombinedTxnLogPtr>> _combined_txn_log_group;
 };
 
 } // namespace starrocks::lake

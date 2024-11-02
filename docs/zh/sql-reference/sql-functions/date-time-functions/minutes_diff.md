@@ -4,7 +4,7 @@ displayed_sidebar: docs
 
 # minutes_diff
 
-
+## 功能
 
 计算开始时间和结束时间相差多少分钟 (`expr1` − `expr2`)。
 

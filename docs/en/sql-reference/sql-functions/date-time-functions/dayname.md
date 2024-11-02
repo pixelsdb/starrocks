@@ -4,7 +4,7 @@ displayed_sidebar: docs
 
 # dayname
 
-
+## Description
 
 Returns the day corresponding to a date.
 

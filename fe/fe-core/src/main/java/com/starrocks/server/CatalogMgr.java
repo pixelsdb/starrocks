@@ -20,6 +20,7 @@ import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
+import com.google.gson.annotations.SerializedName;
 import com.starrocks.catalog.Catalog;
 import com.starrocks.catalog.ExternalCatalog;
 import com.starrocks.catalog.InternalCatalog;
@@ -28,6 +29,7 @@ import com.starrocks.common.AnalysisException;
 import com.starrocks.common.Config;
 import com.starrocks.common.DdlException;
 import com.starrocks.common.FeConstants;
+import com.starrocks.common.io.Text;
 import com.starrocks.common.proc.BaseProcResult;
 import com.starrocks.common.proc.DbsProcDir;
 import com.starrocks.common.proc.ExternalDbsProcDir;
@@ -43,6 +45,7 @@ import com.starrocks.connector.exception.StarRocksConnectorException;
 import com.starrocks.persist.AlterCatalogLog;
 import com.starrocks.persist.DropCatalogLog;
 import com.starrocks.persist.ImageWriter;
+import com.starrocks.persist.gson.GsonUtils;
 import com.starrocks.persist.metablock.SRMetaBlockEOFException;
 import com.starrocks.persist.metablock.SRMetaBlockException;
 import com.starrocks.persist.metablock.SRMetaBlockID;
@@ -59,6 +62,9 @@ import com.starrocks.sql.ast.ModifyTablePropertiesClause;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
+import java.io.EOFException;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
@@ -357,6 +363,29 @@ public class CatalogMgr {
         }
     }
 
+    public long loadCatalogs(DataInputStream dis, long checksum) throws IOException, DdlException {
+        int catalogCount = 0;
+        try {
+            String s = Text.readString(dis);
+            SerializeData data = GsonUtils.GSON.fromJson(s, SerializeData.class);
+            if (data != null) {
+                if (data.catalogs != null) {
+                    for (Catalog catalog : data.catalogs.values()) {
+                        if (!isResourceMappingCatalog(catalog.getName())) {
+                            replayCreateCatalog(catalog);
+                        }
+                    }
+                    catalogCount = data.catalogs.size();
+                }
+            }
+            checksum ^= catalogCount;
+            LOG.info("finished replaying CatalogMgr from image");
+        } catch (EOFException e) {
+            LOG.info("no CatalogMgr to replay.");
+        }
+        return checksum;
+    }
+
     public void loadResourceMappingCatalog() {
         LOG.info("start to replay resource mapping catalog");
 
@@ -378,6 +407,23 @@ public class CatalogMgr {
             }
         }
         LOG.info("finished replaying resource mapping catalogs from resources");
+    }
+
+    public long saveCatalogs(DataOutputStream dos, long checksum) throws IOException {
+        SerializeData data = new SerializeData();
+        data.catalogs = catalogs.entrySet().stream()
+                .filter(entry -> !isResourceMappingCatalog(entry.getKey()))
+                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+
+        checksum ^= data.catalogs.size();
+        String s = GsonUtils.GSON.toJson(data);
+        Text.writeString(dos, s);
+        return checksum;
+    }
+
+    private static class SerializeData {
+        @SerializedName("catalogs")
+        public Map<String, Catalog> catalogs;
     }
 
     public List<List<String>> getCatalogsInfo() {

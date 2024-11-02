@@ -19,7 +19,7 @@ set(EXECUTABLE_OUTPUT_PATH "${BUILD_DIR}/src/storage")
 
 add_subdirectory(rowset)
 
-set(STORAGE_FILES
+add_library(Storage STATIC
     aggregate_type.cpp
     base_tablet.cpp
     decimal12.cpp
@@ -117,13 +117,11 @@ set(STORAGE_FILES
     rowset/rowid_range_option.cpp
     rowset/rowset_meta.cpp
     rowset/horizontal_update_rowset_writer.cpp
-    rowset/bitmap_index_evaluator.cpp
     rowset/metadata_cache.cpp
     task/engine_batch_load_task.cpp
     task/engine_checksum_task.cpp
     task/engine_clone_task.cpp
     task/engine_manual_compaction_task.cpp
-    task/engine_compaction_control_task.cpp
     task/engine_storage_migration_task.cpp
     task/engine_alter_tablet_task.cpp
     aggregate_iterator.cpp
@@ -226,7 +224,6 @@ set(STORAGE_FILES
     sstable/iterator.cpp
     sstable/options.cpp
     sstable/merger.cpp
-    lake/lake_delvec_loader.cpp
     binlog_util.cpp
     binlog_file_writer.cpp
     binlog_file_reader.cpp
@@ -237,7 +234,6 @@ set(STORAGE_FILES
     lake/txn_log_applier.cpp
     lake/lake_local_persistent_index.cpp
     persistent_index_compaction_manager.cpp
-    lake/local_pk_index_manager.cpp
     persistent_index_tablet_loader.cpp
     lake/lake_local_persistent_index_tablet_loader.cpp
     lake/lake_persistent_index.cpp
@@ -251,27 +247,15 @@ set(STORAGE_FILES
     rows_mapper.cpp
     primary_key_compaction_conflict_resolver.cpp
     local_primary_key_compaction_conflict_resolver.cpp
-    index/inverted/inverted_index_iterator.cpp
-    index/inverted/inverted_index_option.cpp
-    index/inverted/inverted_plugin_factory.cpp
-    index/inverted/clucene/clucene_plugin.cpp
-    index/inverted/clucene/clucene_inverted_writer.cpp
-    index/inverted/clucene/clucene_inverted_reader.cpp
-    index/inverted/clucene/match_operator.cpp
-    index/vector/empty_index_reader.cpp
-    index/vector/vector_index_builder_factory.cpp
-    index/vector/vector_index_writer.cpp
-    index/vector/vector_index_builder.cpp
-    index/vector/vector_index_reader_factory.cpp
-    index/vector/tenann_index_reader.cpp
-    index/vector/tenann/del_id_filter.cpp
-    index/vector/tenann/tenann_index_builder.cpp
-    index/vector/tenann/tenann_index_utils.cpp)
-
-if (NOT BUILD_FORMAT_LIB)
-    list(APPEND STORAGE_FILES  lake/starlet_location_provider.cpp)
-endif()
-
-add_library(Storage STATIC
-    ${STORAGE_FILES}
-)
+    inverted/index_descriptor.hpp
+    inverted/inverted_index_iterator.cpp
+    inverted/inverted_index_iterator.cpp
+    inverted/inverted_index_option.cpp
+    inverted/inverted_index_common.hpp
+    inverted/inverted_plugin_factory.cpp
+    inverted/clucene/clucene_plugin.cpp
+    inverted/clucene/clucene_roaring_hit_collector.hpp
+    inverted/clucene/clucene_inverted_writer.cpp
+    inverted/clucene/clucene_inverted_reader.cpp
+    inverted/clucene/clucene_inverted_util.hpp
+    inverted/clucene/match_operator.cpp)

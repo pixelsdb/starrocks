@@ -85,23 +85,23 @@ public abstract class LakeTableAlterMetaJobBase extends AlterJobV2 {
         // send task to be
         GlobalStateMgr globalStateMgr = GlobalStateMgr.getCurrentState();
         List<Partition> partitions = Lists.newArrayList();
-        Database db = globalStateMgr.getLocalMetastore().getDb(dbId);
+        Database db = globalStateMgr.getDb(dbId);
 
         if (db == null) {
             throw new AlterCancelException("database does not exist, dbId:" + dbId);
         }
 
-        LakeTable table = (LakeTable) GlobalStateMgr.getCurrentState().getLocalMetastore().getTable(db.getFullName(), tableName);
+        LakeTable table = (LakeTable) db.getTable(tableName);
         if (table == null) {
             throw new AlterCancelException("table does not exist, tableName:" + tableName);
         }
 
         Locker locker = new Locker();
-        locker.lockTablesWithIntensiveDbLock(db.getId(), Lists.newArrayList(table.getId()), LockType.READ);
+        locker.lockTablesWithIntensiveDbLock(db, Lists.newArrayList(table.getId()), LockType.READ);
         try {
             partitions.addAll(table.getPartitions());
         } finally {
-            locker.unLockTablesWithIntensiveDbLock(db.getId(), Lists.newArrayList(table.getId()), LockType.READ);
+            locker.unLockTablesWithIntensiveDbLock(db, Lists.newArrayList(table.getId()), LockType.READ);
         }
 
         if (this.watershedTxnId == -1) {
@@ -135,20 +135,20 @@ public abstract class LakeTableAlterMetaJobBase extends AlterJobV2 {
 
     @Override
     protected void runRunningJob() throws AlterCancelException {
-        Database db = GlobalStateMgr.getCurrentState().getLocalMetastore().getDb(dbId);
+        Database db = GlobalStateMgr.getCurrentState().getDb(dbId);
         if (db == null) {
             // database has been dropped
             throw new AlterCancelException("database does not exist, dbId:" + dbId);
         }
 
-        LakeTable table = (LakeTable) GlobalStateMgr.getCurrentState().getLocalMetastore().getTable(db.getId(), tableId);
+        LakeTable table = (LakeTable) db.getTable(tableId);
         if (table == null) {
             // table has been dropped
             throw new AlterCancelException("table does not exist, tableId:" + tableId);
         }
 
         Locker locker = new Locker();
-        locker.lockTablesWithIntensiveDbLock(db.getId(), Lists.newArrayList(table.getId()), LockType.WRITE);
+        locker.lockTablesWithIntensiveDbLock(db, Lists.newArrayList(table.getId()), LockType.WRITE);
         try {
             commitVersionMap.clear();
             for (long partitionId : physicalPartitionIndexMap.rowKeySet()) {
@@ -168,7 +168,7 @@ public abstract class LakeTableAlterMetaJobBase extends AlterJobV2 {
             // NOTE: !!! below this point, this update meta job must success unless the database or table been dropped. !!!
             updateNextVersion(table);
         } finally {
-            locker.unLockTablesWithIntensiveDbLock(db.getId(), Lists.newArrayList(table.getId()), LockType.WRITE);
+            locker.unLockTablesWithIntensiveDbLock(db, Lists.newArrayList(table.getId()), LockType.WRITE);
         }
     }
 
@@ -187,22 +187,21 @@ public abstract class LakeTableAlterMetaJobBase extends AlterJobV2 {
             return;
         }
 
-        Database db = GlobalStateMgr.getCurrentState().getLocalMetastore().getDb(dbId);
+        Database db = GlobalStateMgr.getCurrentState().getDb(dbId);
         if (db == null) {
             // database has been dropped
             LOG.warn("database does not exist, dbId:" + dbId);
             throw new AlterCancelException("database does not exist, dbId:" + dbId);
         }
 
-        LakeTable table = (LakeTable) GlobalStateMgr.getCurrentState().getLocalMetastore().getTable(db.getId(), tableId);
+        LakeTable table = (LakeTable) db.getTable(tableName);
         if (table == null) {
             // table has been dropped
             LOG.warn("table does not exist, tableId:" + tableId);
-            throw new AlterCancelException("table does not exist, tableId:" + tableId);
+            throw new AlterCancelException("table does not exist, tableName:" + tableName);
         }
-
         Locker locker = new Locker();
-        locker.lockTablesWithIntensiveDbLock(db.getId(), Lists.newArrayList(table.getId()), LockType.WRITE);
+        locker.lockTablesWithIntensiveDbLock(db, Lists.newArrayList(table.getId()), LockType.WRITE);
         try {
             updateCatalog(db, table);
             this.jobState = JobState.FINISHED;
@@ -213,7 +212,7 @@ public abstract class LakeTableAlterMetaJobBase extends AlterJobV2 {
             table.setState(OlapTable.OlapTableState.NORMAL);
 
         } finally {
-            locker.unLockTablesWithIntensiveDbLock(db.getId(), Lists.newArrayList(table.getId()), LockType.WRITE);
+            locker.unLockTablesWithIntensiveDbLock(db, Lists.newArrayList(table.getId()), LockType.WRITE);
         }
 
         handleMVRepair(db, table);
@@ -221,19 +220,19 @@ public abstract class LakeTableAlterMetaJobBase extends AlterJobV2 {
     }
 
     boolean readyToPublishVersion() throws AlterCancelException {
-        Database db = GlobalStateMgr.getCurrentState().getLocalMetastore().getDb(dbId);
+        Database db = GlobalStateMgr.getCurrentState().getDb(dbId);
         if (db == null) {
             // database has been dropped
             throw new AlterCancelException("database does not exist, dbId:" + dbId);
         }
-        LakeTable table = (LakeTable) GlobalStateMgr.getCurrentState().getLocalMetastore().getTable(db.getId(), tableId);
+        LakeTable table = (LakeTable) db.getTable(tableId);
         if (table == null) {
             // table has been dropped
             throw new AlterCancelException("table does not exist, tableId:" + tableId);
         }
 
         Locker locker = new Locker();
-        locker.lockTablesWithIntensiveDbLock(db.getId(), Lists.newArrayList(table.getId()), LockType.READ);
+        locker.lockTablesWithIntensiveDbLock(db, Lists.newArrayList(table.getId()), LockType.READ);
         try {
             for (long partitionId : physicalPartitionIndexMap.rowKeySet()) {
                 PhysicalPartition partition = table.getPhysicalPartition(partitionId);
@@ -247,7 +246,7 @@ public abstract class LakeTableAlterMetaJobBase extends AlterJobV2 {
                 }
             }
         } finally {
-            locker.unLockTablesWithIntensiveDbLock(db.getId(), Lists.newArrayList(table.getId()), LockType.READ);
+            locker.unLockTablesWithIntensiveDbLock(db, Lists.newArrayList(table.getId()), LockType.READ);
         }
         return true;
     }
@@ -257,14 +256,14 @@ public abstract class LakeTableAlterMetaJobBase extends AlterJobV2 {
             TxnInfoPB txnInfo = new TxnInfoPB();
             txnInfo.txnId = watershedTxnId;
             txnInfo.combinedTxnLog = false;
-            txnInfo.commitTime = finishedTimeMs / 1000;
             txnInfo.txnType = TxnTypePB.TXN_NORMAL;
+            txnInfo.commitTime = finishedTimeMs / 1000;
+            txnInfo.forcePublish = false;
             for (long partitionId : physicalPartitionIndexMap.rowKeySet()) {
                 long commitVersion = commitVersionMap.get(partitionId);
                 Map<Long, MaterializedIndex> dirtyIndexMap = physicalPartitionIndexMap.row(partitionId);
                 for (MaterializedIndex index : dirtyIndexMap.values()) {
-                    Utils.publishVersion(index.getTablets(), txnInfo, commitVersion - 1, commitVersion,
-                            warehouseId);
+                    Utils.publishVersion(index.getTablets(), txnInfo, commitVersion - 1, commitVersion, warehouseId);
                 }
             }
             return true;
@@ -279,30 +278,30 @@ public abstract class LakeTableAlterMetaJobBase extends AlterJobV2 {
     }
 
     public void updatePartitionTabletMeta(Database db, LakeTable table, Partition partition) throws DdlException {
-        Collection<PhysicalPartition> physicalPartitions;
+        Collection<PhysicalPartition> subPartitions;
         Locker locker = new Locker();
-        locker.lockTablesWithIntensiveDbLock(db.getId(), Lists.newArrayList(table.getId()), LockType.READ);
+        locker.lockTablesWithIntensiveDbLock(db, Lists.newArrayList(table.getId()), LockType.READ);
         try {
-            physicalPartitions = partition.getSubPartitions();
+            subPartitions = partition.getSubPartitions();
         } finally {
-            locker.unLockTablesWithIntensiveDbLock(db.getId(), Lists.newArrayList(table.getId()), LockType.READ);
+            locker.unLockTablesWithIntensiveDbLock(db, Lists.newArrayList(table.getId()), LockType.READ);
         }
 
-        for (PhysicalPartition physicalPartition : physicalPartitions) {
-            updatePhysicalPartitionTabletMeta(db, table, physicalPartition);
+        for (PhysicalPartition physicalPartition : subPartitions) {
+            updatePhysicalPartitionTabletMeta(db, table, partition, physicalPartition);
         }
     }
 
-    public void updatePhysicalPartitionTabletMeta(Database db, OlapTable table,
-                                                  PhysicalPartition partition) throws DdlException {
+    public void updatePhysicalPartitionTabletMeta(Database db, OlapTable table, Partition partition,
+                                                  PhysicalPartition subPartition) throws DdlException {
         List<MaterializedIndex> indexList;
 
         Locker locker = new Locker();
-        locker.lockTablesWithIntensiveDbLock(db.getId(), Lists.newArrayList(table.getId()), LockType.READ);
+        locker.lockTablesWithIntensiveDbLock(db, Lists.newArrayList(table.getId()), LockType.READ);
         try {
-            indexList = new ArrayList<>(partition.getMaterializedIndices(MaterializedIndex.IndexExtState.VISIBLE));
+            indexList = new ArrayList<>(subPartition.getMaterializedIndices(MaterializedIndex.IndexExtState.VISIBLE));
         } finally {
-            locker.unLockTablesWithIntensiveDbLock(db.getId(), Lists.newArrayList(table.getId()), LockType.READ);
+            locker.unLockTablesWithIntensiveDbLock(db, Lists.newArrayList(table.getId()), LockType.READ);
         }
         for (MaterializedIndex index : indexList) {
             updateIndexTabletMeta(db, table, partition, index);
@@ -317,11 +316,11 @@ public abstract class LakeTableAlterMetaJobBase extends AlterJobV2 {
         List<Tablet> tablets;
 
         Locker locker = new Locker();
-        locker.lockTablesWithIntensiveDbLock(db.getId(), Lists.newArrayList(table.getId()), LockType.READ);
+        locker.lockTablesWithIntensiveDbLock(db, Lists.newArrayList(table.getId()), LockType.READ);
         try {
             tablets = new ArrayList<>(index.getTablets());
         } finally {
-            locker.unLockTablesWithIntensiveDbLock(db.getId(), Lists.newArrayList(table.getId()), LockType.READ);
+            locker.unLockTablesWithIntensiveDbLock(db, Lists.newArrayList(table.getId()), LockType.READ);
         }
 
         WarehouseManager warehouseManager = GlobalStateMgr.getCurrentState().getWarehouseMgr();
@@ -422,12 +421,12 @@ public abstract class LakeTableAlterMetaJobBase extends AlterJobV2 {
             return false;
         }
 
-        Database db = GlobalStateMgr.getCurrentState().getLocalMetastore().getDb(dbId);
+        Database db = GlobalStateMgr.getCurrentState().getDb(dbId);
         if (db != null) {
-            LakeTable table = (LakeTable) GlobalStateMgr.getCurrentState().getLocalMetastore().getTable(db.getId(), tableId);
+            LakeTable table = (LakeTable) db.getTable(tableId);
             if (table != null) {
                 Locker locker = new Locker();
-                locker.lockTablesWithIntensiveDbLock(db.getId(), Lists.newArrayList(table.getId()), LockType.WRITE);
+                locker.lockTablesWithIntensiveDbLock(db, Lists.newArrayList(table.getId()), LockType.WRITE);
                 try {
                     // Cancel a job of state `FINISHED_REWRITING` only when the database or table has been dropped.
                     if (jobState == JobState.FINISHED_REWRITING) {
@@ -435,7 +434,7 @@ public abstract class LakeTableAlterMetaJobBase extends AlterJobV2 {
                     }
                     table.setState(OlapTable.OlapTableState.NORMAL);
                 } finally {
-                    locker.unLockTablesWithIntensiveDbLock(db.getId(), Lists.newArrayList(table.getId()), LockType.WRITE);
+                    locker.unLockTablesWithIntensiveDbLock(db, Lists.newArrayList(table.getId()), LockType.WRITE);
                 }
             }
         }
@@ -480,20 +479,20 @@ public abstract class LakeTableAlterMetaJobBase extends AlterJobV2 {
             restoreState(other);
         }
 
-        Database db = GlobalStateMgr.getCurrentState().getLocalMetastore().getDb(dbId);
+        Database db = GlobalStateMgr.getCurrentState().getDb(dbId);
         if (db == null) {
             // database has been dropped
             LOG.warn("database does not exist, dbId:" + dbId);
             return;
         }
 
-        LakeTable table = (LakeTable) GlobalStateMgr.getCurrentState().getLocalMetastore().getTable(db.getId(), tableId);
+        LakeTable table = (LakeTable) db.getTable(tableId);
         if (table == null) {
             return;
         }
 
         Locker locker = new Locker();
-        locker.lockTablesWithIntensiveDbLock(db.getId(), Lists.newArrayList(table.getId()), LockType.WRITE);
+        locker.lockTablesWithIntensiveDbLock(db, Lists.newArrayList(table.getId()), LockType.WRITE);
         try {
             if (jobState == JobState.FINISHED_REWRITING) {
                 updateNextVersion(table);
@@ -509,7 +508,7 @@ public abstract class LakeTableAlterMetaJobBase extends AlterJobV2 {
                 throw new RuntimeException("unknown job state '{}'" + jobState.name());
             }
         } finally {
-            locker.unLockTablesWithIntensiveDbLock(db.getId(), Lists.newArrayList(table.getId()), LockType.WRITE);
+            locker.unLockTablesWithIntensiveDbLock(db, Lists.newArrayList(table.getId()), LockType.WRITE);
         }
     }
 
@@ -536,7 +535,7 @@ public abstract class LakeTableAlterMetaJobBase extends AlterJobV2 {
         List<PartitionRepairInfo> partitionRepairInfos = Lists.newArrayListWithCapacity(commitVersionMap.size());
 
         Locker locker = new Locker();
-        locker.lockTableWithIntensiveDbLock(db.getId(), table.getId(), LockType.READ);
+        locker.lockTableWithIntensiveDbLock(db, table.getId(), LockType.READ);
         try {
             for (Map.Entry<Long, Long> partitionVersion : commitVersionMap.entrySet()) {
                 long partitionId = partitionVersion.getKey();
@@ -552,7 +551,7 @@ public abstract class LakeTableAlterMetaJobBase extends AlterJobV2 {
                 partitionRepairInfos.add(partitionRepairInfo);
             }
         } finally {
-            locker.unLockTableWithIntensiveDbLock(db.getId(), table.getId(), LockType.READ);
+            locker.unLockTableWithIntensiveDbLock(db, table, LockType.READ);
         }
 
         if (partitionRepairInfos.isEmpty()) {

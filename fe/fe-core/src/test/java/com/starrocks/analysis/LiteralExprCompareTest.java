@@ -19,7 +19,6 @@ package com.starrocks.analysis;
 
 import com.starrocks.catalog.PrimitiveType;
 import com.starrocks.catalog.ScalarType;
-import com.starrocks.catalog.Type;
 import com.starrocks.common.AnalysisException;
 import org.junit.Assert;
 import org.junit.BeforeClass;
@@ -182,14 +181,6 @@ public class LiteralExprCompareTest {
         Assert.assertTrue(0 == double1.compareLiteral(double2));
         // self equal
         Assert.assertTrue(0 == double1.compareLiteral(double1));
-
-        LiteralExpr floatType = LiteralExpr.create("3.14", Type.FLOAT);
-        Assert.assertEquals(PrimitiveType.FLOAT, floatType.getType().getPrimitiveType());
-        Assert.assertEquals(true, floatType.equals(new FloatLiteral(3.14, Type.FLOAT)));
-
-        LiteralExpr doubleType = LiteralExpr.create("3.14", Type.DOUBLE);
-        Assert.assertEquals(PrimitiveType.DOUBLE, doubleType.getType().getPrimitiveType());
-        Assert.assertEquals(true, doubleType.equals(new FloatLiteral(3.14, Type.DOUBLE)));
     }
 
     private void intTestInternal(ScalarType type) throws AnalysisException {

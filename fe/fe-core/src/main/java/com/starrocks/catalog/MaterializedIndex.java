@@ -173,7 +173,7 @@ public class MaterializedIndex extends MetaObject implements Writable, GsonPostP
     }
 
     public List<Long> getTabletIdsInOrder() {
-        List<Long> tabletIds = Lists.newArrayListWithCapacity(tablets.size());
+        List<Long> tabletIds = Lists.newArrayList();
         for (Tablet tablet : tablets) {
             tabletIds.add(tablet.getId());
         }

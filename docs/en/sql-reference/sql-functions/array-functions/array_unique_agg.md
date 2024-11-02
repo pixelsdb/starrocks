@@ -4,7 +4,7 @@ displayed_sidebar: docs
 
 # array_unique_agg
 
-
+## Description
 
 Aggregates distinct values (including `NULL`) in an ARRAY column into an array (from multiple rows to one row).
 

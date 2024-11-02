@@ -16,6 +16,7 @@
 
 #include "butil/file_util.h"
 #include "column/column_helper.h"
+#include "column/column_pool.h"
 #include "common/config.h"
 #include "exec/pipeline/query_context.h"
 #include "gtest/gtest.h"
@@ -96,7 +97,6 @@ int init_test_env(int argc, char** argv) {
     config::disable_storage_page_cache = true;
     auto st = global_env->init();
     CHECK(st.ok()) << st;
-
     auto* exec_env = ExecEnv::GetInstance();
     // Pagecache is turned on by default, and some test cases require cache to be turned on,
     // and some test cases do not. For easy management, we turn cache off during unit test
@@ -110,7 +110,7 @@ int init_test_env(int argc, char** argv) {
     // clear some trash objects kept in tablet_manager so mem_tracker checks will not fail
     CHECK(StorageEngine::instance()->tablet_manager()->start_trash_sweep().ok());
     (void)butil::DeleteFile(storage_root, true);
-    exec_env->wait_for_finish();
+    TEST_clear_all_columns_this_thread();
     // delete engine
     StorageEngine::instance()->stop();
     // destroy exec env

@@ -4,7 +4,7 @@ displayed_sidebar: docs
 
 # std
 
-
+## Description
 
 Returns the standard deviation of an expression. Since v2.5.10, this function can also be used as a window function.
 

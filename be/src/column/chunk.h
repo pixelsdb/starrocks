@@ -112,8 +112,6 @@ public:
     // schema must exist and will be updated.
     void append_column(ColumnPtr column, const FieldPtr& field);
 
-    void append_vector_column(ColumnPtr column, const FieldPtr& field, SlotId slot_id);
-
     void append_column(ColumnPtr column, SlotId slot_id);
     void insert_column(size_t idx, ColumnPtr column, const FieldPtr& field);
 
@@ -279,11 +277,13 @@ public:
 
     std::string rebuild_csv_row(size_t index, const std::string& delimiter) const;
 
-    Status capacity_limit_reached() const {
+    bool capacity_limit_reached(std::string* msg = nullptr) const {
         for (const auto& column : _columns) {
-            RETURN_IF_ERROR(column->capacity_limit_reached());
+            if (column->capacity_limit_reached(msg)) {
+                return true;
+            }
         }
-        return Status::OK();
+        return false;
     }
 
     query_cache::owner_info& owner_info() { return _owner_info; }

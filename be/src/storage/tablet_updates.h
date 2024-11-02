@@ -80,7 +80,6 @@ struct ExtraFileSize {
 struct EditVersionInfo {
     EditVersion version;
     int64_t creation_time;
-    int64_t gtid = 0;
     std::vector<uint32_t> rowsets;
     // used for rowset commit
     std::vector<uint32_t> deltas;
@@ -97,7 +96,6 @@ struct EditVersionInfo {
             compaction = std::make_unique<CompactionInfo>();
             *compaction = *rhs.compaction;
         }
-        gtid = rhs.gtid;
     }
     // add method to better expose to scripting engine
     CompactionInfo* get_compaction() { return compaction.get(); }
@@ -228,9 +226,6 @@ public:
     // Wait until |version| been applied.
     Status get_applied_rowsets(int64_t version, std::vector<RowsetSharedPtr>* rowsets,
                                EditVersion* full_version = nullptr);
-
-    Status get_applied_rowsets_by_gtid(int64_t gtid, std::vector<RowsetSharedPtr>* rowsets,
-                                       EditVersion* full_version = nullptr);
 
     void to_updates_pb(TabletUpdatesPB* updates_pb) const;
 
@@ -384,8 +379,6 @@ public:
         }
     }
 
-    void rewrite_rs_meta();
-
 private:
     friend class Tablet;
     friend class PrimaryIndex;
@@ -465,9 +458,6 @@ private:
 
     void _set_error(const string& msg);
 
-    Status _get_applied_rowsets(int64_t version, std::vector<RowsetSharedPtr>* rowsets, EditVersion* full_edit_version,
-                                std::unique_lock<std::mutex>& ul, int64_t begin_ms);
-
     Status _load_meta_and_log(const TabletUpdatesPB& tablet_updates_pb);
 
     Status _load_pending_rowsets();
@@ -541,9 +531,6 @@ private:
 
     mutable std::mutex _rowsets_lock;
     std::unordered_map<uint32_t, RowsetSharedPtr> _rowsets;
-
-    // gtid -> version
-    std::map<int64_t, int64_t> _gtid_to_version_map;
 
     // used for async apply, make sure at most 1 thread is doing applying
     mutable std::mutex _apply_running_lock;

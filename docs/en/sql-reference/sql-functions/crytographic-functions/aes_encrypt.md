@@ -4,7 +4,7 @@ displayed_sidebar: docs
 
 # aes_encrypt
 
-
+## Description
 
 Uses the AES_128_ECB algorithm to encrypt a string and returns a binary string.
 

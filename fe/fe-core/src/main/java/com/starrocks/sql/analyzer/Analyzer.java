@@ -14,6 +14,7 @@
 
 package com.starrocks.sql.analyzer;
 
+import com.starrocks.common.AnalysisException;
 import com.starrocks.qe.ConnectContext;
 import com.starrocks.qe.OriginStatement;
 import com.starrocks.server.GlobalStateMgr;
@@ -151,14 +152,6 @@ import com.starrocks.sql.ast.pipe.CreatePipeStmt;
 import com.starrocks.sql.ast.pipe.DescPipeStmt;
 import com.starrocks.sql.ast.pipe.DropPipeStmt;
 import com.starrocks.sql.ast.pipe.ShowPipeStmt;
-import com.starrocks.sql.ast.warehouse.CreateWarehouseStmt;
-import com.starrocks.sql.ast.warehouse.DropWarehouseStmt;
-import com.starrocks.sql.ast.warehouse.ResumeWarehouseStmt;
-import com.starrocks.sql.ast.warehouse.SetWarehouseStmt;
-import com.starrocks.sql.ast.warehouse.ShowClustersStmt;
-import com.starrocks.sql.ast.warehouse.ShowNodesStmt;
-import com.starrocks.sql.ast.warehouse.ShowWarehousesStmt;
-import com.starrocks.sql.ast.warehouse.SuspendWarehouseStmt;
 
 public class Analyzer {
     private final AnalyzerVisitor analyzerVisitor;
@@ -505,7 +498,11 @@ public class Analyzer {
 
         @Override
         public Void visitCreateFunctionStatement(CreateFunctionStmt statement, ConnectContext context) {
-            new CreateFunctionAnalyzer().analyze(statement, context);
+            try {
+                statement.analyze(context);
+            } catch (AnalysisException e) {
+                throw new SemanticException(e.getMessage());
+            }
             return null;
         }
 
@@ -711,72 +708,71 @@ public class Analyzer {
             return null;
         }
 
-        // ---------------------------------------- Authentication Statement ------------------------------------------------
+        // ---------------------------------------- Privilege Statement ------------------------------------------------
 
         @Override
         public Void visitBaseCreateAlterUserStmt(BaseCreateAlterUserStmt stmt, ConnectContext session) {
-            AuthenticationAnalyzer.analyze(stmt, session);
+            PrivilegeStmtAnalyzer.analyze(stmt, session);
             return null;
         }
 
         @Override
         public Void visitDropUserStatement(DropUserStmt stmt, ConnectContext session) {
-            AuthenticationAnalyzer.analyze(stmt, session);
+            PrivilegeStmtAnalyzer.analyze(stmt, session);
             return null;
         }
 
         @Override
         public Void visitShowAuthenticationStatement(ShowAuthenticationStmt statement, ConnectContext context) {
-            AuthenticationAnalyzer.analyze(statement, context);
+            PrivilegeStmtAnalyzer.analyze(statement, context);
             return null;
         }
 
         @Override
         public Void visitExecuteAsStatement(ExecuteAsStmt stmt, ConnectContext session) {
-            AuthenticationAnalyzer.analyze(stmt, session);
+            PrivilegeStmtAnalyzer.analyze(stmt, session);
             return null;
         }
 
-        // ---------------------------------------- Authorization Statement ------------------------------------------------
         @Override
         public Void visitCreateRoleStatement(CreateRoleStmt stmt, ConnectContext session) {
-            AuthorizationAnalyzer.analyze(stmt, session);
+            PrivilegeStmtAnalyzer.analyze(stmt, session);
             return null;
         }
 
         @Override
         public Void visitDropRoleStatement(DropRoleStmt stmt, ConnectContext session) {
-            AuthorizationAnalyzer.analyze(stmt, session);
+            PrivilegeStmtAnalyzer.analyze(stmt, session);
             return null;
         }
 
         @Override
         public Void visitGrantRevokeRoleStatement(BaseGrantRevokeRoleStmt stmt, ConnectContext session) {
-            AuthorizationAnalyzer.analyze(stmt, session);
+            PrivilegeStmtAnalyzer.analyze(stmt, session);
             return null;
         }
 
         @Override
         public Void visitSetRoleStatement(SetRoleStmt stmt, ConnectContext session) {
-            AuthorizationAnalyzer.analyze(stmt, session);
+            PrivilegeStmtAnalyzer.analyze(stmt, session);
             return null;
         }
 
         @Override
         public Void visitSetDefaultRoleStatement(SetDefaultRoleStmt stmt, ConnectContext session) {
-            AuthorizationAnalyzer.analyze(stmt, session);
+            PrivilegeStmtAnalyzer.analyze(stmt, session);
             return null;
         }
 
         @Override
         public Void visitGrantRevokePrivilegeStatement(BaseGrantRevokePrivilegeStmt stmt, ConnectContext session) {
-            AuthorizationAnalyzer.analyze(stmt, session);
+            PrivilegeStmtAnalyzer.analyze(stmt, session);
             return null;
         }
 
         @Override
         public Void visitShowGrantsStatement(ShowGrantsStmt stmt, ConnectContext session) {
-            AuthorizationAnalyzer.analyze(stmt, session);
+            PrivilegeStmtAnalyzer.analyze(stmt, session);
             return null;
         }
 
@@ -1022,53 +1018,6 @@ public class Analyzer {
         @Override
         public Void visitShowDictionaryStatement(ShowDictionaryStmt statement, ConnectContext context) {
             DictionaryAnalyzer.analyze(statement, context);
-            return null;
-        }
-
-        // ---------------------------------------- Warehouse Statement ---------------------------------------------------
-
-        @Override
-        public Void visitShowWarehousesStatement(ShowWarehousesStmt statement, ConnectContext context) {
-            return null;
-        }
-
-        @Override
-        public Void visitShowClusterStatement(ShowClustersStmt statement, ConnectContext context) {
-            return null;
-        }
-
-        @Override
-        public Void visitCreateWarehouseStatement(CreateWarehouseStmt statement, ConnectContext context) {
-            WarehouseAnalyzer.analyze(statement, context);
-            return null;
-        }
-
-        @Override
-        public Void visitDropWarehouseStatement(DropWarehouseStmt statement, ConnectContext context) {
-            WarehouseAnalyzer.analyze(statement, context);
-            return null;
-        }
-
-        @Override
-        public Void visitSuspendWarehouseStatement(SuspendWarehouseStmt statement, ConnectContext context) {
-            WarehouseAnalyzer.analyze(statement, context);
-            return null;
-        }
-
-        @Override
-        public Void visitResumeWarehouseStatement(ResumeWarehouseStmt statement, ConnectContext context) {
-            WarehouseAnalyzer.analyze(statement, context);
-            return null;
-        }
-
-        @Override
-        public Void visitSetWarehouseStatement(SetWarehouseStmt statement, ConnectContext context) {
-            WarehouseAnalyzer.analyze(statement, context);
-            return null;
-        }
-
-        @Override
-        public Void visitShowNodesStatement(ShowNodesStmt statement, ConnectContext context) {
             return null;
         }
     }

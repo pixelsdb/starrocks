@@ -39,7 +39,9 @@ using DataCacheMetrics = DummyCacheMetrics;
 using DataCacheStatus = DummyCacheStatus;
 #endif
 
-enum class DataCacheEngineType { STARCACHE };
+enum class DataCacheEngine { STARCACHE, CACHELIB };
+
+enum class DataCacheEngineType { STARCACHE, CACHELIB };
 
 class KvCache {
 public:

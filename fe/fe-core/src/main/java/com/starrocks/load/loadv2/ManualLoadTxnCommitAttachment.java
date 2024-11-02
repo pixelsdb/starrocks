@@ -37,9 +37,6 @@ public class ManualLoadTxnCommitAttachment extends TxnCommitAttachment {
     // optional
     @SerializedName("eu")
     private String errorLogUrl;
-    private long beginTxnTime;
-    private long planTime;
-    private long receiveDataTime;
 
     public ManualLoadTxnCommitAttachment() {
         super(TransactionState.LoadJobSourceType.BACKEND_STREAMING);
@@ -55,9 +52,6 @@ public class ManualLoadTxnCommitAttachment extends TxnCommitAttachment {
         if (tManualLoadTxnCommitAttachment.isSetErrorLogUrl()) {
             this.errorLogUrl = tManualLoadTxnCommitAttachment.getErrorLogUrl();
         }
-        this.beginTxnTime = tManualLoadTxnCommitAttachment.getBeginTxnTime();
-        this.planTime = tManualLoadTxnCommitAttachment.getPlanTime();
-        this.receiveDataTime = tManualLoadTxnCommitAttachment.getReceiveDataTime();
     }
 
     public long getLoadedRows() {
@@ -82,18 +76,6 @@ public class ManualLoadTxnCommitAttachment extends TxnCommitAttachment {
 
     public String getErrorLogUrl() {
         return errorLogUrl;
-    }
-
-    public long getBeginTxnTime() {
-        return beginTxnTime;
-    }
-
-    public long getPlanTime() {
-        return planTime;
-    }
-
-    public long getReceiveDataTime() {
-        return receiveDataTime;
     }
 
     @Override

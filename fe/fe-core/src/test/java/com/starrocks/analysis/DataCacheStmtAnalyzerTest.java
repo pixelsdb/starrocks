@@ -16,14 +16,11 @@ package com.starrocks.analysis;
 
 import com.starrocks.datacache.DataCacheMgr;
 import com.starrocks.datacache.DataCacheRule;
-import com.starrocks.qe.ConnectContext;
 import com.starrocks.sql.analyzer.AnalyzeTestUtil;
 import com.starrocks.sql.ast.CreateDataCacheRuleStmt;
 import com.starrocks.sql.ast.DataCacheSelectStatement;
 import com.starrocks.sql.ast.QualifiedName;
 import com.starrocks.sql.plan.ConnectorPlanTestBase;
-import com.starrocks.utframe.StarRocksAssert;
-import com.starrocks.utframe.UtFrameUtils;
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.BeforeClass;
@@ -115,7 +112,7 @@ public class DataCacheStmtAnalyzerTest {
     }
 
     @Test
-    public void testCacheSelect() throws Exception {
+    public void testCacheSelect() {
         DataCacheSelectStatement stmt = (DataCacheSelectStatement) analyzeSuccess(
                 "cache select * from hive0.datacache_db.multi_partition_table");
         Assert.assertEquals("black_hole_catalog.black_hole_db.black_hole_table",
@@ -124,11 +121,6 @@ public class DataCacheStmtAnalyzerTest {
         analyzeFail("cache select * from hive0.datacache_db.not_existed");
         analyzeFail("cache select * from default_catalog.test.t0",
                 "Currently cache select is not supported in local olap table");
-        ConnectContext connectContext = UtFrameUtils.createDefaultCtx();
-        StarRocksAssert starRocksAssert = new StarRocksAssert(connectContext);
-        starRocksAssert.withDatabase("test").useDatabase("test").withView("create view aaa as select 1;");
-        analyzeFail("cache select * from test.aaa",
-                "Cache select only support olap table, external table or materialized view.");
     }
 
     @Test

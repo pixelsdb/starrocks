@@ -49,7 +49,6 @@ public:
 
     Status prepare(RuntimeState* state) override;
     void close(RuntimeState* state) override;
-    void update_chunk_exec_stats(RuntimeState* state) override;
 
 private:
     Status _read_chunk(RuntimeState* state, ChunkPtr* chunk) override;
@@ -75,11 +74,12 @@ private:
     OlapScanNode* _scan_node;
     OlapScanContext* _scan_ctx;
 
-    int64_t _limit; // -1: no limit
+    const int64_t _limit; // -1: no limit
     TInternalScanRange* _scan_range;
 
     PredicateTree _non_pushdown_pred_tree;
-    Filter _selection;
+    ConjunctivePredicates _not_push_down_predicates;
+    std::vector<uint8_t> _selection;
 
     ObjectPool _obj_pool;
     TabletSharedPtr _tablet;
@@ -104,12 +104,6 @@ private:
     std::vector<SlotDescriptor*> _query_slots;
 
     std::vector<ColumnAccessPathPtr> _column_access_paths;
-
-    bool _use_vector_index = false;
-
-    bool _use_ivfpq = false;
-
-    std::string _vector_distance_column_name;
 
     // The following are profile meatures
     int64_t _num_rows_read = 0;
@@ -139,7 +133,6 @@ private:
     RuntimeProfile::Counter* _rows_key_range_counter = nullptr;
     RuntimeProfile::Counter* _bf_filter_timer = nullptr;
     RuntimeProfile::Counter* _zm_filtered_counter = nullptr;
-    RuntimeProfile::Counter* _vector_index_filtered_counter = nullptr;
     RuntimeProfile::Counter* _bf_filtered_counter = nullptr;
     RuntimeProfile::Counter* _seg_zm_filtered_counter = nullptr;
     RuntimeProfile::Counter* _seg_rt_filtered_counter = nullptr;
@@ -156,11 +149,7 @@ private:
     RuntimeProfile::Counter* _bi_filter_timer = nullptr;
     RuntimeProfile::Counter* _gin_filtered_counter = nullptr;
     RuntimeProfile::Counter* _gin_filtered_timer = nullptr;
-    RuntimeProfile::Counter* _get_row_ranges_by_vector_index_timer = nullptr;
-    RuntimeProfile::Counter* _vector_search_timer = nullptr;
-    RuntimeProfile::Counter* _process_vector_distance_and_id_timer = nullptr;
     RuntimeProfile::Counter* _pushdown_predicates_counter = nullptr;
-    RuntimeProfile::Counter* _non_pushdown_predicates_counter = nullptr;
     RuntimeProfile::Counter* _rowsets_read_count = nullptr;
     RuntimeProfile::Counter* _segments_read_count = nullptr;
     RuntimeProfile::Counter* _total_columns_data_page_count = nullptr;

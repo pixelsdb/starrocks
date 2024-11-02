@@ -322,6 +322,11 @@ public class AggregationNode extends PlanNode {
     }
 
     @Override
+    public int getNumInstances() {
+        return children.get(0).getNumInstances();
+    }
+
+    @Override
     public Optional<List<Expr>> candidatesOfSlotExpr(Expr expr, Function<Expr, Boolean> couldBound) {
         if (!couldBound.apply(expr)) {
             return Optional.empty();
@@ -465,10 +470,5 @@ public class AggregationNode extends PlanNode {
         TupleId tupleId = needsFinalize ? aggInfo.getOutputTupleId() : aggInfo.getIntermediateTupleId();
         return descriptorTable.getTupleDesc(tupleId).getSlots().subList(0, numGroupingExprs + numAggExprs)
                 .stream().map(SlotDescriptor::getId).collect(Collectors.toList());
-    }
-
-    @Override
-    public boolean needCollectExecStats() {
-        return true;
     }
 }

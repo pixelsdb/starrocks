@@ -51,11 +51,14 @@ public class DeltaUtilsTest {
     public void testCheckTableFeatureSupported() {
         expectedEx.expect(ValidateException.class);
         expectedEx.expectMessage("Delta table is missing protocol or metadata information.");
-        DeltaUtils.checkProtocolAndMetadata(null, null);
+        DeltaUtils.checkTableFeatureSupported(null, null);
     }
 
     @Test
     public void testCheckTableFeatureSupported2(@Mocked Metadata metadata) {
+        expectedEx.expect(ValidateException.class);
+        expectedEx.expectMessage("Delta table feature [column mapping] is not supported");
+
         new Expectations(metadata) {
             {
                 metadata.getConfiguration();
@@ -64,7 +67,7 @@ public class DeltaUtilsTest {
             }
         };
 
-        DeltaUtils.checkProtocolAndMetadata(new Protocol(3, 7, Lists.newArrayList(),
+        DeltaUtils.checkTableFeatureSupported(new Protocol(3, 7, Lists.newArrayList(),
                 Lists.newArrayList()), metadata);
     }
 

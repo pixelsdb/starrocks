@@ -32,7 +32,6 @@ import com.starrocks.common.Pair;
 import com.starrocks.common.util.PropertyAnalyzer;
 import com.starrocks.qe.ShowExecutor;
 import com.starrocks.qe.ShowResultSet;
-import com.starrocks.server.GlobalStateMgr;
 import com.starrocks.sql.ast.CreateMaterializedViewStatement;
 import com.starrocks.sql.ast.ShowStmt;
 import com.starrocks.sql.plan.ConnectorPlanTestBase;
@@ -245,8 +244,8 @@ public class MaterializedViewAnalyzerTest {
     @Test
     public void testRefreshMaterializedView() throws Exception {
         analyzeSuccess("refresh materialized view mv");
-        Database testDb = starRocksAssert.getCtx().getGlobalStateMgr().getLocalMetastore().getDb("test");
-        Table table = GlobalStateMgr.getCurrentState().getLocalMetastore().getTable(testDb.getFullName(), "mv");
+        Database testDb = starRocksAssert.getCtx().getGlobalStateMgr().getDb("test");
+        Table table = testDb.getTable("mv");
         Assert.assertNotNull(table);
         Assert.assertTrue(table instanceof MaterializedView);
         MaterializedView mv = (MaterializedView) table;

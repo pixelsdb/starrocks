@@ -101,7 +101,6 @@ Status OlapTableSink::init(const TDataSink& t_sink, RuntimeState* state) {
     _need_gen_rollup = table_sink.need_gen_rollup;
     _tuple_desc_id = table_sink.tuple_id;
     _is_lake_table = table_sink.is_lake_table;
-    _write_txn_log = table_sink.write_txn_log;
     _keys_type = table_sink.keys_type;
     if (table_sink.__isset.null_expr_in_auto_increment) {
         _null_expr_in_auto_increment = table_sink.null_expr_in_auto_increment;
@@ -409,7 +408,7 @@ Status OlapTableSink::_automatic_create_partition() {
     request.__set_partition_values(_partition_not_exist_row_values);
 
     LOG(INFO) << "load_id=" << print_id(_load_id) << ", txn_id: " << std::to_string(_txn_id)
-              << " automatic partition rpc begin request " << request;
+              << "automatic partition rpc begin request " << request;
     TNetworkAddress master_addr = get_master_address();
     auto timeout_ms = _runtime_state->query_options().query_timeout * 1000 / 2;
     int retry_times = 0;
@@ -418,8 +417,8 @@ Status OlapTableSink::_automatic_create_partition() {
     do {
         if (retry_times++ > 1) {
             SleepFor(MonoDelta::FromMilliseconds(std::min(5000, timeout_ms)));
-            VLOG(2) << "load_id=" << print_id(_load_id) << ", txn_id: " << std::to_string(_txn_id)
-                    << " automatic partition rpc retry " << retry_times;
+            VLOG(1) << "load_id=" << print_id(_load_id) << ", txn_id: " << std::to_string(_txn_id)
+                    << "automatic partition rpc retry " << retry_times;
         }
         RETURN_IF_ERROR(ThriftRpcHelper::rpc<FrontendServiceClient>(
                 master_addr.hostname, master_addr.port,
@@ -429,7 +428,7 @@ Status OlapTableSink::_automatic_create_partition() {
              butil::gettimeofday_s() - start_ts < timeout_ms / 1000);
 
     LOG(INFO) << "load_id=" << print_id(_load_id) << ", txn_id: " << std::to_string(_txn_id)
-              << " automatic partition rpc end response " << result;
+              << "automatic partition rpc end response " << result;
     if (result.status.status_code == TStatusCode::OK) {
         // add new created partitions
         RETURN_IF_ERROR(_vectorized_partition->add_partitions(result.partitions));
@@ -764,9 +763,9 @@ Status OlapTableSink::_fill_auto_increment_id_internal(Chunk* chunk, SlotDescrip
     }
 
     ColumnPtr& data_col = std::dynamic_pointer_cast<NullableColumn>(col)->data_column();
-    Filter filter(std::dynamic_pointer_cast<NullableColumn>(col)->immutable_null_column_data());
+    std::vector<uint8_t> filter(std::dynamic_pointer_cast<NullableColumn>(col)->immutable_null_column_data());
 
-    Filter init_filter(chunk->num_rows(), 0);
+    std::vector<uint8_t> init_filter(chunk->num_rows(), 0);
 
     if (_keys_type == TKeysType::PRIMARY_KEYS && _output_tuple_desc->slots().back()->col_name() == "__op") {
         size_t op_column_id = chunk->num_columns() - 1;
@@ -859,7 +858,7 @@ Status OlapTableSink::close_wait(RuntimeState* state, Status close_status) {
     if (_tablet_sink_sender == nullptr) {
         return close_status;
     }
-    Status status = _tablet_sink_sender->close_wait(state, close_status, _ts_profile, _write_txn_log);
+    Status status = _tablet_sink_sender->close_wait(state, close_status, _ts_profile);
     if (!status.ok()) {
         _span->SetStatus(trace::StatusCode::kError, std::string(status.message()));
     }
@@ -1062,7 +1061,7 @@ void OlapTableSink::_validate_data(RuntimeState* state, Chunk* chunk) {
         case TYPE_DECIMALV2: {
             column = ColumnHelper::get_data_column(column);
             auto* decimal = down_cast<DecimalColumn*>(column);
-            Buffer<DecimalV2Value>& datas = decimal->get_data();
+            std::vector<DecimalV2Value>& datas = decimal->get_data();
             int scale = desc->type().scale;
             for (size_t j = 0; j < num_rows; ++j) {
                 if (_validate_selection[j] == VALID_SEL_OK) {

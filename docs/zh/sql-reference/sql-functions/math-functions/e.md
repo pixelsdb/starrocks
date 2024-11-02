@@ -4,7 +4,7 @@ displayed_sidebar: docs
 
 # e
 
-
+## 功能
 
 返回自然对数函数的底数。
 

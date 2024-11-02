@@ -4,7 +4,7 @@ displayed_sidebar: docs
 
 # array_distinct
 
-
+## 功能
 
 数组元素去重。
 

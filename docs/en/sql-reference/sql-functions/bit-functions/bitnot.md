@@ -4,7 +4,7 @@ displayed_sidebar: docs
 
 # bitnot
 
-
+## Description
 
 Returns the bitwise negation of a numeric expression.
 

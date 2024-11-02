@@ -52,14 +52,11 @@
 #include "common/config.h"
 #include "common/daemon.h"
 #include "common/logging.h"
-#include "common/process_exit.h"
 #include "common/status.h"
 #include "exec/pipeline/query_context.h"
-#include "fs/s3/poco_http_client_factory.h"
 #include "runtime/exec_env.h"
 #include "runtime/heartbeat_flags.h"
 #include "runtime/jdbc_driver_manager.h"
-#include "runtime/memory/roaring_hook.h"
 #include "service/backend_options.h"
 #include "service/service.h"
 #include "service/staros_worker.h"
@@ -181,8 +178,6 @@ int main(int argc, char** argv) {
         return -1;
     }
 
-    starrocks::init_roaring_hook();
-
 #ifdef FIU_ENABLE
     if (!starrocks::failpoint::init_failpoint_from_conf(std::string(getenv("STARROCKS_HOME")) +
                                                         "/conf/failpoint.json")) {
@@ -214,9 +209,6 @@ int main(int argc, char** argv) {
         aws_sdk_options.httpOptions.compliantRfc3986Encoding = true;
     }
     Aws::InitAPI(aws_sdk_options);
-    if (starrocks::config::enable_poco_client_for_aws_sdk) {
-        Aws::Http::SetHttpClientFactory(std::make_shared<starrocks::poco::PocoHttpClientFactory>());
-    }
 
     std::vector<starrocks::StorePath> paths;
     auto olap_res = starrocks::parse_conf_store_paths(starrocks::config::storage_root_path, &paths);
@@ -257,7 +249,7 @@ int main(int argc, char** argv) {
     // cn need to support all ops for cloudnative table, so just start_be
     starrocks::start_be(paths, as_cn);
 
-    if (starrocks::process_quick_exit_in_progress()) {
+    if (starrocks::k_starrocks_exit_quick.load()) {
         LOG(INFO) << "BE is shutting down，will exit quickly";
         exit(0);
     }

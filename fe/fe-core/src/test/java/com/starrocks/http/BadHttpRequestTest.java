@@ -21,6 +21,7 @@ import okhttp3.RequestBody;
 import okhttp3.Response;
 import org.jetbrains.annotations.NotNull;
 import org.junit.Assert;
+import org.junit.Before;
 import org.junit.Test;
 
 import java.io.IOException;
@@ -34,8 +35,10 @@ public class BadHttpRequestTest extends StarRocksHttpTestCase {
 
     private static String STREAM_LOAD_URL_FORMAT;
 
+    @Before
     @Override
-    protected void doSetUp() throws Exception {
+    public void setUp() {
+        super.setUp();
         STREAM_LOAD_URL_FORMAT = "http://localhost:" + HTTP_PORT + STREAM_LOAD_URI_FORMAT;
     }
 

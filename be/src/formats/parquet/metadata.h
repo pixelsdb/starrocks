@@ -14,14 +14,9 @@
 
 #pragma once
 
-#include <stdint.h>
-
-#include <string>
-
 #include "common/status.h"
 #include "formats/parquet/schema.h"
 #include "gen_cpp/parquet_types.h"
-#include "types/logical_type.h"
 
 namespace starrocks::parquet {
 

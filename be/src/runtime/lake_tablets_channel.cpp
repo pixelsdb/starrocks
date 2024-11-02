@@ -17,6 +17,8 @@
 #include <bthread/mutex.h>
 #include <fmt/format.h>
 
+#include <chrono>
+#include <cstdint>
 #include <unordered_map>
 #include <vector>
 
@@ -35,7 +37,6 @@
 #include "serde/protobuf_serde.h"
 #include "service/backend_options.h"
 #include "storage/lake/async_delta_writer.h"
-#include "storage/lake/delta_writer_finish_mode.h"
 #include "storage/memtable.h"
 #include "storage/storage_engine.h"
 #include "util/bthreads/bthread_shared_mutex.h"
@@ -52,7 +53,6 @@ class TabletManager;
 
 class LakeTabletsChannel : public TabletsChannel {
     using AsyncDeltaWriter = lake::AsyncDeltaWriter;
-    using TxnLogPtr = AsyncDeltaWriter::TxnLogPtr;
 
 public:
     LakeTabletsChannel(LoadChannel* load_channel, lake::TabletManager* tablet_manager, const TabletsChannelKey& key,
@@ -118,14 +118,6 @@ private:
             info->set_schema_hash(0); // required field
         }
 
-        // NOT thread-safe
-        void add_txn_logs(const std::vector<TxnLogPtr>& logs) {
-            _response->mutable_lake_tablet_data()->mutable_txn_logs()->Reserve(logs.size());
-            for (auto& log : logs) {
-                _response->mutable_lake_tablet_data()->add_txn_logs()->CopyFrom(*log);
-            }
-        }
-
     private:
         friend class LakeTabletsChannel;
 
@@ -137,63 +129,18 @@ private:
         std::unique_ptr<uint32_t[]> _channel_row_idx_start_points;
     };
 
-    class TxnLogCollector {
-    public:
-        void add(TxnLogPtr log) {
-            std::lock_guard l(_mtx);
-            _logs.emplace_back(std::move(log));
-        }
-
-        void update_status(const Status& st) {
-            std::lock_guard l(_mtx);
-            _st.update(st);
-        }
-
-        Status status() const {
-            std::lock_guard l(_mtx);
-            return _st;
-        }
-
-        std::vector<TxnLogPtr> logs() {
-            std::lock_guard l(_mtx);
-            return _logs;
-        }
-
-        // Returns true on notified, false on timeout
-        bool wait(int64_t timeout_ms) {
-            std::unique_lock l(_mtx);
-            while (!_notified) {
-                if (_cond.wait_for(l, timeout_ms * 1000L) == ETIMEDOUT) {
-                    return false;
-                }
-            }
-            return true;
-        }
-
-        void notify() {
-            {
-                std::lock_guard l(_mtx);
-                _notified = true;
-            }
-            _cond.notify_all();
-        }
-
-    private:
-        mutable bthread::Mutex _mtx;
-        bthread::ConditionVariable _cond;
-        std::vector<TxnLogPtr> _logs;
-        Status _st;
-        bool _notified{false};
-    };
-
     // called by open() or incremental_open to build AsyncDeltaWriter for tablets
     Status _create_delta_writers(const PTabletWriterOpenRequest& params, bool is_incremental);
+
+    Status _build_chunk_meta(const ChunkPB& pb_chunk);
 
     StatusOr<std::unique_ptr<WriteContext>> _create_write_context(Chunk* chunk,
                                                                   const PTabletWriterAddChunkRequest& request,
                                                                   PTabletWriterAddBatchResult* response);
 
     int _close_sender(const int64_t* partitions, size_t partitions_size);
+
+    Status _deserialize_chunk(const ChunkPB& pchunk, Chunk& chunk, faststring* uncompressed_buffer);
 
     void _flush_stale_memtables();
 
@@ -230,8 +177,7 @@ private:
     GlobalDictByNameMaps _global_dicts;
     std::unique_ptr<MemPool> _mem_pool;
     bool _is_incremental_channel{false};
-    lake::DeltaWriterFinishMode _finish_mode{lake::DeltaWriterFinishMode::kWriteTxnLog};
-    TxnLogCollector _txn_log_collector;
+
     std::set<int64_t> _immutable_partition_ids;
     std::map<string, string> _column_to_expr_value;
 
@@ -280,7 +226,6 @@ LakeTabletsChannel::~LakeTabletsChannel() {
 
 Status LakeTabletsChannel::open(const PTabletWriterOpenRequest& params, PTabletWriterOpenResult* result,
                                 std::shared_ptr<OlapTableSchemaParam> schema, bool is_incremental) {
-    DCHECK_EQ(-1, _txn_id);
     SCOPED_TIMER(_open_timer);
     COUNTER_UPDATE(_open_counter, 1);
     std::unique_lock<bthreads::BThreadSharedMutex> l(_rw_mtx);
@@ -288,10 +233,6 @@ Status LakeTabletsChannel::open(const PTabletWriterOpenRequest& params, PTabletW
     _index_id = params.index_id();
     _schema = schema;
     _is_incremental_channel = is_incremental;
-    if (params.has_lake_tablet_params() && params.lake_tablet_params().has_write_txn_log()) {
-        _finish_mode = params.lake_tablet_params().write_txn_log() ? lake::DeltaWriterFinishMode::kWriteTxnLog
-                                                                   : lake::DeltaWriterFinishMode::kDontWriteTxnLog;
-    }
 
     _senders = std::vector<Sender>(params.num_senders());
     if (_is_incremental_channel) {
@@ -322,7 +263,7 @@ Status LakeTabletsChannel::open(const PTabletWriterOpenRequest& params, PTabletW
             result->add_immutable_tablet_ids(id);
             result->add_immutable_partition_ids(writer->partition_id());
         }
-        VLOG(2) << "check tablet writer for tablet " << id << ", partition " << writer->partition_id() << ", txn "
+        VLOG(1) << "check tablet writer for tablet " << id << ", partition " << writer->partition_id() << ", txn "
                 << _txn_id << ", is_immutable  " << writer->is_immutable();
     }
     COUNTER_SET(_tablets_num, (int64_t)_delta_writers.size());
@@ -476,20 +417,13 @@ void LakeTabletsChannel::add_chunk(Chunk* chunk, const PTabletWriterAddChunkRequ
                     count_down_latch.count_down();
                     continue;
                 }
-                dw->finish(_finish_mode, [&, id = tablet_id](StatusOr<TxnLogPtr> res) {
-                    if (!res.ok()) {
-                        context->update_status(res.status());
-                        LOG(ERROR) << "Fail to finish tablet " << id << ": " << res.status();
-                    } else {
+                dw->finish([&, id = tablet_id](const Status& st) {
+                    if (st.ok()) {
                         context->add_finished_tablet(id);
                         VLOG(5) << "Finished tablet " << id;
-                    }
-                    if (_finish_mode == lake::DeltaWriterFinishMode::kDontWriteTxnLog) {
-                        if (!res.ok()) {
-                            _txn_log_collector.update_status(res.status());
-                        } else {
-                            _txn_log_collector.add(std::move(res).value());
-                        }
+                    } else {
+                        context->update_status(st);
+                        LOG(ERROR) << "Fail to finish tablet " << id << ": " << st;
                     }
                     count_down_latch.count_down();
                 });
@@ -553,23 +487,6 @@ void LakeTabletsChannel::add_chunk(Chunk* chunk, const PTabletWriterAddChunkRequ
 
     if (close_channel) {
         _load_channel->remove_tablets_channel(_key);
-        if (_finish_mode == lake::DeltaWriterFinishMode::kDontWriteTxnLog) {
-            _txn_log_collector.notify();
-        }
-    }
-
-    // Sender 0 is responsible for waiting for all other senders to finish and collecting txn logs
-    if (_finish_mode == lake::kDontWriteTxnLog && request.eos() && (request.sender_id() == 0) &&
-        response->status().status_code() == TStatusCode::OK) {
-        rolk.unlock();
-        auto t = request.timeout_ms() - (int64_t)(watch.elapsed_time() / 1000 / 1000);
-        auto ok = _txn_log_collector.wait(t);
-        auto st = ok ? _txn_log_collector.status() : Status::TimedOut(fmt::format("wait txn log timed out: {}", t));
-        if (st.ok()) {
-            context->add_txn_logs(_txn_log_collector.logs());
-        } else {
-            context->update_status(st);
-        }
     }
 }
 
@@ -618,7 +535,7 @@ void LakeTabletsChannel::_flush_stale_memtables() {
                 }
             }
             if (log_flushed) {
-                VLOG(2) << "Flush stale memtable tablet_id: " << tablet_id << " txn_id: " << _txn_id
+                VLOG(1) << "Flush stale memtable tablet_id: " << tablet_id << " txn_id: " << _txn_id
                         << " partition_id: " << writer->partition_id() << " is_immutable: " << writer->is_immutable()
                         << " last_write_ts: " << now - last_write_ts
                         << " job_mem_usage: " << _mem_tracker->consumption()

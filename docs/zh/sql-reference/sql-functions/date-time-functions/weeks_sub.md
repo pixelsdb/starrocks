@@ -4,7 +4,7 @@ displayed_sidebar: docs
 
 # weeks_sub
 
-
+## 功能
 
 返回原始的日期减去若干周后的日期。
 

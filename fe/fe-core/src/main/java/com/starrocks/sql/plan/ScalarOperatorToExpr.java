@@ -127,6 +127,7 @@ public class ScalarOperatorToExpr {
             this.colRefToExpr = variableToSlotRef;
             this.projectOperatorMap = projectOperatorMap;
         }
+
     }
 
     public static class Formatter extends ScalarOperatorVisitor<Expr, FormatterContext> {

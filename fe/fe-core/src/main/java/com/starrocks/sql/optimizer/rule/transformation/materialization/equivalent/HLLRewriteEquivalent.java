@@ -24,6 +24,7 @@ import com.starrocks.sql.optimizer.operator.scalar.CallOperator;
 import com.starrocks.sql.optimizer.operator.scalar.CastOperator;
 import com.starrocks.sql.optimizer.operator.scalar.ColumnRefOperator;
 import com.starrocks.sql.optimizer.operator.scalar.ScalarOperator;
+import com.starrocks.sql.optimizer.rule.transformation.materialization.RewriteContext;
 
 import java.util.Arrays;
 
@@ -105,6 +106,7 @@ public class HLLRewriteEquivalent extends IAggregateRewriteEquivalent {
         CallOperator aggFunc = (CallOperator) newInput;
         String aggFuncName = aggFunc.getFnName();
         boolean isRollup = shuttleContext.isRollup();
+        RewriteContext rewriteContext = shuttleContext.getRewriteContext();
         if (aggFuncName.equals(APPROX_COUNT_DISTINCT) || aggFuncName.equals(NDV)) {
             ScalarOperator arg0 = aggFunc.getChild(0);
             if (!arg0.equals(eqChild)) {
@@ -138,6 +140,7 @@ public class HLLRewriteEquivalent extends IAggregateRewriteEquivalent {
         }
         return null;
     }
+
 
     private CallOperator makeHllUnionAggFunc(ScalarOperator arg0) {
         Function fn = Expr.getBuiltinFunction(FunctionSet.HLL_UNION_AGG, new Type[] {Type.HLL}, IS_IDENTICAL);

@@ -31,12 +31,9 @@ import com.starrocks.sql.optimizer.operator.SortPhase;
 import com.starrocks.sql.optimizer.operator.TopNType;
 import com.starrocks.sql.optimizer.operator.scalar.ColumnRefOperator;
 import com.starrocks.sql.optimizer.operator.scalar.ScalarOperator;
-import com.starrocks.sql.optimizer.property.DomainProperty;
-import org.apache.commons.collections4.CollectionUtils;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
 
 public class LogicalTopNOperator extends LogicalOperator {
@@ -68,7 +65,7 @@ public class LogicalTopNOperator extends LogicalOperator {
         super(OperatorType.LOGICAL_TOPN);
     }
 
-    public LogicalTopNOperator(long limit,
+    private LogicalTopNOperator(long limit,
                                 ScalarOperator predicate, Projection projection,
                                 List<ColumnRefOperator> partitionByColumns,
                                 long partitionLimit,
@@ -150,14 +147,6 @@ public class LogicalTopNOperator extends LogicalOperator {
             entryList.add(new ColumnOutputInfo(ordering.getColumnRef(), ordering.getColumnRef()));
         }
         return new RowOutputInfo(entryList);
-    }
-
-    @Override
-    public DomainProperty deriveDomainProperty(List<OptExpression> inputs) {
-        if (CollectionUtils.isEmpty(inputs)) {
-            return new DomainProperty(Map.of());
-        }
-        return inputs.get(0).getDomainProperty();
     }
 
     @Override

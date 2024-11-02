@@ -34,7 +34,6 @@
 
 package com.starrocks.qe;
 
-import com.google.common.base.Predicate;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.starrocks.common.Config;
@@ -135,7 +134,6 @@ public class ConnectScheduler {
 
     /**
      * Register one connection with its connection id.
-     *
      * @param ctx connection context
      * @return a pair, first is success or not, second is error message(if any)
      */
@@ -200,20 +198,6 @@ public class ConnectScheduler {
         return connectionMap.get(connectionId);
     }
 
-    public ConnectContext findContextByQueryId(String queryId) {
-        return connectionMap.values().stream().filter(
-                        (Predicate<ConnectContext>) c ->
-                                c.getQueryId() != null
-                                && queryId.equals(c.getQueryId().toString())
-                )
-                .findFirst().orElse(null);
-    }
-
-    public ConnectContext findContextByCustomQueryId(String customQueryId) {
-        return connectionMap.values().stream().filter(
-                (Predicate<ConnectContext>) c -> customQueryId.equals(c.getCustomQueryId())).findFirst().orElse(null);
-    }
-
     public int getConnectionNum() {
         return numberConnection.get();
     }
@@ -259,7 +243,9 @@ public class ConnectScheduler {
 
     public Set<UUID> listAllSessionsId() {
         Set<UUID> sessionIds = new HashSet<>();
-        connectionMap.values().forEach(ctx -> sessionIds.add(ctx.getSessionId()));
+        connectionMap.values().forEach(ctx -> {
+            sessionIds.add(ctx.getSessionId());
+        });
         return sessionIds;
     }
 

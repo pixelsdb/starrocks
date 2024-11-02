@@ -34,6 +34,7 @@ import com.starrocks.sql.ast.TableRelation;
 import com.starrocks.sql.ast.UpdateStmt;
 import com.starrocks.sql.ast.ViewRelation;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -74,12 +75,17 @@ public class PlannerMetaLocker {
         Locker locker = new Locker();
 
         boolean isLockSuccess = false;
+        long milliTimeout = timeout;
+        if (!unit.equals(TimeUnit.MILLISECONDS)) {
+            milliTimeout = TimeUnit.MILLISECONDS.convert(Duration.of(timeout, unit.toChronoUnit()));
+        }
+
         List<Database> lockedDbs = Lists.newArrayList();
         try {
             for (Map.Entry<Long, Set<Long>> entry : tables.entrySet()) {
                 Database database = dbs.get(entry.getKey());
-                if (!locker.tryLockTablesWithIntensiveDbLock(database.getId(), new ArrayList<>(entry.getValue()),
-                        LockType.READ, timeout, unit)) {
+                if (!locker.tryLockTablesWithIntensiveDbLock(database, new ArrayList<>(entry.getValue()),
+                        LockType.READ, milliTimeout)) {
                     return false;
                 }
                 lockedDbs.add(database);
@@ -88,7 +94,7 @@ public class PlannerMetaLocker {
         } finally {
             if (!isLockSuccess) {
                 for (Database database : lockedDbs) {
-                    locker.unLockTablesWithIntensiveDbLock(database.getId(), new ArrayList<>(tables.get(database.getId())),
+                    locker.unLockTablesWithIntensiveDbLock(database, new ArrayList<>(tables.get(database.getId())),
                             LockType.READ);
                 }
             }
@@ -101,7 +107,7 @@ public class PlannerMetaLocker {
         for (Map.Entry<Long, Set<Long>> entry : tables.entrySet()) {
             Database database = dbs.get(entry.getKey());
             List<Long> tableIds = new ArrayList<>(entry.getValue());
-            locker.lockTablesWithIntensiveDbLock(database.getId(), tableIds, LockType.READ);
+            locker.lockTablesWithIntensiveDbLock(database, tableIds, LockType.READ);
         }
     }
 
@@ -110,7 +116,7 @@ public class PlannerMetaLocker {
         for (Map.Entry<Long, Set<Long>> entry : tables.entrySet()) {
             Database database = dbs.get(entry.getKey());
             List<Long> tableIds = new ArrayList<>(entry.getValue());
-            locker.unLockTablesWithIntensiveDbLock(database.getId(), tableIds, LockType.READ);
+            locker.unLockTablesWithIntensiveDbLock(database, tableIds, LockType.READ);
         }
     }
 

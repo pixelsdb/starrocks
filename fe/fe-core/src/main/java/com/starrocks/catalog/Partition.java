@@ -436,8 +436,7 @@ public class Partition extends MetaObject implements PhysicalPartition, GsonPost
     }
 
     public List<MaterializedIndex> getMaterializedIndices(IndexExtState extState) {
-        int expectedSize = 1 + idToVisibleRollupIndex.size() + idToShadowIndex.size();
-        List<MaterializedIndex> indices = Lists.newArrayListWithExpectedSize(expectedSize);
+        List<MaterializedIndex> indices = Lists.newArrayList();
         switch (extState) {
             case ALL:
                 indices.add(baseIndex);
@@ -491,10 +490,9 @@ public class Partition extends MetaObject implements PhysicalPartition, GsonPost
 
     public long getRowCount() {
         long rowCount = 0;
-        for (PhysicalPartition subPartition : idToSubPartition.values()) {
+        for (PhysicalPartition subPartition : getSubPartitions()) {
             rowCount += subPartition.storageRowCount();
         }
-        rowCount += this.storageRowCount();
         return rowCount;
     }
 
@@ -598,8 +596,8 @@ public class Partition extends MetaObject implements PhysicalPartition, GsonPost
             }
         }
 
-        buffer.append("visibleVersion: ").append(visibleVersion).append("; ");
-        buffer.append("committedVersion: ").append(getCommittedVersion()).append("; ");
+        buffer.append("committedVersion: ").append(visibleVersion).append("; ");
+        buffer.append("committedVersionHash: ").append(0).append("; ");
         buffer.append("nextVersion: ").append(nextVersion).append("; ");
 
         buffer.append("dataVersion: ").append(dataVersion).append("; ");

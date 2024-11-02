@@ -47,15 +47,15 @@ public class FilterSelectivityEvaluator {
 
     public static final double NON_SELECTIVITY = 100;
 
-    public static int IN_CHILDREN_THRESHOLD = 1024;
+    public static final int IN_CHILDREN_THRESHOLD = 1024;
 
-    private final int unionNumLimit;
+    private int unionNumLimit;
 
-    private final ScalarOperator predicate;
+    private ScalarOperator predicate;
 
-    private final Statistics statistics;
+    private Statistics statistics;
 
-    private final boolean isDecomposePhase;
+    private boolean isDecomposePhase;
 
     public FilterSelectivityEvaluator(ScalarOperator predicate, Statistics statistics, boolean isDecomposePhase) {
         this.predicate = predicate;
@@ -90,15 +90,23 @@ public class FilterSelectivityEvaluator {
 
     private List<ColumnFilter> decomposeInPredicate(InPredicateOperator predicate) {
         List<ColumnFilter> inFilters = Lists.newArrayList();
-        List<ScalarOperator> inList = predicate.getChildren().stream().skip(1).distinct().collect(Collectors.toList());
+        Set<ScalarOperator> inSet = predicate.getChildren().stream().skip(1).collect(Collectors.toSet());
         ColumnRefOperator column = (ColumnRefOperator) predicate.getChild(0);
-        int totalSize = inList.size();
+        int totalSize = inSet.size();
         int numSubsets = (int) Math.ceil((double) totalSize / IN_CHILDREN_THRESHOLD);
+        List<List<ScalarOperator>> smallInSets = Lists.newArrayList();
         for (int i = 0; i < numSubsets; i++) {
-            List<ScalarOperator> s = Lists.newArrayListWithExpectedSize(IN_CHILDREN_THRESHOLD + 2);
-            s.add(column);
-            s.addAll(inList.subList(i * IN_CHILDREN_THRESHOLD, Math.min((i + 1) * IN_CHILDREN_THRESHOLD, totalSize)));
-            InPredicateOperator newInPredicate = new InPredicateOperator(false, s);
+            smallInSets.add(Lists.newArrayList(column));
+        }
+
+        int currentIndex = 0;
+        for (ScalarOperator element : inSet) {
+            int subsetIndex = currentIndex / IN_CHILDREN_THRESHOLD;
+            smallInSets.get(subsetIndex).add(element);
+            currentIndex++;
+        }
+        for (int i = 0; i < numSubsets; i++) {
+            InPredicateOperator newInPredicate = new InPredicateOperator(false, smallInSets.get(i));
             inFilters.add(evaluateScalarOperator(newInPredicate));
         }
 
@@ -307,12 +315,13 @@ public class FilterSelectivityEvaluator {
 
     public static class ColumnFilter implements Comparable<ColumnFilter> {
 
-        private final Double selectRatio;
+        private Double selectRatio;
 
         // TODO add index info
-        private final Optional<ColumnRefOperator> column;
 
-        private final ScalarOperator filter;
+        private Optional<ColumnRefOperator> column;
+
+        private ScalarOperator filter;
 
         public ColumnFilter(double selectRatio, ScalarOperator filter) {
             this.selectRatio = selectRatio;
@@ -332,10 +341,6 @@ public class FilterSelectivityEvaluator {
 
         public ScalarOperator getFilter() {
             return filter;
-        }
-
-        public Optional<ColumnRefOperator> getColumn() {
-            return column;
         }
 
         public boolean isUnknownSelectRatio() {
@@ -371,7 +376,13 @@ public class FilterSelectivityEvaluator {
 
         @Override
         public int compareTo(@NotNull ColumnFilter o) {
-            return selectRatio.compareTo(o.selectRatio);
+            if (selectRatio < o.selectRatio) {
+                return -1;
+            } else if (selectRatio > o.selectRatio) {
+                return 1;
+            } else {
+                return 0;
+            }
         }
     }
 }

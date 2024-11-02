@@ -22,9 +22,11 @@ import com.starrocks.analysis.TableRef;
 import com.starrocks.backup.Repository;
 import com.starrocks.catalog.BaseTableInfo;
 import com.starrocks.catalog.Database;
+import com.starrocks.catalog.ListPartitionInfo;
 import com.starrocks.catalog.MaterializedView;
 import com.starrocks.catalog.OlapTable;
 import com.starrocks.catalog.Partition;
+import com.starrocks.catalog.PartitionInfo;
 import com.starrocks.catalog.Table;
 import com.starrocks.common.Config;
 import com.starrocks.common.ErrorCode;
@@ -83,7 +85,7 @@ public class BackupRestoreAnalyzer {
             // If TableRefs is empty, it means that we do not specify any table in Backup stmt.
             // We should backup all table in current database.
             if (tableRefs.size() == 0) {
-                for (Table tbl : GlobalStateMgr.getCurrentState().getLocalMetastore().getTables(database.getId())) {
+                for (Table tbl : database.getTables()) {
                     if (!Config.enable_backup_materialized_view && tbl.isMaterializedView()) {
                         LOG.info("Skip backup materialized view: {} because " +
                                         "`Config.enable_backup_materialized_view=false`", tbl.getName());
@@ -362,7 +364,7 @@ public class BackupRestoreAnalyzer {
     }
 
     public static Database getDatabase(String dbName, ConnectContext context) {
-        Database db = context.getGlobalStateMgr().getLocalMetastore().getDb(dbName);
+        Database db = context.getGlobalStateMgr().getDb(dbName);
         if (db == null) {
             ErrorReport.reportSemanticException(ErrorCode.ERR_BAD_DB_ERROR, dbName);
         }
@@ -395,17 +397,24 @@ public class BackupRestoreAnalyzer {
         tableName.setDb(dbName);
 
         PartitionNames partitionNames = tableRef.getPartitionNames();
-        Table tbl = GlobalStateMgr.getCurrentState().getLocalMetastore().getTable(db.getFullName(), tableName.getTbl());
+        Table tbl = db.getTable(tableName.getTbl());
         if (null == tbl) {
             throw new SemanticException(ErrorCode.ERR_WRONG_TABLE_NAME.formatErrorMsg(tableName.getTbl()));
         }
 
         String alias = tableRef.getAlias();
         if (!tableName.getTbl().equalsIgnoreCase(alias)) {
-            Table tblAlias = GlobalStateMgr.getCurrentState().getLocalMetastore().getTable(db.getFullName(), alias);
+            Table tblAlias = db.getTable(alias);
             if (tblAlias != null && tbl != tblAlias) {
                 ErrorReport.reportSemanticException(ErrorCode.ERR_COMMON_ERROR,
                         "table [" + alias + "] existed");
+            }
+        }
+
+        if (tbl instanceof OlapTable) {
+            PartitionInfo partitionInfo = ((OlapTable) tbl).getPartitionInfo();
+            if (partitionInfo instanceof ListPartitionInfo) {
+                throw new SemanticException("List partition table does not support backup/restore job");
             }
         }
 

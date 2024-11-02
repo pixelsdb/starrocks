@@ -287,7 +287,7 @@ public class GlobalTransactionMgr implements MemoryTrackable {
     public void commitPreparedTransaction(long dbId, long transactionId, long timeoutMillis)
             throws UserException {
 
-        Database db = globalStateMgr.getLocalMetastore().getDb(dbId);
+        Database db = GlobalStateMgr.getCurrentState().getDb(dbId);
         if (db == null) {
             LOG.warn("Database {} does not exist", dbId);
             throw new UserException("Database[" + dbId + "] does not exist");
@@ -311,16 +311,14 @@ public class GlobalTransactionMgr implements MemoryTrackable {
         List<Long> tableIdList = transactionState.getTableIdList();
 
         Locker locker = new Locker();
-        if (!locker.tryLockTablesWithIntensiveDbLock(db.getId(), tableIdList, LockType.WRITE,
-                timeoutMillis, TimeUnit.MILLISECONDS)) {
-            String errMsg = String.format("get database write lock timeout, transactionId=%d, database=%s, timeoutMillis=%d",
-                    transactionId, db.getFullName(), timeoutMillis);
-            throw new UserException(errMsg);
+        if (!locker.tryLockTablesWithIntensiveDbLock(db, tableIdList, LockType.WRITE, timeoutMillis)) {
+            throw new UserException("get database write lock timeout, transactionId=" + transactionId + " database="
+                    + db.getFullName() + ", timeoutMillis=" + timeoutMillis);
         }
         try {
             waiter = getDatabaseTransactionMgr(db.getId()).commitPreparedTransaction(transactionId);
         } finally {
-            locker.unLockTablesWithIntensiveDbLock(db.getId(), tableIdList, LockType.WRITE);
+            locker.unLockTablesWithIntensiveDbLock(db, tableIdList, LockType.WRITE);
         }
 
         MetricRepo.COUNTER_LOAD_FINISHED.increase(1L);
@@ -415,7 +413,6 @@ public class GlobalTransactionMgr implements MemoryTrackable {
             } catch (LockTimeoutException e) {
                 throw e;
             } catch (Exception e) {
-                LOG.warn("fail to commit", e);
                 throw new UserException("fail to execute commit task: " + e.getMessage(), e);
             }
         }
@@ -446,14 +443,14 @@ public class GlobalTransactionMgr implements MemoryTrackable {
         TransactionState transactionState = getTransactionState(db.getId(), transactionId);
         List<Long> tableId = transactionState.getTableIdList();
         Locker locker = new Locker();
-        if (!locker.tryLockTablesWithIntensiveDbLock(db.getId(), tableId, LockType.WRITE, timeoutMs, TimeUnit.MILLISECONDS)) {
+        if (!locker.tryLockTablesWithIntensiveDbLock(db, tableId, LockType.WRITE, timeoutMs)) {
             throw new LockTimeoutException(
                     "get database write lock timeout, database=" + db.getFullName() + ", timeout=" + timeoutMs + "ms");
         }
         try {
             return commitTransaction(db.getId(), transactionId, tabletCommitInfos, tabletFailInfos, attachment);
         } finally {
-            locker.unLockTablesWithIntensiveDbLock(db.getId(), tableId, LockType.WRITE);
+            locker.unLockTablesWithIntensiveDbLock(db, tableId, LockType.WRITE);
         }
     }
 
@@ -701,7 +698,7 @@ public class GlobalTransactionMgr implements MemoryTrackable {
         for (long dbId : dbIds) {
             List<Comparable> info = new ArrayList<Comparable>();
             info.add(dbId);
-            Database db = globalStateMgr.getLocalMetastore().getDb(dbId);
+            Database db = GlobalStateMgr.getCurrentState().getDb(dbId);
             if (db == null) {
                 continue;
             }

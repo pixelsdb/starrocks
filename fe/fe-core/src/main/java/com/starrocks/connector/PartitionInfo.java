@@ -12,9 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package com.starrocks.connector;
 
-import com.starrocks.connector.hive.RemoteFileInputFormat;
+package com.starrocks.connector;
 
 import java.util.concurrent.TimeUnit;
 
@@ -23,13 +22,5 @@ public interface PartitionInfo {
 
     default TimeUnit getModifiedTimeUnit()  {
         return TimeUnit.SECONDS;
-    }
-
-    default RemoteFileInputFormat getFileFormat() {
-        throw new UnsupportedOperationException("");
-    }
-
-    default String getFullPath() {
-        throw new UnsupportedOperationException("");
     }
 }

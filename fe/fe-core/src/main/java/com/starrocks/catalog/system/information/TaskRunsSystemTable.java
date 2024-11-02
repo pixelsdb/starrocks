@@ -55,6 +55,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 public class TaskRunsSystemTable extends SystemTable {
+
     private static final Logger LOG = LogManager.getLogger(SystemTable.class);
 
     private static final SystemTable TABLE = new TaskRunsSystemTable();
@@ -68,15 +69,13 @@ public class TaskRunsSystemTable extends SystemTable {
                     .put(TType.BOOL, Type.BOOLEAN)
                     .build();
 
-    public static final String NAME = "task_runs";
-
     public static SystemTable getInstance() {
         return TABLE;
     }
 
     public TaskRunsSystemTable() {
         super(SystemId.TASK_RUNS_ID,
-                NAME,
+                "task_runs",
                 Table.TableType.SCHEMA,
                 builder()
                         .column("QUERY_ID", ScalarType.createVarchar(64))

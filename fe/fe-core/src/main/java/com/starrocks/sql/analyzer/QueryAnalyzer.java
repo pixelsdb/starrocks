@@ -30,7 +30,6 @@ import com.starrocks.analysis.Expr;
 import com.starrocks.analysis.FunctionCallExpr;
 import com.starrocks.analysis.IntLiteral;
 import com.starrocks.analysis.JoinOperator;
-import com.starrocks.analysis.LiteralExpr;
 import com.starrocks.analysis.OrderByElement;
 import com.starrocks.analysis.ParseNode;
 import com.starrocks.analysis.SlotRef;
@@ -97,13 +96,11 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
-import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 import static com.starrocks.sql.analyzer.AstToStringBuilder.getAliasName;
@@ -196,23 +193,19 @@ public class QueryAnalyzer {
             }
 
             // 3. analyze generated column expression based on current scope
-            Map<Expr, SlotRef> analyzedGeneratedExprToColumnRef = new HashMap<>();
             for (Map.Entry<Expr, SlotRef> entry : generatedExprToColumnRef.entrySet()) {
                 entry.getKey().reset();
                 entry.getValue().reset();
-
+                
                 try {
                     ExpressionAnalyzer.analyzeExpression(entry.getKey(), new AnalyzeState(), scope, session);
                     ExpressionAnalyzer.analyzeExpression(entry.getValue(), new AnalyzeState(), scope, session);
                 } catch (Exception ignore) {
-                    // skip this generated column rewrite if hit any exception
-                    // some exception is reasonable because some of illegal generated column
-                    // rewrite will be rejected by ananlyzer exception.
-                    continue;
+                    // ignore generated column rewrite if hit any exception
+                    generatedExprToColumnRef.clear();
                 }
-                analyzedGeneratedExprToColumnRef.put(entry.getKey(), entry.getValue());
             }
-            resultGeneratedExprToColumnRef.putAll(analyzedGeneratedExprToColumnRef);
+            resultGeneratedExprToColumnRef.putAll(generatedExprToColumnRef);
         }
 
         @Override
@@ -372,7 +365,6 @@ public class QueryAnalyzer {
             Scope sourceScope = process(resolvedRelation, scope);
             sourceScope.setParent(scope);
 
-            selectRelation.accept(new RewriteAliasVisitor(sourceScope, session), null);
             SelectAnalyzer selectAnalyzer = new SelectAnalyzer(session);
             selectAnalyzer.analyze(
                     analyzeState,
@@ -433,15 +425,9 @@ public class QueryAnalyzer {
                 return pivotRelation;
             } else if (relation instanceof FileTableFunctionRelation) {
                 FileTableFunctionRelation tableFunctionRelation = (FileTableFunctionRelation) relation;
-                Table table = resolveTableFunctionTable(
-                        tableFunctionRelation.getProperties(), tableFunctionRelation.getPushDownSchemaFunc());
-                TableFunctionTable tableFunctionTable = (TableFunctionTable) table;
-                if (tableFunctionTable.isListFilesOnly()) {
-                    return convertFileTableFunctionRelation(tableFunctionTable);
-                } else {
-                    tableFunctionRelation.setTable(table);
-                    return relation;
-                }
+                Table table = resolveTableFunctionTable(tableFunctionRelation.getProperties());
+                tableFunctionRelation.setTable(table);
+                return relation;
             } else if (relation instanceof TableRelation) {
                 TableRelation tableRelation = (TableRelation) relation;
                 TableName tableName = tableRelation.getName();
@@ -478,7 +464,7 @@ public class QueryAnalyzer {
                 }
 
                 TableName resolveTableName = relation.getResolveTableName();
-                resolveTableName.normalization(session);
+                MetaUtils.normalizationTableName(session, resolveTableName);
                 if (aliasSet.contains(resolveTableName)) {
                     ErrorReport.reportSemanticException(ErrorCode.ERR_NONUNIQ_TABLE,
                             relation.getResolveTableName().getTbl());
@@ -523,9 +509,12 @@ public class QueryAnalyzer {
 
                     r = viewRelation;
                 } else {
-                    if (tableRelation.getQueryPeriodString() != null && !table.isTemporal()) {
-                        throw unsupportedException("Unsupported table type for temporal clauses, table type: " +
-                                table.getType());
+                    if (tableRelation.getTemporalClause() != null) {
+                        if (table.getType() != Table.TableType.MYSQL && table.getType() != Table.TableType.METADATA) {
+                            throw unsupportedException(
+                                    "Unsupported table type for temporal clauses: " + table.getType() +
+                                            "; only external MYSQL tables support temporal clauses");
+                        }
                     }
 
                     if (table.isSupported()) {
@@ -564,27 +553,6 @@ public class QueryAnalyzer {
                 }
                 return relation;
             }
-        }
-
-        // convert FileTableFunctionRelation to ValuesRelation if only list files
-        private ValuesRelation convertFileTableFunctionRelation(TableFunctionTable table) {
-            List<Column> columns = table.getFullSchema();
-            List<String> columnNames = columns.stream().map(Column::getName).collect(Collectors.toList());
-            List<Type> outputColumnTypes = columns.stream().map(Column::getType).collect(Collectors.toList());
-            List<List<Expr>> rows = Lists.newArrayList();
-            for (List<String> fileInfo : table.listFilesAndDirs()) {
-                Preconditions.checkState(columns.size() == fileInfo.size());
-                List<Expr> row = Lists.newArrayList();
-                for (int i = 0; i < columns.size(); ++i) {
-                    try {
-                        row.add(LiteralExpr.create(fileInfo.get(i), columns.get(i).getType()));
-                    } catch (AnalysisException e) {
-                        throw new SemanticException(e.getMessage());
-                    }
-                }
-                rows.add(row);
-            }
-            return new ValuesRelation(rows, columnNames, outputColumnTypes);
         }
 
         @Override
@@ -1122,39 +1090,32 @@ public class QueryAnalyzer {
 
         @Override
         public Scope visitValues(ValuesRelation node, Scope scope) {
-            Type[] outputTypes;
-            List<List<Expr>> rows = node.getRows();
-            List<Type> outputColumnTypes = node.getOutputColumnTypes();
-            if (!outputColumnTypes.isEmpty()) {
-                outputTypes = outputColumnTypes.toArray(new Type[0]);
-            } else {
-                Preconditions.checkState(!rows.isEmpty());
-                AnalyzeState analyzeState = new AnalyzeState();
+            AnalyzeState analyzeState = new AnalyzeState();
 
-                List<Expr> firstRow = node.getRow(0);
-                firstRow.forEach(e -> analyzeExpression(e, analyzeState, scope));
-                outputTypes = firstRow.stream().map(Expr::getType).toArray(Type[]::new);
-                for (List<Expr> row : rows) {
-                    if (row.size() != firstRow.size()) {
-                        throw new SemanticException("Values have unequal number of columns");
+            List<Expr> firstRow = node.getRow(0);
+            firstRow.forEach(e -> analyzeExpression(e, analyzeState, scope));
+            List<List<Expr>> rows = node.getRows();
+            Type[] outputTypes = firstRow.stream().map(Expr::getType).toArray(Type[]::new);
+            for (List<Expr> row : rows) {
+                if (row.size() != firstRow.size()) {
+                    throw new SemanticException("Values have unequal number of columns");
+                }
+                for (int fieldIdx = 0; fieldIdx < row.size(); ++fieldIdx) {
+                    analyzeExpression(row.get(fieldIdx), analyzeState, scope);
+                    Type commonType =
+                            TypeManager.getCommonSuperType(outputTypes[fieldIdx], row.get(fieldIdx).getType());
+                    if (!commonType.isValid()) {
+                        throw new SemanticException(String.format("Incompatible return types '%s' and '%s'",
+                                outputTypes[fieldIdx], row.get(fieldIdx).getType()));
                     }
-                    for (int fieldIdx = 0; fieldIdx < row.size(); ++fieldIdx) {
-                        analyzeExpression(row.get(fieldIdx), analyzeState, scope);
-                        Type commonType =
-                                TypeManager.getCommonSuperType(outputTypes[fieldIdx], row.get(fieldIdx).getType());
-                        if (!commonType.isValid()) {
-                            throw new SemanticException(String.format("Incompatible return types '%s' and '%s'",
-                                    outputTypes[fieldIdx], row.get(fieldIdx).getType()));
-                        }
-                        outputTypes[fieldIdx] = commonType;
-                    }
+                    outputTypes[fieldIdx] = commonType;
                 }
             }
-
             List<Field> fields = new ArrayList<>();
             for (int fieldIdx = 0; fieldIdx < outputTypes.length; ++fieldIdx) {
                 fields.add(new Field(node.getColumnOutputNames().get(fieldIdx), outputTypes[fieldIdx],
-                        node.getResolveTableName(), rows.isEmpty() ? null : rows.get(0).get(fieldIdx)));
+                        node.getResolveTableName(),
+                        rows.get(0).get(fieldIdx)));
             }
 
             Scope valuesScope = new Scope(RelationId.of(node), new RelationFields(fields));
@@ -1379,7 +1340,7 @@ public class QueryAnalyzer {
     public Table resolveTable(TableRelation tableRelation) {
         TableName tableName = tableRelation.getName();
         try {
-            tableName.normalization(session);
+            MetaUtils.normalizationTableName(session, tableName);
             String catalogName = tableName.getCatalog();
             String dbName = tableName.getDb();
             String tbName = tableName.getTbl();
@@ -1410,14 +1371,14 @@ public class QueryAnalyzer {
                         Preconditions.checkState(mvTable instanceof OlapTable);
                         try {
                             // Add read lock to avoid concurrent problems.
-                            locker.lockDatabase(db.getId(), LockType.READ);
+                            locker.lockDatabase(db, LockType.READ);
                             OlapTable mvOlapTable = new OlapTable();
                             ((OlapTable) mvTable).copyOnlyForQuery(mvOlapTable);
                             // Copy the necessary olap table meta to avoid changing original meta;
                             mvOlapTable.setBaseIndexId(materializedIndex.second.getIndexId());
                             table = mvOlapTable;
                         } finally {
-                            locker.unLockDatabase(db.getId(), LockType.READ);
+                            locker.unLockDatabase(db, LockType.READ);
                         }
                     }
                 }
@@ -1468,9 +1429,9 @@ public class QueryAnalyzer {
         }
     }
 
-    private Table resolveTableFunctionTable(Map<String, String> properties, Consumer<TableFunctionTable> pushDownSchemaFunc) {
+    private Table resolveTableFunctionTable(Map<String, String> properties) {
         try {
-            return new TableFunctionTable(properties, pushDownSchemaFunc);
+            return new TableFunctionTable(properties);
         } catch (DdlException e) {
             throw new StorageAccessException(e);
         }
@@ -1491,121 +1452,6 @@ public class QueryAnalyzer {
             for (Expr child : expr.getChildren()) {
                 checkJoinEqual(child);
             }
-        }
-    }
-
-    // Support alias referring to select item
-    // eg: select trim(c1) as a, trim(c2) as b, concat(a,',', b) from t1
-    // Note: alias in where clause is not handled now
-    // eg: select trim(c1) as a, trim(c2) as b, concat(a,',', b) from t1 where a != 'x'
-    private static class RewriteAliasVisitor implements AstVisitor<Expr, Void> {
-        private final Map<String, Expr> aliases = new HashMap<>();
-        private final Set<String> aliasesMaybeAmbiguous = new HashSet<>();
-        private final Map<String, Expr> resolvedAliases = new HashMap<>();
-        private final LinkedList<String> resolvingAlias = new LinkedList<>();
-        private final Scope sourceScope;
-        private final ConnectContext session;
-
-        public RewriteAliasVisitor(Scope sourceScope, ConnectContext session) {
-            this.sourceScope = sourceScope;
-            this.session = session;
-        }
-
-        @Override
-        public Expr visitExpression(Expr expr, Void context) {
-            for (int i = 0; i < expr.getChildren().size(); ++i) {
-                expr.setChild(i, visit(expr.getChild(i)));
-            }
-            return expr;
-        }
-
-        @Override
-        public Expr visitSlot(SlotRef slotRef, Void context) {
-            // We treat it as column name rather than alias when table name is specified
-            if (slotRef.getTblNameWithoutAnalyzed() != null) {
-                return slotRef;
-            }
-            // Alias is case-insensitive
-            String ref = slotRef.getColumnName().toLowerCase();
-            Expr e = aliases.get(ref);
-            // Ignore slot rewrite if the `slotRef` is not in alias map
-            if (e == null) {
-                return slotRef;
-            }
-            // If alias is same with table column name where this alias is defined, we directly use table column name.
-            // eg: DATE(pt) as pt
-            if (ref.equals(resolvingAlias.peekLast())) {
-                return slotRef;
-            }
-            // If alias is same with table column name, we directly use table column name.
-            // Otherwise, we treat it as alias.
-            // It behaves the same as that in `SelectAnalyzer.RewriteAliasVisitor`
-            // eg: select trim(t1a) as t1c, concat(t1c,','),t1c from test_all_type
-            if (sourceScope.tryResolveField(slotRef).isPresent() &&
-                    !session.getSessionVariable().getEnableGroupbyUseOutputAlias()) {
-                return slotRef;
-            }
-            // Referring to a duplicated alias is ambiguous
-            if (aliasesMaybeAmbiguous.contains(ref)) {
-                throw new SemanticException("Column " + ref + " is ambiguous", slotRef.getPos());
-            }
-            // Use short circuit to avoid duplicated resolving of same alias
-            if (resolvedAliases.containsKey(ref)) {
-                return resolvedAliases.get(ref);
-            }
-            if (resolvingAlias.contains(ref)) {
-                throw new SemanticException("Cyclic aliases: " + ref, slotRef.getPos());
-            }
-
-            // Use resolvingAliases to detect cyclic aliases
-            resolvingAlias.add(ref);
-            e = visit(e);
-            resolvedAliases.put(ref, e);
-            resolvingAlias.removeLast();
-            return e;
-        }
-
-        @Override
-        public Expr visitSelect(SelectRelation selectRelation, Void context) {
-            // Collect alias in select relation
-            for (SelectListItem item : selectRelation.getSelectList().getItems()) {
-                String alias = item.getAlias();
-                if (item.getAlias() == null) {
-                    continue;
-                }
-
-                // Alias is case-insensitive
-                Expr lastAssociatedExpr = aliases.putIfAbsent(alias.toLowerCase(), item.getExpr());
-                if (lastAssociatedExpr != null) {
-                    // Duplicate alias is allowed, eg: select a.v1 as v, a.v2 as v from t0 a,
-                    // But it should be ambiguous when the alias is used in the order by expr,
-                    // eg: select a.v1 as v, a.v2 as v from t0 a order by v
-                    aliasesMaybeAmbiguous.add(alias.toLowerCase());
-                }
-            }
-            if (aliases.isEmpty()) {
-                return null;
-            }
-            for (SelectListItem item : selectRelation.getSelectList().getItems()) {
-                if (item.getExpr() == null) {
-                    continue;
-                }
-                if (item.getAlias() == null) {
-                    item.setExpr(visit(item.getExpr()));
-                    continue;
-                }
-                // Alias is case-insensitive
-                String alias = item.getAlias().toLowerCase();
-                resolvingAlias.add(alias);
-                // Can't use computeIfAbsent here due to resolvedAliases is also modified in `visitSlot`,
-                // otherwise `ConcurrentModificationException` will be thrown
-                Expr rewrittenExpr = resolvedAliases.containsKey(alias) && !aliasesMaybeAmbiguous.contains(alias)
-                        ? resolvedAliases.get(alias) : visit(item.getExpr());
-                resolvedAliases.putIfAbsent(alias, rewrittenExpr);
-                item.setExpr(rewrittenExpr);
-                resolvingAlias.removeLast();
-            }
-            return null;
         }
     }
 }

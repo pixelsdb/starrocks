@@ -413,32 +413,6 @@ public class OlapTableFactory implements AbstractTableFactory {
                 throw new DdlException(e.getMessage());
             }
 
-            if (PropertyAnalyzer.analyzeBooleanProp(properties, PropertyAnalyzer.PROPERTIES_ENABLE_LOAD_PROFILE, false)) {
-                table.setEnableLoadProfile(true);
-            }
-
-            try {
-                table.setBaseCompactionForbiddenTimeRanges(PropertyAnalyzer.analyzeBaseCompactionForbiddenTimeRanges(properties));
-                if (!table.getBaseCompactionForbiddenTimeRanges().isEmpty()) {
-                    if (table instanceof OlapTable) {
-                        OlapTable olapTable = (OlapTable) table;
-                        if (olapTable.getKeysType() == KeysType.PRIMARY_KEYS
-                                || olapTable.isCloudNativeTableOrMaterializedView()) {
-                            throw new SemanticException("Property " +
-                                    PropertyAnalyzer.PROPERTIES_BASE_COMPACTION_FORBIDDEN_TIME_RANGES +
-                                    " not support primary keys table or cloud native table");
-                        }
-                    }
-                    GlobalStateMgr.getCurrentState().getCompactionControlScheduler().updateTableForbiddenTimeRanges(
-                            table.getId(), table.getBaseCompactionForbiddenTimeRanges());
-                }
-                if (properties != null) {
-                    properties.remove(PropertyAnalyzer.PROPERTIES_BASE_COMPACTION_FORBIDDEN_TIME_RANGES);
-                }
-            } catch (Exception e) {
-                throw new DdlException(e.getMessage());
-            }
-
             // write quorum
             try {
                 table.setWriteQuorum(PropertyAnalyzer.analyzeWriteQuorum(properties));
@@ -460,8 +434,7 @@ public class OlapTableFactory implements AbstractTableFactory {
                 }
             }
 
-            boolean hasGin = table.getIndexes().stream()
-                    .anyMatch(index -> index.getIndexType() == IndexType.GIN);
+            boolean hasGin = table.getIndexes().stream().anyMatch(index -> index.getIndexType() == IndexType.GIN);
             if (hasGin && table.enableReplicatedStorage()) {
                 throw new SemanticException("GIN does not support replicated mode");
             }

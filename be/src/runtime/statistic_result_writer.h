@@ -53,8 +53,6 @@ private:
 
     Status _fill_table_statistic_data(int version, const Columns& columns, const Chunk* chunk,
                                       TFetchDataResult* result);
-    Status _fill_partition_statistic_data(int version, const Columns& columns, const Chunk* chunk,
-                                          TFetchDataResult* result);
 
     Status _fill_full_statistic_data_v4(int version, const Columns& columns, const Chunk* chunk,
                                         TFetchDataResult* result);
@@ -64,9 +62,6 @@ private:
 
     Status _fill_full_statistic_query_external(int version, const Columns& columns, const Chunk* chunk,
                                                TFetchDataResult* result);
-
-    Status _fill_full_statistic_query_external_v2(int version, const Columns& columns, const Chunk* chunk,
-                                                  TFetchDataResult* result);
 
     Status _fill_statistic_histogram_external(int version, const Columns& columns, const Chunk* chunk,
                                               TFetchDataResult* result);

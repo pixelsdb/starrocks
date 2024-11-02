@@ -34,7 +34,6 @@ import com.starrocks.catalog.Table;
 import com.starrocks.common.AnalysisException;
 import com.starrocks.common.Pair;
 import com.starrocks.common.util.DebugUtil;
-import com.starrocks.connector.GetRemoteFilesParams;
 import com.starrocks.connector.RemoteFileInfo;
 import com.starrocks.connector.elasticsearch.EsShardPartitions;
 import com.starrocks.connector.elasticsearch.EsTablePartitions;
@@ -87,7 +86,7 @@ public class OptExternalPartitionPruner {
     }
 
     public static LogicalScanOperator prunePartitionsImpl(OptimizerContext context,
-                                                          LogicalScanOperator logicalScanOperator) {
+            LogicalScanOperator logicalScanOperator) {
         if (logicalScanOperator instanceof LogicalEsScanOperator) {
             LogicalEsScanOperator operator = (LogicalEsScanOperator) logicalScanOperator;
             EsTablePartitions esTablePartitions = operator.getEsTablePartitions();
@@ -224,8 +223,7 @@ public class OptExternalPartitionPruner {
         return true;
     }
 
-    // Note: The isConstant() method cannot be used here. If the child of CallOperator is constant, isConstant() will return
-    // true, but partition pruning cannot be performed.
+    // Note: The isConstant() method cannot be used here. If the child of CallOperator is constant, isConstant() will return true, but partition pruning cannot be performed.
     private static boolean isConstantOrColumnRef(ScalarOperator scalarOperator) {
         return (scalarOperator instanceof ConstantOperator) || scalarOperator.isColumnRef();
     }
@@ -244,8 +242,7 @@ public class OptExternalPartitionPruner {
 
     // get equivalence predicate which column ref is partition column
     public static List<Optional<ScalarOperator>> getEffectivePartitionPredicate(LogicalScanOperator operator,
-                                                                                List<Column> partitionColumns,
-                                                                                ScalarOperator predicate) {
+            List<Column> partitionColumns, ScalarOperator predicate) {
         if (partitionColumns.isEmpty()) {
             return Lists.newArrayList();
         }
@@ -283,9 +280,8 @@ public class OptExternalPartitionPruner {
     }
 
     private static void initPartitionInfo(LogicalScanOperator operator, OptimizerContext context,
-                                          Map<ColumnRefOperator,
-                                                  ConcurrentNavigableMap<LiteralExpr, Set<Long>>> columnToPartitionValuesMap,
-                                          Map<ColumnRefOperator, Set<Long>> columnToNullPartitions) throws AnalysisException {
+            Map<ColumnRefOperator, ConcurrentNavigableMap<LiteralExpr, Set<Long>>> columnToPartitionValuesMap,
+            Map<ColumnRefOperator, Set<Long>> columnToNullPartitions) throws AnalysisException {
         Table table = operator.getTable();
         // RemoteScanPartitionPruneRule may be run multiple times, such like after MaterializedViewRewriter rewrite，
         // the predicates of scan operator may changed, it need to re-compute the ScanOperatorPredicates.
@@ -386,8 +382,7 @@ public class OptExternalPartitionPruner {
     }
 
     private static void classifyConjuncts(LogicalScanOperator operator,
-                                          Map<ColumnRefOperator,
-                                                  ConcurrentNavigableMap<LiteralExpr, Set<Long>>> columnToPartitionValuesMap)
+            Map<ColumnRefOperator, ConcurrentNavigableMap<LiteralExpr, Set<Long>>> columnToPartitionValuesMap)
             throws AnalysisException {
         for (ScalarOperator scalarOperator : Utils.extractConjuncts(operator.getPredicate())) {
             List<ColumnRefOperator> columnRefOperatorList = Utils.extractColumnRef(scalarOperator);
@@ -400,9 +395,8 @@ public class OptExternalPartitionPruner {
     }
 
     private static void computePartitionInfo(LogicalScanOperator operator, OptimizerContext context,
-                                             Map<ColumnRefOperator,
-                                                     ConcurrentNavigableMap<LiteralExpr, Set<Long>>> columnToPartitionValuesMap,
-                                             Map<ColumnRefOperator, Set<Long>> columnToNullPartitions) throws AnalysisException {
+            Map<ColumnRefOperator, ConcurrentNavigableMap<LiteralExpr, Set<Long>>> columnToPartitionValuesMap,
+            Map<ColumnRefOperator, Set<Long>> columnToNullPartitions) throws AnalysisException {
         Table table = operator.getTable();
         ScanOperatorPredicates scanOperatorPredicates = operator.getScanOperatorPredicates();
         if (table instanceof HiveMetaStoreTable) {
@@ -426,7 +420,7 @@ public class OptExternalPartitionPruner {
             scanOperatorPredicates.getNoEvalPartitionConjuncts().addAll(partitionPruner.getNoEvalConjuncts());
         } else if (table instanceof IcebergTable) {
             IcebergTable icebergTable = (IcebergTable) table;
-            if (operator.getTableVersionRange().end().isEmpty()) {
+            if (!icebergTable.getSnapshot().isPresent()) {
                 // TODO: for iceberg table, it cannot decide whether it's pruned or not when `selectedPartitionIds`
                 //  is empty. It's expensive to set all partitions here.
                 return;
@@ -439,8 +433,7 @@ public class OptExternalPartitionPruner {
             } else {
                 String catalogName = icebergTable.getCatalogName();
                 List<PartitionKey> partitionKeys = GlobalStateMgr.getCurrentState().getMetadataMgr()
-                        .getPrunedPartitions(catalogName, icebergTable, operator.getPredicate(),
-                                operator.getLimit(), operator.getTableVersionRange());
+                        .getPrunedPartitions(catalogName, icebergTable, operator.getPredicate(), operator.getLimit());
                 for (PartitionKey partitionKey : partitionKeys) {
                     partitionKeyMap.put(context.getNextUniquePartitionId(), partitionKey);
                 }
@@ -453,9 +446,8 @@ public class OptExternalPartitionPruner {
             List<String> fieldNames = operator.getColRefToColumnMetaMap().keySet().stream()
                     .map(ColumnRefOperator::getName)
                     .collect(Collectors.toList());
-            GetRemoteFilesParams params =
-                    GetRemoteFilesParams.newBuilder().setPredicate(operator.getPredicate()).setFieldNames(fieldNames).build();
-            List<RemoteFileInfo> fileInfos = GlobalStateMgr.getCurrentState().getMetadataMgr().getRemoteFiles(table, params);
+            List<RemoteFileInfo> fileInfos = GlobalStateMgr.getCurrentState().getMetadataMgr().getRemoteFileInfos(
+                    paimonTable.getCatalogName(), table, null, -1, operator.getPredicate(), fieldNames, -1);
             if (fileInfos.isEmpty()) {
                 return;
             }
@@ -485,7 +477,7 @@ public class OptExternalPartitionPruner {
      * @throws AnalysisException
      */
     private static Collection<Long> partitionPrune(Table table, PartitionInfo partitionInfo,
-                                                   Map<String, PartitionColumnFilter> columnFilters) throws AnalysisException {
+            Map<String, PartitionColumnFilter> columnFilters) throws AnalysisException {
         if (partitionInfo == null) {
             return null;
         }
@@ -588,8 +580,7 @@ public class OptExternalPartitionPruner {
     }
 
     private static BinaryPredicateOperator buildMinMaxConjunct(BinaryType type, ScalarOperator left,
-                                                               ScalarOperator right, LogicalScanOperator operator)
-            throws AnalysisException {
+            ScalarOperator right, LogicalScanOperator operator) throws AnalysisException {
         ScanOperatorPredicates scanOperatorPredicates = operator.getScanOperatorPredicates();
         ColumnRefOperator columnRefOperator = (ColumnRefOperator) left;
         scanOperatorPredicates.getMinMaxColumnRefMap().putIfAbsent(columnRefOperator,

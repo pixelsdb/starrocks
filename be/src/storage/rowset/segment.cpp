@@ -48,7 +48,6 @@
 #include "segment_iterator.h"
 #include "segment_options.h"
 #include "storage/lake/tablet_manager.h"
-#include "storage/predicate_tree/predicate_tree.hpp"
 #include "storage/rowset/cast_column_iterator.h"
 #include "storage/rowset/column_reader.h"
 #include "storage/rowset/default_value_column_iterator.h"
@@ -270,44 +269,32 @@ bool Segment::_use_segment_zone_map_filter(const SegmentReadOptions& read_option
     return st.ok() && dcgs.size() == 0;
 }
 
-struct SegmentZoneMapPruner {
-    bool operator()(const PredicateColumnNode& node) const {
-        const auto* col_pred = node.col_pred();
-        const ColumnId column_id = col_pred->column_id();
-        const auto& tablet_column = read_options.tablet_schema ? read_options.tablet_schema->column(column_id)
-                                                               : parent->_tablet_schema->column(column_id);
-        const auto column_unique_id = tablet_column.unique_id();
-
-        if (const auto it = parent->_column_readers.find(column_unique_id); it == parent->_column_readers.end()) {
-            return false;
-        } else {
-            return it->second->has_zone_map() && !it->second->segment_zone_map_filter({col_pred}) &&
-                   (tablet_column.is_key() || parent->_use_segment_zone_map_filter(read_options));
-        }
-    }
-    bool operator()(const PredicateAndNode& node) const {
-        return std::any_of(node.children().begin(), node.children().end(),
-                           [this](const auto& child) { return child.visit(*this); });
-    }
-    bool operator()(const PredicateOrNode& node) const {
-        return !node.empty() && std::all_of(node.children().begin(), node.children().end(),
-                                            [this](const auto& child) { return child.visit(*this); });
-    }
-
-    Segment* parent;
-    const SegmentReadOptions& read_options;
-};
-
 StatusOr<ChunkIteratorPtr> Segment::_new_iterator(const Schema& schema, const SegmentReadOptions& read_options) {
     DCHECK(read_options.stats != nullptr);
 
-    const auto pruned = config::enable_index_segment_level_zonemap_filter &&
-                        read_options.pred_tree_for_zone_map.visit(SegmentZoneMapPruner{this, read_options});
-    if (pruned) {
-        if (read_options.is_first_split_of_segment) {
-            read_options.stats->segment_stats_filtered += num_rows();
+    if (config::enable_index_segment_level_zonemap_filter) {
+        // trying to prune the current segment by segment-level zone map
+        for (const auto& pair : read_options.predicates_for_zone_map) {
+            ColumnId column_id = pair.first;
+            const auto& tablet_column = read_options.tablet_schema ? read_options.tablet_schema->column(column_id)
+                                                                   : _tablet_schema->column(column_id);
+            auto column_unique_id = tablet_column.unique_id();
+            if (_column_readers.count(column_unique_id) < 1 || !_column_readers.at(column_unique_id)->has_zone_map()) {
+                continue;
+            }
+            if (!_column_readers.at(column_unique_id)->segment_zone_map_filter(pair.second)) {
+                // skip segment zonemap filter when this segment has column files link to it.
+                if (tablet_column.is_key() || _use_segment_zone_map_filter(read_options)) {
+                    if (read_options.is_first_split_of_segment) {
+                        read_options.stats->segment_stats_filtered += _column_readers.at(column_unique_id)->num_rows();
+                    }
+                    return Status::EndOfFile(
+                            strings::Substitute("End of file $0, empty iterator", _segment_file_info.path));
+                } else {
+                    break;
+                }
+            }
         }
-        return Status::EndOfFile(strings::Substitute("End of file $0, empty iterator", _segment_file_info.path));
     }
 
     return new_segment_iterator(shared_from_this(), schema, read_options);
@@ -365,7 +352,7 @@ Status Segment::_load_index(const LakeIOOptions& lake_io_opts) {
     ASSIGN_OR_RETURN(auto read_file, _fs->new_random_access_file(file_opts, _segment_file_info));
 
     PageReadOptions opts;
-    opts.use_page_cache = lake_io_opts.use_page_cache;
+    opts.use_page_cache = !config::disable_storage_page_cache;
     opts.read_file = read_file.get();
     opts.page_pointer = _short_key_index_page;
     opts.codec = nullptr; // short key index page uses NO_COMPRESSION for now

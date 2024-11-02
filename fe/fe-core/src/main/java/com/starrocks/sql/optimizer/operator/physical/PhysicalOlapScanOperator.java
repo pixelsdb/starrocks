@@ -19,7 +19,6 @@ import com.google.common.collect.Maps;
 import com.starrocks.catalog.Column;
 import com.starrocks.catalog.Table;
 import com.starrocks.common.Pair;
-import com.starrocks.common.VectorSearchOptions;
 import com.starrocks.sql.optimizer.OptExpression;
 import com.starrocks.sql.optimizer.OptExpressionVisitor;
 import com.starrocks.sql.optimizer.base.DistributionSpec;
@@ -59,10 +58,6 @@ public class PhysicalOlapScanOperator extends PhysicalScanOperator {
     // Rewriting the scan column ref also needs to rewrite the pruned predicate at the same time.
     private List<ScalarOperator> prunedPartitionPredicates = Lists.newArrayList();
 
-    private VectorSearchOptions vectorSearchOptions = new VectorSearchOptions();
-
-    private long gtid = 0;
-
     private PhysicalOlapScanOperator() {
         super(OperatorType.PHYSICAL_OLAP_SCAN);
     }
@@ -78,8 +73,7 @@ public class PhysicalOlapScanOperator extends PhysicalScanOperator {
                                     List<Long> hintsReplicaId,
                                     List<ScalarOperator> prunedPartitionPredicates,
                                     Projection projection,
-                                    boolean usePkIndex,
-                                    VectorSearchOptions vectorSearchOptions) {
+                                    boolean usePkIndex) {
         super(OperatorType.PHYSICAL_OLAP_SCAN, table, colRefToColumnMetaMap, limit, predicate, projection);
         this.distributionSpec = distributionDesc;
         this.selectedIndexId = selectedIndexId;
@@ -88,32 +82,21 @@ public class PhysicalOlapScanOperator extends PhysicalScanOperator {
         this.hintsReplicaId = hintsReplicaId;
         this.prunedPartitionPredicates = prunedPartitionPredicates;
         this.usePkIndex = usePkIndex;
-        this.vectorSearchOptions = vectorSearchOptions;
     }
 
     public PhysicalOlapScanOperator(LogicalOlapScanOperator scanOperator) {
         super(OperatorType.PHYSICAL_OLAP_SCAN, scanOperator);
         this.distributionSpec = scanOperator.getDistributionSpec();
         this.selectedIndexId = scanOperator.getSelectedIndexId();
-        this.gtid = scanOperator.getGtid();
         this.selectedPartitionId = scanOperator.getSelectedPartitionId();
         this.selectedTabletId = scanOperator.getSelectedTabletId();
         this.hintsReplicaId = scanOperator.getHintsReplicaIds();
         this.prunedPartitionPredicates = scanOperator.getPrunedPartitionPredicates();
         this.usePkIndex = scanOperator.isUsePkIndex();
-        this.vectorSearchOptions = scanOperator.getVectorSearchOptions();
-    }
-
-    public VectorSearchOptions getVectorSearchOptions() {
-        return vectorSearchOptions;
     }
 
     public long getSelectedIndexId() {
         return selectedIndexId;
-    }
-
-    public long getGtid() {
-        return gtid;
     }
 
     public void setSelectedPartitionId(List<Long> selectedPartitionId) {
@@ -237,7 +220,6 @@ public class PhysicalOlapScanOperator extends PhysicalScanOperator {
         }
         PhysicalOlapScanOperator that = (PhysicalOlapScanOperator) o;
         return selectedIndexId == that.selectedIndexId &&
-                gtid == that.gtid &&
                 Objects.equals(distributionSpec, that.distributionSpec) &&
                 Objects.equals(selectedPartitionId, that.selectedPartitionId) &&
                 Objects.equals(selectedTabletId, that.selectedTabletId);
@@ -276,7 +258,6 @@ public class PhysicalOlapScanOperator extends PhysicalScanOperator {
             super.withOperator(operator);
             builder.distributionSpec = operator.distributionSpec;
             builder.selectedIndexId = operator.selectedIndexId;
-            builder.gtid = operator.gtid;
             builder.selectedTabletId = operator.selectedTabletId;
             builder.hintsReplicaId = operator.hintsReplicaId;
             builder.selectedPartitionId = operator.selectedPartitionId;
@@ -288,7 +269,6 @@ public class PhysicalOlapScanOperator extends PhysicalScanOperator {
             builder.usePkIndex = operator.usePkIndex;
             builder.globalDicts = operator.globalDicts;
             builder.prunedPartitionPredicates = operator.prunedPartitionPredicates;
-            builder.vectorSearchOptions = operator.vectorSearchOptions;
             return this;
         }
 

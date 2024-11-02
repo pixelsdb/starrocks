@@ -107,13 +107,13 @@ public class FunctionName implements Writable {
         for (int i = 0; i < fn_.length(); ++i) {
             if (!isValidCharacter(fn_.charAt(i))) {
                 ErrorReport.reportSemanticException(ErrorCode.ERR_COMMON_ERROR,
-                        "Function names must be all alphanumeric or underscore. " +
-                                "Invalid name: " + fn_);
+                            "Function names must be all alphanumeric or underscore. " +
+                                        "Invalid name: " + fn_);
             }
         }
         if (Character.isDigit(fn_.charAt(0))) {
             ErrorReport.reportSemanticException(ErrorCode.ERR_COMMON_ERROR,
-                    "Function cannot start with a digit: " + fn_);
+                        "Function cannot start with a digit: " + fn_);
         }
         if (db_ == null) {
             db_ = defaultDb;

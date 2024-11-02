@@ -280,19 +280,9 @@ public class StreamLoadPlanner {
         queryOptions.setMem_limit(streamLoadInfo.getExecMemLimit());
         queryOptions.setLoad_mem_limit(streamLoadInfo.getLoadMemLimit());
 
-        boolean enableLoadProfile = false;
-        enableLoadProfile |= destTable.enableLoadProfile();
-        enableLoadProfile |= connectContext.getSessionVariable().isEnableLoadProfile();
-        if (Config.load_profile_collect_interval_second > 0
-                && System.currentTimeMillis() - destTable.getLastCollectProfileTime()
-                        < Config.load_profile_collect_interval_second * 1000) {
-            enableLoadProfile = false;
-        }
-
-        if (enableLoadProfile) {
+        if (connectContext.getSessionVariable().isEnableLoadProfile()) {
             queryOptions.setEnable_profile(true);
-            queryOptions.setLoad_profile_collect_second(Config.stream_load_profile_collect_threshold_second);
-            destTable.updateLastCollectProfileTime();
+            queryOptions.setLoad_profile_collect_second(Config.stream_load_profile_collect_second);
         }
 
         params.setQuery_options(queryOptions);
@@ -308,9 +298,9 @@ public class StreamLoadPlanner {
         TNetworkAddress coordAddress = new TNetworkAddress(FrontendOptions.getLocalHostAddress(), Config.rpc_port);
         params.setCoord(coordAddress);
 
-        LOG.debug("load job id: {}, txn id: {}, parallel: {}, compress: {}, replicated: {}, quorum: {}",
-                 DebugUtil.printId(loadId), streamLoadInfo.getTxnId(), queryOptions.getLoad_dop(),
-                 queryOptions.getLoad_transmission_compression_type(), destTable.enableReplicatedStorage(), writeQuorum);
+        LOG.info("load job id: {}, txn id: {}, parallel: {}, compress: {}, replicated: {}, quorum: {}",
+                DebugUtil.printId(loadId), streamLoadInfo.getTxnId(), queryOptions.getLoad_dop(),
+                queryOptions.getLoad_transmission_compression_type(), destTable.enableReplicatedStorage(), writeQuorum);
         this.execPlanFragmentParams = params;
         return params;
     }

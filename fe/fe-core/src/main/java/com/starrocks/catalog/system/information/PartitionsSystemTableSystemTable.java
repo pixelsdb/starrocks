@@ -25,13 +25,11 @@ import static com.starrocks.catalog.system.SystemTable.NAME_CHAR_LEN;
 import static com.starrocks.catalog.system.SystemTable.builder;
 
 public class PartitionsSystemTableSystemTable {
-    private static final String NAME = "partitions";
-
     public static SystemTable create(String catalogName) {
         return new SystemTable(
                 catalogName,
                 SystemId.PARTITIONS_ID,
-                NAME,
+                "partitions",
                 Table.TableType.SCHEMA,
                 builder()
                         .column("TABLE_CATALOG", ScalarType.createVarchar(FN_REFLEN))

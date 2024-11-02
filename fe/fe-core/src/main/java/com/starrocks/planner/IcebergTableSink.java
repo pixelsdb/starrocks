@@ -56,10 +56,8 @@ public class IcebergTableSink extends DataSink {
     private final boolean isStaticPartitionSink;
     private final String tableIdentifier;
     private final CloudConfiguration cloudConfiguration;
-    private String targetBranch;
 
-    public IcebergTableSink(IcebergTable icebergTable, TupleDescriptor desc, boolean isStaticPartitionSink,
-                            SessionVariable sessionVariable, String targetBranch) {
+    public IcebergTableSink(IcebergTable icebergTable, TupleDescriptor desc, boolean isStaticPartitionSink, SessionVariable sessionVariable) {
         Table nativeTable = icebergTable.getNativeTable();
         this.desc = desc;
         this.location = nativeTable.location();
@@ -70,8 +68,6 @@ public class IcebergTableSink extends DataSink {
                 .toLowerCase();
         this.compressionType = sessionVariable.getConnectorSinkCompressionCodec();
         this.targetMaxFileSize = sessionVariable.getConnectorSinkTargetMaxFileSize();
-        this.targetBranch = targetBranch;
-
         String catalogName = icebergTable.getCatalogName();
         CatalogConnector connector = GlobalStateMgr.getCurrentState().getConnectorMgr().getConnector(catalogName);
         Preconditions.checkState(connector != null,
@@ -88,10 +84,6 @@ public class IcebergTableSink extends DataSink {
 
         Preconditions.checkState(cloudConfiguration != null,
                 String.format("cloudConfiguration of catalog %s should not be null", catalogName));
-    }
-
-    public String getTargetBranch() {
-        return targetBranch;
     }
 
     @Override

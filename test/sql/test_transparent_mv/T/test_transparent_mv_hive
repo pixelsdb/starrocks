@@ -1,4 +1,4 @@
--- name: test_transparent_mv_hive @slow
+-- name: test_transparent_mv_hive
 create external catalog mv_hive_${uuid0}
 properties
 (

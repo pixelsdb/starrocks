@@ -72,8 +72,6 @@ import com.starrocks.load.BrokerFileGroup;
 import com.starrocks.load.BrokerFileGroupAggInfo.FileGroupAggKey;
 import com.starrocks.load.FailMsg;
 import com.starrocks.load.Load;
-import com.starrocks.load.PartitionUtils;
-import com.starrocks.load.PartitionUtils.RangePartitionBoundary;
 import com.starrocks.load.loadv2.etl.EtlJobConfig;
 import com.starrocks.load.loadv2.etl.EtlJobConfig.EtlColumn;
 import com.starrocks.load.loadv2.etl.EtlJobConfig.EtlColumnMapping;
@@ -88,7 +86,9 @@ import com.starrocks.load.loadv2.etl.EtlJobConfig.SourceType;
 import com.starrocks.server.GlobalStateMgr;
 import com.starrocks.sql.analyzer.SemanticException;
 import com.starrocks.sql.ast.ImportColumnDesc;
+import com.starrocks.sql.common.ErrorType;
 import com.starrocks.sql.common.MetaUtils;
+import com.starrocks.sql.common.StarRocksPlannerException;
 import com.starrocks.transaction.TransactionState;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -156,14 +156,14 @@ public class SparkLoadPendingTask extends LoadTask {
     }
 
     private void createEtlJobConf() throws LoadException {
-        Database db = GlobalStateMgr.getCurrentState().getLocalMetastore().getDb(dbId);
+        Database db = GlobalStateMgr.getCurrentState().getDb(dbId);
         if (db == null) {
             throw new LoadException("db does not exist. id: " + dbId);
         }
 
         Map<Long, EtlTable> tables = Maps.newHashMap();
         Locker locker = new Locker();
-        locker.lockDatabase(db.getId(), LockType.READ);
+        locker.lockDatabase(db, LockType.READ);
         try {
             Map<Long, Set<Long>> tableIdToPartitionIds = Maps.newHashMap();
             Set<Long> allPartitionsTableIds = Sets.newHashSet();
@@ -173,7 +173,7 @@ public class SparkLoadPendingTask extends LoadTask {
                 FileGroupAggKey aggKey = entry.getKey();
                 long tableId = aggKey.getTableId();
 
-                OlapTable table = (OlapTable) GlobalStateMgr.getCurrentState().getLocalMetastore().getTable(db.getId(), tableId);
+                OlapTable table = (OlapTable) db.getTable(tableId);
                 if (table == null) {
                     throw new LoadException("table does not exist. id: " + tableId);
                 }
@@ -205,7 +205,7 @@ public class SparkLoadPendingTask extends LoadTask {
                 }
             }
         } finally {
-            locker.unLockDatabase(db.getId(), LockType.READ);
+            locker.unLockDatabase(db, LockType.READ);
         }
 
         String outputFilePattern = EtlJobConfig.getOutputFilePattern(loadLabel, FilePatternVersion.V1);
@@ -224,7 +224,7 @@ public class SparkLoadPendingTask extends LoadTask {
                 continue;
             }
 
-            OlapTable table = (OlapTable) GlobalStateMgr.getCurrentState().getLocalMetastore().getTable(db.getId(), tableId);
+            OlapTable table = (OlapTable) db.getTable(tableId);
             if (table == null) {
                 throw new LoadException("table does not exist. id: " + tableId);
             }
@@ -415,7 +415,7 @@ public class SparkLoadPendingTask extends LoadTask {
         for (LiteralExpr literalExpr : list) {
             Object keyValue;
             if (literalExpr instanceof DateLiteral) {
-                keyValue = PartitionUtils.convertDateLiteralToNumber((DateLiteral) literalExpr);
+                keyValue = convertDateLiteralToNumber((DateLiteral) literalExpr);
             } else {
                 keyValue = literalExpr.getRealObjectValue();
             }
@@ -447,14 +447,49 @@ public class SparkLoadPendingTask extends LoadTask {
             // bucket num
             int bucketNum = partition.getDistributionInfo().getBucketNum();
 
-            RangePartitionBoundary boundary = PartitionUtils.calRangePartitionBoundary(entry.getValue());
-            etlPartitions.add(new EtlPartition(
-                    partitionId,
-                    boundary.getStartKeys(),
-                    boundary.getEndKeys(),
-                    boundary.isMinPartition(),
-                    boundary.isMaxPartition(),
-                    bucketNum));
+            // is min|max partition
+            Range<PartitionKey> range = entry.getValue();
+            boolean isMaxPartition = range.upperEndpoint().isMaxValue();
+            boolean isMinPartition = range.lowerEndpoint().isMinValue();
+
+            // start keys
+            List<LiteralExpr> rangeKeyExprs = null;
+            List<Object> startKeys = Lists.newArrayList();
+            if (!isMinPartition) {
+                rangeKeyExprs = range.lowerEndpoint().getKeys();
+                for (int i = 0; i < rangeKeyExprs.size(); ++i) {
+                    LiteralExpr literalExpr = rangeKeyExprs.get(i);
+
+                    Object keyValue;
+                    if (literalExpr instanceof DateLiteral) {
+                        keyValue = convertDateLiteralToNumber((DateLiteral) literalExpr);
+                    } else {
+                        keyValue = literalExpr.getRealObjectValue();
+                    }
+
+                    startKeys.add(keyValue);
+                }
+            }
+
+            // end keys
+            // is empty list when max partition
+            List<Object> endKeys = Lists.newArrayList();
+            if (!isMaxPartition) {
+                rangeKeyExprs = range.upperEndpoint().getKeys();
+                for (int i = 0; i < rangeKeyExprs.size(); ++i) {
+                    LiteralExpr literalExpr = rangeKeyExprs.get(i);
+
+                    Object keyValue;
+                    if (literalExpr instanceof DateLiteral) {
+                        keyValue = convertDateLiteralToNumber((DateLiteral) literalExpr);
+                    } else {
+                        keyValue = literalExpr.getRealObjectValue();
+                    }
+                    endKeys.add(keyValue);
+                }
+            }
+
+            etlPartitions.add(new EtlPartition(partitionId, startKeys, endKeys, isMinPartition, isMaxPartition, bucketNum));
         }
         return etlPartitions;
     }
@@ -571,8 +606,7 @@ public class SparkLoadPendingTask extends LoadTask {
         Map<String, String> hiveTableProperties = Maps.newHashMap();
         if (fileGroup.isLoadFromTable()) {
             long srcTableId = fileGroup.getSrcTableId();
-            HiveTable srcHiveTable = (HiveTable) GlobalStateMgr.getCurrentState().getLocalMetastore()
-                        .getTable(db.getId(), srcTableId);
+            HiveTable srcHiveTable = (HiveTable) db.getTable(srcTableId);
             if (srcHiveTable == null) {
                 throw new LoadException("table does not exist. id: " + srcTableId);
             }
@@ -652,4 +686,19 @@ public class SparkLoadPendingTask extends LoadTask {
         }
     }
 
+    // This is to be compatible with Spark Load Job formats for Date type.
+    // Because the historical version is serialized and deserialized with a special hash number for DateLiteral,
+    // special processing is also done here for DateLiteral to keep the historical version compatible.
+    // The deserialized code is in "SparkDpp.createPartitionRangeKeys"
+    public static Object convertDateLiteralToNumber(DateLiteral dateLiteral) {
+        if (dateLiteral.getType().isDate()) {
+            return (dateLiteral.getYear() * 16 * 32L
+                    + dateLiteral.getMonth() * 32
+                    + dateLiteral.getDay());
+        } else if (dateLiteral.getType().isDatetime()) {
+            return dateLiteral.getLongValue();
+        } else {
+            throw new StarRocksPlannerException("Invalid date type: " + dateLiteral.getType(), ErrorType.INTERNAL_ERROR);
+        }
+    }
 }

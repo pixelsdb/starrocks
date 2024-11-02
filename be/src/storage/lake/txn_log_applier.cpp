@@ -146,7 +146,6 @@ public:
             DeferOp defer([&]() { _tablet.update_mgr()->unlock_shard_pk_index_shard(_tablet.id()); });
             RETURN_IF_ERROR(prepare_primary_index());
         }
-
         // Must call `commit` before `finalize`,
         // because if `commit` or `finalize` fail, we can remove index in `handle_failure`.
         // if `_index_entry` is null, do nothing.

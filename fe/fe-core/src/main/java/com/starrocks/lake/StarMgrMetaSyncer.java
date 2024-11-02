@@ -74,7 +74,7 @@ public class StarMgrMetaSyncer extends FrontendDaemon {
             }
 
             Locker locker = new Locker();
-            locker.lockDatabase(db.getId(), LockType.READ);
+            locker.lockDatabase(db, LockType.READ);
             try {
                 for (Table table : GlobalStateMgr.getCurrentState().getLocalMetastore().getTablesIncludeRecycleBin(db)) {
                     if (table.isCloudNativeTableOrMaterializedView()) {
@@ -87,7 +87,7 @@ public class StarMgrMetaSyncer extends FrontendDaemon {
                     }
                 }
             } finally {
-                locker.unLockDatabase(db.getId(), LockType.READ);
+                locker.unLockDatabase(db, LockType.READ);
             }
         }
         return groupIds;
@@ -262,7 +262,7 @@ public class StarMgrMetaSyncer extends FrontendDaemon {
     public void syncTableMetaAndColocationInfo() {
         List<Long> dbIds = GlobalStateMgr.getCurrentState().getLocalMetastore().getDbIds();
         for (Long dbId : dbIds) {
-            Database db = GlobalStateMgr.getCurrentState().getLocalMetastore().getDb(dbId);
+            Database db = GlobalStateMgr.getCurrentState().getDb(dbId);
             if (db == null) {
                 continue;
             }
@@ -270,7 +270,7 @@ public class StarMgrMetaSyncer extends FrontendDaemon {
                 continue;
             }
 
-            List<Table> tables = GlobalStateMgr.getCurrentState().getLocalMetastore().getTables(db.getId());
+            List<Table> tables = db.getTables();
             for (Table table : tables) {
                 if (!table.isCloudNativeTableOrMaterializedView()) {
                     continue;
@@ -291,9 +291,9 @@ public class StarMgrMetaSyncer extends FrontendDaemon {
         HashMap<Long, Set<Long>> redundantGroupToShards = new HashMap<>();
         List<PhysicalPartition> physicalPartitions = new ArrayList<>();
         Locker locker = new Locker();
-        locker.lockDatabase(db.getId(), LockType.READ);
+        locker.lockDatabase(db, LockType.READ);
         try {
-            if (GlobalStateMgr.getCurrentState().getLocalMetastore().getTable(db.getId(), table.getId()) == null) {
+            if (db.getTable(table.getId()) == null) {
                 return false; // table might be dropped
             }
             GlobalStateMgr.getCurrentState().getLocalMetastore()
@@ -303,11 +303,11 @@ public class StarMgrMetaSyncer extends FrontendDaemon {
                     .forEach(physicalPartitions::addAll);
             table.setShardGroupChanged(false);
         } finally {
-            locker.unLockDatabase(db.getId(), LockType.READ);
+            locker.unLockDatabase(db, LockType.READ);
         }
 
         for (PhysicalPartition physicalPartition : physicalPartitions) {
-            locker.lockDatabase(db.getId(), LockType.READ);
+            locker.lockDatabase(db, LockType.READ);
             try {
                 // schema change might replace the shards in the original shard group
                 if (table.getState() != OlapTable.OlapTableState.NORMAL) {
@@ -339,7 +339,7 @@ public class StarMgrMetaSyncer extends FrontendDaemon {
                 // collect shard in starmgr but not in fe
                 redundantGroupToShards.put(groupId, starmgrShardIdsSet);
             } finally {
-                locker.unLockDatabase(db.getId(), LockType.READ);
+                locker.unLockDatabase(db, LockType.READ);
             }
         }
 
@@ -372,19 +372,19 @@ public class StarMgrMetaSyncer extends FrontendDaemon {
             return;
         }
         Locker locker = new Locker();
-        locker.lockDatabase(db.getId(), LockType.WRITE);
+        locker.lockDatabase(db, LockType.WRITE);
         try {
             // check db and table again
-            if (GlobalStateMgr.getCurrentState().getLocalMetastore().getDb(db.getId()) == null) {
+            if (GlobalStateMgr.getCurrentState().getDb(db.getId()) == null) {
                 return;
             }
-            if (GlobalStateMgr.getCurrentState().getLocalMetastore().getTable(db.getId(), table.getId()) == null) {
+            if (db.getTable(table.getId()) == null) {
                 return;
             }
             GlobalStateMgr.getCurrentState().getColocateTableIndex().updateLakeTableColocationInfo(table, true /* isJoin */,
                     null /* expectGroupId */);
         } finally {
-            locker.unLockDatabase(db.getId(), LockType.WRITE);
+            locker.unLockDatabase(db, LockType.WRITE);
         }
     }
 
@@ -407,12 +407,12 @@ public class StarMgrMetaSyncer extends FrontendDaemon {
     }
 
     public void syncTableMeta(String dbName, String tableName, boolean forceDeleteData) throws DdlException {
-        Database db = GlobalStateMgr.getCurrentState().getLocalMetastore().getDb(dbName);
+        Database db = GlobalStateMgr.getCurrentState().getDb(dbName);
         if (db == null) {
             throw new DdlException(String.format("db %s does not exist.", dbName));
         }
 
-        Table table = GlobalStateMgr.getCurrentState().getLocalMetastore().getTable(db.getFullName(), tableName);
+        Table table = db.getTable(tableName);
         if (table == null) {
             throw new DdlException(String.format("table %s does not exist.", tableName));
         }

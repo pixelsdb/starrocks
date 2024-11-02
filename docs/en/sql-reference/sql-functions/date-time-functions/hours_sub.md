@@ -4,7 +4,7 @@ displayed_sidebar: docs
 
 # hours_sub
 
-
+## Description
 
 Reduces the specified date and time by a specified number of hours.
 

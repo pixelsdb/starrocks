@@ -4,6 +4,8 @@ displayed_sidebar: docs
 
 # rand, random
 
+## Description
+
 Returns a random floating-point number between 0 (inclusive) and 1 (exclusive).
 
 ## Syntax

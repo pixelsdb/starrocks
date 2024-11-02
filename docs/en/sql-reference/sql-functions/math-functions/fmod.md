@@ -4,7 +4,7 @@ displayed_sidebar: docs
 
 # fmod
 
-
+## Description
 
 Returns the floating point remainder of the division ( `dividend`/`divisor` ). It is a modulo function.
 

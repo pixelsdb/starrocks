@@ -4,7 +4,7 @@ displayed_sidebar: docs
 
 # parse_json
 
-
+## Description
 
 Converts a string to a JSON value.
 

@@ -93,9 +93,6 @@ public class TableProperty implements Writable, GsonPostProcessable {
     public static final String BINLOG_PROPERTY_PREFIX = "binlog";
     public static final String BINLOG_PARTITION = "binlog_partition_";
 
-    public static final String CLOUD_NATIVE_INDEX_TYPE = "CLOUD_NATIVE";
-    public static final String LOCAL_INDEX_TYPE = "LOCAL";
-
     public enum QueryRewriteConsistencyMode {
         DISABLE,    // 0: disable query rewrite
         LOOSE,      // 1: enable query rewrite, and skip the partition version check, still need to check mv partition exist
@@ -207,10 +204,6 @@ public class TableProperty implements Writable, GsonPostProcessable {
     // Indicates which tables do not listen to auto refresh events when load
     private List<TableName> excludedTriggerTables;
 
-    // This property only applies to materialized views,
-    // Indicates which tables do not refresh the base table when auto refresh
-    private List<TableName> excludedRefreshTables;
-
     // This property only applies to materialized views
     private List<String> mvSortKeys;
 
@@ -271,10 +264,6 @@ public class TableProperty implements Writable, GsonPostProcessable {
 
     // the default mutable bucket number
     private long mutableBucketNum = 0;
-
-    private boolean enableLoadProfile = false;
-
-    private String baseCompactionForbiddenTimeRanges = "";
 
     // 1. This table has been deleted. if hasDelete is false, the BE segment must don't have deleteConditions.
     //    If hasDelete is true, the BE segment maybe have deleteConditions because compaction.
@@ -371,12 +360,6 @@ public class TableProperty implements Writable, GsonPostProcessable {
                 break;
             case OperationType.OP_MODIFY_MUTABLE_BUCKET_NUM:
                 buildMutableBucketNum();
-                break;
-            case OperationType.OP_MODIFY_ENABLE_LOAD_PROFILE:
-                buildEnableLoadProfile();
-                break;
-            case OperationType.OP_MODIFY_BASE_COMPACTION_FORBIDDEN_TIME_RANGES:
-                buildBaseCompactionForbiddenTimeRanges();
                 break;
             case OperationType.OP_MODIFY_BINLOG_CONFIG:
                 buildBinlogConfig();
@@ -503,23 +486,18 @@ public class TableProperty implements Writable, GsonPostProcessable {
     }
 
     public TableProperty buildExcludedTriggerTables() {
-        excludedTriggerTables = parseExcludedTables(PropertyAnalyzer.PROPERTIES_EXCLUDED_TRIGGER_TABLES);
-        excludedRefreshTables = parseExcludedTables(PropertyAnalyzer.PROPERTIES_EXCLUDED_REFRESH_TABLES);
-        return this;
-    }
-
-    private List<TableName> parseExcludedTables(String propertiesKey) {
-        String excludedTables = properties.getOrDefault(propertiesKey, null);
+        String excludedRefreshConf = properties.getOrDefault(PropertyAnalyzer.PROPERTIES_EXCLUDED_TRIGGER_TABLES, null);
         List<TableName> tables = Lists.newArrayList();
-        if (excludedTables != null) {
+        if (excludedRefreshConf != null) {
             List<String> tableList = Splitter.on(",").omitEmptyStrings().trimResults()
-                    .splitToList(excludedTables);
+                    .splitToList(excludedRefreshConf);
             for (String table : tableList) {
                 TableName tableName = AnalyzerUtils.stringToTableName(table);
                 tables.add(tableName);
             }
         }
-        return tables;
+        excludedTriggerTables = tables;
+        return this;
     }
 
     public TableProperty buildMvSortKeys() {
@@ -683,19 +661,6 @@ public class TableProperty implements Writable, GsonPostProcessable {
         return this;
     }
 
-    public TableProperty buildEnableLoadProfile() {
-        if (properties.get(PropertyAnalyzer.PROPERTIES_ENABLE_LOAD_PROFILE) != null) {
-            enableLoadProfile = Boolean.parseBoolean(properties.get(PropertyAnalyzer.PROPERTIES_ENABLE_LOAD_PROFILE));
-        }
-        return this;
-    }
-
-    public TableProperty buildBaseCompactionForbiddenTimeRanges() {
-        baseCompactionForbiddenTimeRanges = properties.getOrDefault(
-                PropertyAnalyzer.PROPERTIES_BASE_COMPACTION_FORBIDDEN_TIME_RANGES, "");
-        return this;
-    }
-
     public TableProperty buildEnablePersistentIndex() {
         enablePersistentIndex = Boolean.parseBoolean(
                 properties.getOrDefault(PropertyAnalyzer.PROPERTIES_ENABLE_PERSISTENT_INDEX, "false"));
@@ -709,11 +674,10 @@ public class TableProperty implements Writable, GsonPostProcessable {
     }
 
     public TableProperty buildPersistentIndexType() {
-        String defaultType = Config.enable_cloud_native_persistent_index_by_default ? CLOUD_NATIVE_INDEX_TYPE : LOCAL_INDEX_TYPE;
-        String type = properties.getOrDefault(PropertyAnalyzer.PROPERTIES_PERSISTENT_INDEX_TYPE, defaultType);
-        if (type.equals(LOCAL_INDEX_TYPE)) {
+        String type = properties.getOrDefault(PropertyAnalyzer.PROPERTIES_PERSISTENT_INDEX_TYPE, "LOCAL");
+        if (type.equals("LOCAL")) {
             persistentIndexType = TPersistentIndexType.LOCAL;
-        } else if (type.equals(CLOUD_NATIVE_INDEX_TYPE)) {
+        } else if (type.equals("CLOUD_NATIVE")) {
             persistentIndexType = TPersistentIndexType.CLOUD_NATIVE;
         }
         return this;
@@ -722,9 +686,9 @@ public class TableProperty implements Writable, GsonPostProcessable {
     public static String persistentIndexTypeToString(TPersistentIndexType type) {
         switch (type) {
             case LOCAL:
-                return LOCAL_INDEX_TYPE;
+                return "LOCAL";
             case CLOUD_NATIVE:
-                return CLOUD_NATIVE_INDEX_TYPE;
+                return "CLOUD_NATIVE";
             default:
                 // shouldn't happen
                 // for it has been checked outside
@@ -869,14 +833,6 @@ public class TableProperty implements Writable, GsonPostProcessable {
         this.excludedTriggerTables = excludedTriggerTables;
     }
 
-    public List<TableName> getExcludedRefreshTables() {
-        return excludedRefreshTables;
-    }
-
-    public void setExcludedRefreshTables(List<TableName> excludedRefreshTables) {
-        this.excludedRefreshTables = excludedRefreshTables;
-    }
-
     public List<String> getMvSortKeys() {
         return mvSortKeys;
     }
@@ -959,14 +915,6 @@ public class TableProperty implements Writable, GsonPostProcessable {
 
     public long getMutableBucketNum() {
         return mutableBucketNum;
-    }
-
-    public boolean enableLoadProfile() {
-        return enableLoadProfile;
-    }
-
-    public String getBaseCompactionForbiddenTimeRanges() {
-        return baseCompactionForbiddenTimeRanges;
     }
 
     public String getStorageVolume() {
@@ -1085,7 +1033,7 @@ public class TableProperty implements Writable, GsonPostProcessable {
         buildPartitionLiveNumber();
         buildReplicatedStorage();
         buildBucketSize();
-        buildEnableLoadProfile();
+        buildMutableBucketNum();
         buildBinlogConfig();
         buildBinlogAvailableVersion();
         buildDataCachePartitionDuration();
@@ -1093,6 +1041,5 @@ public class TableProperty implements Writable, GsonPostProcessable {
         buildStorageType();
         buildMvProperties();
         buildLocation();
-        buildBaseCompactionForbiddenTimeRanges();
     }
 }

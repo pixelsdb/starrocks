@@ -4,7 +4,7 @@ displayed_sidebar: docs
 
 # convert_tz
 
-
+## Description
 
 Converts a DATE or DATETIME value from one time zone to another.
 

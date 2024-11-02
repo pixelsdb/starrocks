@@ -36,6 +36,7 @@ import com.starrocks.analysis.ParseNode;
 import com.starrocks.analysis.SlotRef;
 import com.starrocks.catalog.BaseTableInfo;
 import com.starrocks.catalog.Column;
+import com.starrocks.catalog.DataProperty;
 import com.starrocks.catalog.Database;
 import com.starrocks.catalog.DistributionInfo;
 import com.starrocks.catalog.FunctionSet;
@@ -114,7 +115,6 @@ import com.starrocks.sql.optimizer.transformer.RelationTransformer;
 import com.starrocks.sql.optimizer.transformer.SqlToScalarOperatorTranslator;
 import com.starrocks.sql.optimizer.transformer.TransformerContext;
 import com.starrocks.sql.parser.ParsingException;
-import com.starrocks.sql.util.Box;
 import org.apache.commons.collections4.SetUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -122,7 +122,6 @@ import org.apache.logging.log4j.Logger;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -175,12 +174,12 @@ public class MvUtils {
         }
         Set<Table> newMvs = Sets.newHashSet();
         for (MvId mvId : newMvIds) {
-            Database db = GlobalStateMgr.getCurrentState().getLocalMetastore().getDb(mvId.getDbId());
+            Database db = GlobalStateMgr.getCurrentState().getDb(mvId.getDbId());
             if (db == null) {
                 logMVPrepare("Cannot find database from mvId:{}", mvId);
                 continue;
             }
-            Table table = GlobalStateMgr.getCurrentState().getLocalMetastore().getTable(db.getId(), mvId.getId());
+            Table table = db.getTable(mvId.getId());
             if (table == null) {
                 logMVPrepare("Cannot find materialized view from mvId:{}", mvId);
                 continue;
@@ -1035,41 +1034,6 @@ public class MvUtils {
         return mergedRanges;
     }
 
-    public static List<Range<PartitionKey>> mergeRanges(List<Pair<Long, Range<PartitionKey>>> ranges,
-                                                        Map<Box<Range<PartitionKey>>, Set<Long>> queryMergeRangesToPartitionIds) {
-        ranges.sort(Comparator.comparing(k -> k.second.lowerEndpoint()));
-        List<Range<PartitionKey>> mergedRanges = Lists.newArrayList();
-        for (Pair<Long, Range<PartitionKey>> currentRangePair : ranges) {
-            boolean merged = false;
-            Range<PartitionKey> currentRange = currentRangePair.second;
-            long partitionId = currentRangePair.first;
-            for (int j = 0; j < mergedRanges.size(); j++) {
-                // 1 < r < 10, 10 <= r < 20 => 1 < r < 20
-                Range<PartitionKey> mergedRange = mergedRanges.get(j);
-                if (currentRange.isConnected(mergedRange)) {
-                    // for partition range, the intersection must be empty
-                    Preconditions.checkState(currentRange.intersection(mergedRange).isEmpty());
-                    Range<PartitionKey> newRange = mergedRange.span(currentRange);
-                    mergedRanges.set(j, newRange);
-
-                    Box<Range<PartitionKey>> mergedRangeBox = Box.of(mergedRange);
-                    Set<Long> mergePartitionIds = queryMergeRangesToPartitionIds.get(mergedRangeBox);
-                    queryMergeRangesToPartitionIds.remove(mergedRangeBox);
-                    mergePartitionIds.add(partitionId);
-                    queryMergeRangesToPartitionIds.put(Box.of(newRange), mergePartitionIds);
-
-                    merged = true;
-                    break;
-                }
-            }
-            if (!merged) {
-                mergedRanges.add(currentRange);
-                queryMergeRangesToPartitionIds.put(Box.of(currentRange), Sets.newHashSet(partitionId));
-            }
-        }
-        return mergedRanges;
-    }
-
     public static boolean isDateRange(Range<PartitionKey> range) {
         if (range.hasUpperBound()) {
             PartitionKey partitionKey = range.upperEndpoint();
@@ -1117,6 +1081,7 @@ public class MvUtils {
         }
         return o.toString();
     }
+
 
     /**
      * Return the max refresh timestamp of all partition infos.
@@ -1166,6 +1131,13 @@ public class MvUtils {
         return joinOperator.isLeftOuterJoin() || joinOperator.isInnerJoin();
     }
 
+    public static SlotRef extractPartitionSlotRef(Expr paritionExpr) {
+        List<SlotRef> slotRefs = Lists.newArrayList();
+        paritionExpr.collect(SlotRef.class, slotRefs);
+        Preconditions.checkState(slotRefs.size() == 1);
+        return slotRefs.get(0);
+    }
+
     /**
      * Inactive related mvs after modified columns have been done. Only inactive mvs after
      * modified columns have done because the modified process may be failed and in this situation
@@ -1179,8 +1151,7 @@ public class MvUtils {
         }
         // inactive related asynchronous mvs
         for (MvId mvId : olapTable.getRelatedMaterializedViews()) {
-            MaterializedView mv = (MaterializedView) GlobalStateMgr.getCurrentState().getLocalMetastore()
-                        .getTable(db.getId(), mvId.getId());
+            MaterializedView mv = (MaterializedView) db.getTable(mvId.getId());
             if (mv == null) {
                 LOG.warn("Ignore materialized view {} does not exists", mvId);
                 continue;
@@ -1374,9 +1345,7 @@ public class MvUtils {
         try {
             List<StatementBase> statementBases =
                     com.starrocks.sql.parser.SqlParser.parse(query, connectContext.getSessionVariable());
-            if (statementBases.size() != 1) {
-                return null;
-            }
+            Preconditions.checkState(statementBases.size() == 1);
             StatementBase stmt = statementBases.get(0);
             Analyzer.analyze(stmt, connectContext);
             return stmt;
@@ -1402,7 +1371,7 @@ public class MvUtils {
         // Cache partition predicate predicates because it's expensive time costing if there are too many materialized views or
         // query expressions are too complex.
         final ScalarOperator queryPartitionPredicate = MvPartitionCompensator.compensateQueryPartitionPredicate(
-                mvContext, rule, queryColumnRefFactory, queryExpression);
+                mvContext, queryColumnRefFactory, queryExpression);
         if (queryPartitionPredicate == null) {
             logMVRewrite(mvContext.getOptimizerContext(), rule, "Compensate query expression's partition " +
                     "predicates from pruned partitions failed.");
@@ -1422,18 +1391,6 @@ public class MvUtils {
         return queryMaterializationContext.getPredicateSplit(queryConjuncts, queryColumnRefRewriter);
     }
 
-    public static Optional<Table> getTable(BaseTableInfo baseTableInfo) {
-        return GlobalStateMgr.getCurrentState().getMetadataMgr().getTable(baseTableInfo);
-    }
-
-    public static Optional<Table> getTableWithIdentifier(BaseTableInfo baseTableInfo) {
-        return GlobalStateMgr.getCurrentState().getMetadataMgr().getTableWithIdentifier(baseTableInfo);
-    }
-
-    public static Table getTableChecked(BaseTableInfo baseTableInfo) {
-        return GlobalStateMgr.getCurrentState().getMetadataMgr().getTableChecked(baseTableInfo);
-    }
-
     public static Optional<FunctionCallExpr> getStr2DateExpr(Expr partitionExpr) {
         List<Expr> matches = Lists.newArrayList();
         partitionExpr.collect(expr -> isStr2Date(expr), matches);
@@ -1448,6 +1405,18 @@ public class MvUtils {
                 && ((FunctionCallExpr) expr).getFnName().getFunction().equalsIgnoreCase(FunctionSet.STR2DATE);
     }
 
+    public static Optional<Table> getTable(BaseTableInfo baseTableInfo) {
+        return GlobalStateMgr.getCurrentState().getMetadataMgr().getTable(baseTableInfo);
+    }
+
+    public static Optional<Table> getTableWithIdentifier(BaseTableInfo baseTableInfo) {
+        return GlobalStateMgr.getCurrentState().getMetadataMgr().getTableWithIdentifier(baseTableInfo);
+    }
+
+    public static Table getTableChecked(BaseTableInfo baseTableInfo) {
+        return GlobalStateMgr.getCurrentState().getMetadataMgr().getTableChecked(baseTableInfo);
+    }
+
     public static Map<String, String> getPartitionProperties(MaterializedView materializedView) {
         Map<String, String> partitionProperties = new HashMap<>(4);
         partitionProperties.put("replication_num",
@@ -1455,7 +1424,8 @@ public class MvUtils {
         partitionProperties.put("storage_medium", materializedView.getStorageMedium());
         String storageCooldownTime =
                 materializedView.getTableProperty().getProperties().get("storage_cooldown_time");
-        if (storageCooldownTime != null) {
+        if (storageCooldownTime != null
+                && !storageCooldownTime.equals(String.valueOf(DataProperty.MAX_COOLDOWN_TIME_MS))) {
             // cast long str to time str e.g.  '1587473111000' -> '2020-04-21 15:00:00'
             String storageCooldownTimeStr = TimeUtils.longToTimeString(Long.parseLong(storageCooldownTime));
             partitionProperties.put("storage_cooldown_time", storageCooldownTimeStr);
@@ -1466,8 +1436,8 @@ public class MvUtils {
     public static DistributionDesc getDistributionDesc(MaterializedView materializedView) {
         DistributionInfo distributionInfo = materializedView.getDefaultDistributionInfo();
         if (distributionInfo instanceof HashDistributionInfo) {
-            List<String> distColumnNames = MetaUtils.getColumnNamesByColumnIds(
-                    materializedView.getIdToColumn(), distributionInfo.getDistributionColumns());
+            List<String> distColumnNames = MetaUtils.getColumnNamesByColumnIds(materializedView.getIdToColumn(),
+                    distributionInfo.getDistributionColumns());
             return new HashDistributionDesc(distributionInfo.getBucketNum(), distColumnNames);
         } else {
             return new RandomDistributionDesc();
@@ -1572,7 +1542,7 @@ public class MvUtils {
         return optimizedViewPlan;
     }
 
-    /**
+    /*
      * Trim the input string if its length is larger than maxLength.
      * @param input the input string
      * @param maxLength the max length

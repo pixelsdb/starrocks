@@ -162,33 +162,7 @@ public class AccessTestUtil {
     }
 
     public static GlobalStateMgr fetchBlockCatalog() {
-        GlobalStateMgr globalStateMgr = Deencapsulation.newInstance(GlobalStateMgr.class);
-
-        Database db = mockDb("testDb");
-
-        /*
-        new Expectations(globalStateMgr) {
-            {
-                globalStateMgr.getLocalMetastore().getDb("testDb");
-                minTimes = 0;
-                result = db;
-
-                globalStateMgr.getLocalMetastore().getDb("emptyDb");
-                minTimes = 0;
-                result = null;
-
-                globalStateMgr.getLocalMetastore().getDb(anyString);
-                minTimes = 0;
-                result = new Database();
-
-                globalStateMgr.getLocalMetastore().getDb("emptyCluster");
-                minTimes = 0;
-                result = null;
-            }
-        };
-
-         */
-        return globalStateMgr;
+        return Deencapsulation.newInstance(GlobalStateMgr.class);
     }
 
     public static Analyzer fetchAdminAnalyzer() {

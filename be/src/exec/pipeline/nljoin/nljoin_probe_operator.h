@@ -59,7 +59,6 @@ public:
     Status push_chunk(RuntimeState* state, const ChunkPtr& chunk) override;
 
     Status reset_state(RuntimeState* state, const std::vector<ChunkPtr>& refill_chunks) override;
-    void update_exec_stats(RuntimeState* state) override;
 
 private:
     enum JoinStage {
@@ -124,7 +123,7 @@ private:
     size_t _prev_chunk_start = 0;
     size_t _prev_chunk_size = 0;
     size_t _build_row_current = 0;
-    mutable Filter _self_build_match_flag;
+    mutable std::vector<uint8_t> _self_build_match_flag;
 
     // Probe states
     ChunkPtr _probe_chunk = nullptr;
@@ -168,7 +167,7 @@ private:
     const RowDescriptor& _left_row_desc;
     const RowDescriptor& _right_row_desc;
 
-    std::vector<SlotDescriptor*> _col_types;
+    Buffer<SlotDescriptor*> _col_types;
     size_t _probe_column_count = 0;
     size_t _build_column_count = 0;
 

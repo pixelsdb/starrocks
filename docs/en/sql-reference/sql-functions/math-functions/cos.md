@@ -4,7 +4,7 @@ displayed_sidebar: docs
 
 # cos
 
-
+## Description
 
 Computes the cosine of the argument.
 

@@ -4,7 +4,7 @@ displayed_sidebar: docs
 
 # asin
 
-
+## Description
 
 Computes the arc sine of the argument.
 

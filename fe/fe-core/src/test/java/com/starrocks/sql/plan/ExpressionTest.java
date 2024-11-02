@@ -781,12 +781,6 @@ public class ExpressionTest extends PlanTestBase {
                 "  |  <slot 8> : map_size(3: m)\n" +
                 "  |  <slot 9> : CAST(8: map_size AS BIGINT)");
 
-        sql = "select array_generate(0, `k`, 1) as a," +
-                " map_apply((k, v) -> (k, array_sum(array_map(arg -> arg * v, `a`))), `m` ) from test_reuse_lambda_expr;";
-        plan = getFragmentPlan(sql);
-        assertContains(plan, "  |  common expressions:\n" +
-                "  |  <slot 9> : array_generate(0, 1: k, 1)");
-
         sql = "select array_map(x -> array_map(x->x+100, x),[[1,23],[4,3,2]]);";
         plan = getFragmentPlan(sql);
         assertContains(plan, "  1:Project\n" +
@@ -837,22 +831,6 @@ public class ExpressionTest extends PlanTestBase {
                 "c4 IN ('1970-01-01', '1970-01-01', '1970-02-01')");
         testPlanContains("SELECT * FROM test_in_pred_norm WHERE c4 IN ('292278994-08-17', '1970-01-01', '1970-02-01') ",
                 "5: c4 IN (CAST('292278994-08-17' AS DATE), '1970-01-01', '1970-02-01')");
-
-        // common expression
-        testPlanContains("SELECT " +
-                        "c4 IN ('292278994-08-17', '1970-02-01') AND " +
-                        "c5 IN ('292278994-08-17', '1970-02-01') AND " +
-                        "c5 IN ('292278994-08-17', '1970-02-01')  " +
-                        " FROM test_in_pred_norm",
-                "<slot 7> : (5: c4 IN (CAST('292278994-08-17' AS DATE), '1970-02-01')) AND " +
-                        "(6: c5 IN (CAST('292278994-08-17' AS DATE), '1970-02-01'))");
-
-        String plan = getFragmentPlan("SELECT " +
-                "c4 IN ('292278994-08-17', '1970-02-01') AND c4 IN ('292278994-08-18', '1970-02-01') AND " +
-                "c5 IN ('292278994-08-17', '1970-02-01') AND c5 IN ('292278994-08-18', '1970-02-01') AND " +
-                "c5 IN ('292278994-08-17', '1970-02-01') AND c5 IN ('292278994-08-17', '1970-02-01')  " +
-                " FROM test_in_pred_norm");
-        Assert.assertTrue("plan is \n" + plan, plan.contains("<slot 7> "));
     }
 
     @Test

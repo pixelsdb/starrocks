@@ -26,11 +26,9 @@ import com.starrocks.catalog.Table;
 import com.starrocks.common.AlreadyExistsException;
 import com.starrocks.common.DdlException;
 import com.starrocks.common.MetaNotFoundException;
-import com.starrocks.connector.GetRemoteFilesParams;
 import com.starrocks.connector.MetaPreparationItem;
 import com.starrocks.connector.PartitionInfo;
 import com.starrocks.connector.RemoteFileInfo;
-import com.starrocks.connector.TableVersionRange;
 import com.starrocks.connector.delta.DeltaLakeMetadata;
 import com.starrocks.connector.hive.HiveMetadata;
 import com.starrocks.connector.hudi.HudiMetadata;
@@ -61,36 +59,27 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class UnifiedMetadataTest {
-    @Mocked
-    private HiveMetadata hiveMetadata;
-    @Mocked
-    private IcebergMetadata icebergMetadata;
-    @Mocked
-    private HudiMetadata hudiMetadata;
-    @Mocked
-    private DeltaLakeMetadata deltaLakeMetadata;
-    @Mocked
-    private KuduMetadata kuduMetadata;
+    @Mocked private HiveMetadata hiveMetadata;
+    @Mocked private IcebergMetadata icebergMetadata;
+    @Mocked private HudiMetadata hudiMetadata;
+    @Mocked private DeltaLakeMetadata deltaLakeMetadata;
+    @Mocked private KuduMetadata kuduMetadata;
     private final CreateTableStmt createTableStmt = new CreateTableStmt(false, true,
             new TableName("test_db", "test_tbl"), ImmutableList.of(), "hive",
             null, null, null, null, null, null);
 
     private UnifiedMetadata unifiedMetadata;
 
-    private GetRemoteFilesParams getRemoteFilesParams;
-
     @BeforeEach
     public void setUp() {
         this.unifiedMetadata = new UnifiedMetadata(ImmutableMap.of(
-                HIVE, hiveMetadata,
-                ICEBERG, icebergMetadata,
-                HUDI, hudiMetadata,
-                DELTALAKE, deltaLakeMetadata,
-                KUDU, kuduMetadata
+            HIVE, hiveMetadata,
+            ICEBERG, icebergMetadata,
+            HUDI, hudiMetadata,
+            DELTALAKE, deltaLakeMetadata,
+            KUDU, kuduMetadata
         )
         );
-        this.getRemoteFilesParams = GetRemoteFilesParams.newBuilder().setPartitionKeys(ImmutableList.of())
-                .setTableVersionRange(TableVersionRange.empty()).build();
     }
 
     @Test
@@ -101,33 +90,27 @@ public class UnifiedMetadataTest {
                 result = ImmutableList.of("test_db1", "test_db2");
                 times = 1;
             }
-
             {
                 hiveMetadata.listTableNames("test_db");
                 result = ImmutableList.of("test_tbl1", "test_tbl2");
             }
-
             {
                 hiveMetadata.createDb("test_db");
                 times = 1;
             }
-
             {
                 hiveMetadata.createDb("test_db", ImmutableMap.of("key", "value"));
                 times = 1;
             }
-
             {
                 hiveMetadata.dbExists("test_db");
                 result = true;
                 times = 1;
             }
-
             {
                 hiveMetadata.dropDb("test_db", false);
                 times = 1;
             }
-
             {
                 hiveMetadata.getCloudConfiguration();
                 result = new CloudConfiguration();
@@ -157,41 +140,34 @@ public class UnifiedMetadataTest {
                 result = hiveTable;
                 minTimes = 1;
             }
-
             {
-                hiveMetadata.listPartitionNames("test_db", "test_tbl", TableVersionRange.empty());
+                hiveMetadata.listPartitionNames("test_db", "test_tbl", -1);
                 result = ImmutableList.of("test_part1", "test_part2");
                 times = 1;
             }
-
             {
                 hiveMetadata.listPartitionNamesByValue("test_db", "test_tbl", ImmutableList.of());
                 result = ImmutableList.of("test_part1", "test_part2");
                 times = 1;
             }
-
             {
-                hiveMetadata.getRemoteFiles(hiveTable, getRemoteFilesParams);
+                hiveMetadata.getRemoteFileInfos(hiveTable, ImmutableList.of(), -1, null, null, -1);
                 result = ImmutableList.of();
                 times = 1;
             }
-
             {
                 hiveMetadata.getPartitions(hiveTable, ImmutableList.of());
                 result = ImmutableList.of();
                 times = 1;
             }
-
             {
                 hiveMetadata.refreshTable("test_db", hiveTable, ImmutableList.of(), false);
                 times = 1;
             }
-
             {
-                hiveMetadata.finishSink("test_db", "test_tbl", ImmutableList.of(), null);
+                hiveMetadata.finishSink("test_db", "test_tbl", ImmutableList.of());
                 times = 1;
             }
-
             {
                 hiveMetadata.createTable(createTableStmt);
                 result = true;
@@ -201,17 +177,17 @@ public class UnifiedMetadataTest {
 
         Table table = unifiedMetadata.getTable("test_db", "test_tbl");
         assertTrue(table instanceof HiveTable);
-        List<String> partitionNames = unifiedMetadata.listPartitionNames("test_db", "test_tbl", TableVersionRange.empty());
+        List<String> partitionNames = unifiedMetadata.listPartitionNames("test_db", "test_tbl", -1);
         assertEquals(ImmutableList.of("test_part1", "test_part2"), partitionNames);
         partitionNames = unifiedMetadata.listPartitionNamesByValue("test_db", "test_tbl", ImmutableList.of());
         assertEquals(ImmutableList.of("test_part1", "test_part2"), partitionNames);
-
-        List<RemoteFileInfo> remoteFileInfos = unifiedMetadata.getRemoteFiles(hiveTable, getRemoteFilesParams);
+        List<RemoteFileInfo> remoteFileInfos = unifiedMetadata.getRemoteFileInfos(
+                hiveTable, ImmutableList.of(), -1, null, null, -1);
         assertEquals(ImmutableList.of(), remoteFileInfos);
         List<PartitionInfo> partitionInfos = unifiedMetadata.getPartitions(hiveTable, ImmutableList.of());
         assertEquals(ImmutableList.of(), partitionInfos);
         unifiedMetadata.refreshTable("test_db", hiveTable, ImmutableList.of(), false);
-        unifiedMetadata.finishSink("test_db", "test_tbl", ImmutableList.of(), null);
+        unifiedMetadata.finishSink("test_db", "test_tbl", ImmutableList.of());
         createTableStmt.setEngineName("hive");
         assertTrue(unifiedMetadata.createTable(createTableStmt));
     }
@@ -226,71 +202,59 @@ public class UnifiedMetadataTest {
                 result = ImmutableMap.of(ICEBERG_TABLE_TYPE_NAME, ICEBERG_TABLE_TYPE_VALUE);
                 minTimes = 1;
             }
-
             {
                 hiveMetadata.getTable("test_db", "test_tbl");
                 result = hiveTable;
                 minTimes = 1;
             }
-
             {
                 icebergMetadata.getTable("test_db", "test_tbl");
                 result = icebergTable;
                 times = 1;
             }
-
             {
-                icebergMetadata.listPartitionNames("test_db", "test_tbl", TableVersionRange.empty());
+                icebergMetadata.listPartitionNames("test_db", "test_tbl", -1);
                 result = ImmutableList.of("test_part1", "test_part2");
                 times = 1;
             }
-
             {
                 icebergMetadata.listPartitionNamesByValue("test_db", "test_tbl", ImmutableList.of());
                 result = ImmutableList.of("test_part1", "test_part2");
                 times = 1;
             }
-
             {
-                icebergMetadata.getRemoteFiles(icebergTable, getRemoteFilesParams);
+                icebergMetadata.getRemoteFileInfos(icebergTable, ImmutableList.of(), -1, null, null, -1);
                 result = ImmutableList.of();
                 times = 1;
             }
-
             {
-                icebergMetadata.getSerializedMetaSpec("test_db", "test_tbl", -1, null, null);
+                icebergMetadata.getSerializedMetaSpec("test_db", "test_tbl", -1, null);
                 result = new IcebergMetaSpec(null, null, false);
                 times = 1;
             }
-
             {
                 icebergMetadata.getPartitions(icebergTable, ImmutableList.of());
                 result = ImmutableList.of();
                 times = 1;
             }
-
             {
                 icebergMetadata.refreshTable("test_db", icebergTable, ImmutableList.of(), false);
                 times = 1;
             }
-
             {
-                icebergMetadata.finishSink("test_db", "test_tbl", ImmutableList.of(), null);
+                icebergMetadata.finishSink("test_db", "test_tbl", ImmutableList.of());
                 times = 1;
             }
-
             {
                 icebergMetadata.createTable(createTableStmt);
                 result = true;
                 times = 1;
             }
-
             {
-                icebergMetadata.getPrunedPartitions(icebergTable, null, -1, TableVersionRange.empty());
+                icebergMetadata.getPrunedPartitions(icebergTable, null, -1);
                 result = ImmutableList.of();
                 times = 1;
             }
-
             {
                 icebergMetadata.prepareMetadata((MetaPreparationItem) any, null, null);
                 result = true;
@@ -300,22 +264,22 @@ public class UnifiedMetadataTest {
 
         Table table = unifiedMetadata.getTable("test_db", "test_tbl");
         assertTrue(table instanceof IcebergTable);
-        List<String> partitionNames = unifiedMetadata.listPartitionNames("test_db", "test_tbl", TableVersionRange.empty());
+        List<String> partitionNames = unifiedMetadata.listPartitionNames("test_db", "test_tbl", -1);
         assertEquals(ImmutableList.of("test_part1", "test_part2"), partitionNames);
         partitionNames = unifiedMetadata.listPartitionNamesByValue("test_db", "test_tbl", ImmutableList.of());
         assertEquals(ImmutableList.of("test_part1", "test_part2"), partitionNames);
-        List<RemoteFileInfo> remoteFileInfos = unifiedMetadata.getRemoteFiles(icebergTable, getRemoteFilesParams);
+        List<RemoteFileInfo> remoteFileInfos = unifiedMetadata.getRemoteFileInfos(icebergTable, ImmutableList.of(),
+                -1, null, null, -1);
         assertEquals(ImmutableList.of(), remoteFileInfos);
         List<PartitionInfo> partitionInfos = unifiedMetadata.getPartitions(icebergTable, ImmutableList.of());
         assertEquals(ImmutableList.of(), partitionInfos);
         unifiedMetadata.refreshTable("test_db", icebergTable, ImmutableList.of(), false);
-        unifiedMetadata.finishSink("test_db", "test_tbl", ImmutableList.of(), null);
+        unifiedMetadata.finishSink("test_db", "test_tbl", ImmutableList.of());
         createTableStmt.setEngineName("iceberg");
         assertTrue(unifiedMetadata.createTable(createTableStmt));
-        Assert.assertTrue(unifiedMetadata.getPrunedPartitions(table, null, -1, TableVersionRange.empty()).isEmpty());
-        Assert.assertTrue(unifiedMetadata.prepareMetadata(new MetaPreparationItem(icebergTable, null,
-                -1, TableVersionRange.empty()), null, null));
-        Assert.assertNotNull(unifiedMetadata.getSerializedMetaSpec("test_db", "test_tbl", -1, null, null));
+        Assert.assertTrue(unifiedMetadata.getPrunedPartitions(table, null, -1).isEmpty());
+        Assert.assertTrue(unifiedMetadata.prepareMetadata(new MetaPreparationItem(icebergTable, null, -1), null, null));
+        Assert.assertNotNull(unifiedMetadata.getSerializedMetaSpec("test_db", "test_tbl", -1, null));
     }
 
     @Test
@@ -328,47 +292,39 @@ public class UnifiedMetadataTest {
                 result = hudiTable;
                 minTimes = 1;
             }
-
             {
                 hudiMetadata.getTable("test_db", "test_tbl");
                 result = hudiTable;
                 times = 1;
             }
-
             {
-                hudiMetadata.listPartitionNames("test_db", "test_tbl", TableVersionRange.empty());
+                hudiMetadata.listPartitionNames("test_db", "test_tbl", -1);
                 result = ImmutableList.of("test_part1", "test_part2");
                 times = 1;
             }
-
             {
                 hudiMetadata.listPartitionNamesByValue("test_db", "test_tbl", ImmutableList.of());
                 result = ImmutableList.of("test_part1", "test_part2");
                 times = 1;
             }
-
             {
-                hudiMetadata.getRemoteFiles(hudiTable, getRemoteFilesParams);
+                hudiMetadata.getRemoteFileInfos(hudiTable, ImmutableList.of(), -1, null, null, -1);
                 result = ImmutableList.of();
                 times = 1;
             }
-
             {
                 hudiMetadata.getPartitions(hudiTable, ImmutableList.of());
                 result = ImmutableList.of();
                 times = 1;
             }
-
             {
                 hudiMetadata.refreshTable("test_db", hudiTable, ImmutableList.of(), false);
                 times = 1;
             }
-
             {
-                hudiMetadata.finishSink("test_db", "test_tbl", ImmutableList.of(), null);
+                hudiMetadata.finishSink("test_db", "test_tbl", ImmutableList.of());
                 times = 1;
             }
-
             {
                 hudiMetadata.createTable(createTableStmt);
                 result = true;
@@ -378,16 +334,17 @@ public class UnifiedMetadataTest {
 
         Table table = unifiedMetadata.getTable("test_db", "test_tbl");
         assertTrue(table instanceof HudiTable);
-        List<String> partitionNames = unifiedMetadata.listPartitionNames("test_db", "test_tbl", TableVersionRange.empty());
+        List<String> partitionNames = unifiedMetadata.listPartitionNames("test_db", "test_tbl", -1);
         assertEquals(ImmutableList.of("test_part1", "test_part2"), partitionNames);
         partitionNames = unifiedMetadata.listPartitionNamesByValue("test_db", "test_tbl", ImmutableList.of());
         assertEquals(ImmutableList.of("test_part1", "test_part2"), partitionNames);
-        List<RemoteFileInfo> remoteFileInfos = unifiedMetadata.getRemoteFiles(hudiTable, getRemoteFilesParams);
+        List<RemoteFileInfo> remoteFileInfos = unifiedMetadata.getRemoteFileInfos(
+                hudiTable, ImmutableList.of(), -1, null, null, -1);
         assertEquals(ImmutableList.of(), remoteFileInfos);
         List<PartitionInfo> partitionInfos = unifiedMetadata.getPartitions(hudiTable, ImmutableList.of());
         assertEquals(ImmutableList.of(), partitionInfos);
         unifiedMetadata.refreshTable("test_db", hudiTable, ImmutableList.of(), false);
-        unifiedMetadata.finishSink("test_db", "test_tbl", ImmutableList.of(), null);
+        unifiedMetadata.finishSink("test_db", "test_tbl", ImmutableList.of());
         createTableStmt.setEngineName("hudi");
         assertTrue(unifiedMetadata.createTable(createTableStmt));
     }
@@ -402,53 +359,44 @@ public class UnifiedMetadataTest {
                 result = ImmutableMap.of(SPARK_TABLE_PROVIDER_KEY, DELTA_LAKE_PROVIDER);
                 minTimes = 1;
             }
-
             {
                 hiveMetadata.getTable("test_db", "test_tbl");
                 result = hiveTable;
                 minTimes = 1;
             }
-
             {
                 deltaLakeMetadata.getTable("test_db", "test_tbl");
                 result = deltaLakeTable;
                 times = 1;
             }
-
             {
-                deltaLakeMetadata.listPartitionNames("test_db", "test_tbl", TableVersionRange.empty());
+                deltaLakeMetadata.listPartitionNames("test_db", "test_tbl", -1);
                 result = ImmutableList.of("test_part1", "test_part2");
                 times = 1;
             }
-
             {
                 deltaLakeMetadata.listPartitionNamesByValue("test_db", "test_tbl", ImmutableList.of());
                 result = ImmutableList.of("test_part1", "test_part2");
                 times = 1;
             }
-
             {
-                deltaLakeMetadata.getRemoteFiles(deltaLakeTable, getRemoteFilesParams);
+                deltaLakeMetadata.getRemoteFileInfos(deltaLakeTable, ImmutableList.of(), -1, null, null, -1);
                 result = ImmutableList.of();
                 times = 1;
             }
-
             {
                 deltaLakeMetadata.getPartitions(deltaLakeTable, ImmutableList.of());
                 result = ImmutableList.of();
                 times = 1;
             }
-
             {
                 deltaLakeMetadata.refreshTable("test_db", deltaLakeTable, ImmutableList.of(), false);
                 times = 1;
             }
-
             {
-                deltaLakeMetadata.finishSink("test_db", "test_tbl", ImmutableList.of(), null);
+                deltaLakeMetadata.finishSink("test_db", "test_tbl", ImmutableList.of());
                 times = 1;
             }
-
             {
                 deltaLakeMetadata.createTable(createTableStmt);
                 result = true;
@@ -458,16 +406,17 @@ public class UnifiedMetadataTest {
 
         Table table = unifiedMetadata.getTable("test_db", "test_tbl");
         assertTrue(table instanceof DeltaLakeTable);
-        List<String> partitionNames = unifiedMetadata.listPartitionNames("test_db", "test_tbl", TableVersionRange.empty());
+        List<String> partitionNames = unifiedMetadata.listPartitionNames("test_db", "test_tbl", -1);
         assertEquals(ImmutableList.of("test_part1", "test_part2"), partitionNames);
         partitionNames = unifiedMetadata.listPartitionNamesByValue("test_db", "test_tbl", ImmutableList.of());
         assertEquals(ImmutableList.of("test_part1", "test_part2"), partitionNames);
-        List<RemoteFileInfo> remoteFileInfos = unifiedMetadata.getRemoteFiles(deltaLakeTable, getRemoteFilesParams);
+        List<RemoteFileInfo> remoteFileInfos = unifiedMetadata.getRemoteFileInfos(deltaLakeTable, ImmutableList.of(),
+                -1, null, null, -1);
         assertEquals(ImmutableList.of(), remoteFileInfos);
         List<PartitionInfo> partitionInfos = unifiedMetadata.getPartitions(deltaLakeTable, ImmutableList.of());
         assertEquals(ImmutableList.of(), partitionInfos);
         unifiedMetadata.refreshTable("test_db", deltaLakeTable, ImmutableList.of(), false);
-        unifiedMetadata.finishSink("test_db", "test_tbl", ImmutableList.of(), null);
+        unifiedMetadata.finishSink("test_db", "test_tbl", ImmutableList.of());
         createTableStmt.setEngineName("deltalake");
         assertTrue(unifiedMetadata.createTable(createTableStmt));
     }
@@ -482,31 +431,26 @@ public class UnifiedMetadataTest {
                 result = kuduTable;
                 minTimes = 1;
             }
-
             {
                 kuduMetadata.getTable("test_db", "test_tbl");
                 result = kuduTable;
                 minTimes = 1;
             }
-
             {
-                kuduMetadata.listPartitionNames("test_db", "test_tbl", TableVersionRange.empty());
+                kuduMetadata.listPartitionNames("test_db", "test_tbl", -1);
                 result = ImmutableList.of("test_part1", "test_part2");
                 times = 1;
             }
-
             {
                 kuduMetadata.listPartitionNamesByValue("test_db", "test_tbl", ImmutableList.of());
                 result = ImmutableList.of("test_part1", "test_part2");
                 times = 1;
             }
-
             {
-                kuduMetadata.getRemoteFiles(kuduTable, getRemoteFilesParams);
+                kuduMetadata.getRemoteFileInfos(kuduTable, ImmutableList.of(), -1, null, null, -1);
                 result = ImmutableList.of();
                 times = 1;
             }
-
             {
                 kuduMetadata.getPartitions(kuduTable, ImmutableList.of());
                 result = ImmutableList.of();
@@ -516,11 +460,12 @@ public class UnifiedMetadataTest {
 
         Table table = unifiedMetadata.getTable("test_db", "test_tbl");
         assertTrue(table instanceof KuduTable);
-        List<String> partitionNames = unifiedMetadata.listPartitionNames("test_db", "test_tbl", TableVersionRange.empty());
+        List<String> partitionNames = unifiedMetadata.listPartitionNames("test_db", "test_tbl", -1);
         assertEquals(ImmutableList.of("test_part1", "test_part2"), partitionNames);
         partitionNames = unifiedMetadata.listPartitionNamesByValue("test_db", "test_tbl", ImmutableList.of());
         assertEquals(ImmutableList.of("test_part1", "test_part2"), partitionNames);
-        List<RemoteFileInfo> remoteFileInfos = unifiedMetadata.getRemoteFiles(kuduTable, getRemoteFilesParams);
+        List<RemoteFileInfo> remoteFileInfos = unifiedMetadata.getRemoteFileInfos(kuduTable, ImmutableList.of(),
+                -1, null, null, -1);
         assertEquals(ImmutableList.of(), remoteFileInfos);
         List<PartitionInfo> partitionInfos = unifiedMetadata.getPartitions(kuduTable, ImmutableList.of());
         assertEquals(ImmutableList.of(), partitionInfos);

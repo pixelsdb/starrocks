@@ -73,7 +73,6 @@ import com.starrocks.sql.ast.ExecuteStmt;
 import com.starrocks.sql.ast.PrepareStmt;
 import com.starrocks.sql.ast.QueryStatement;
 import com.starrocks.sql.ast.Relation;
-import com.starrocks.sql.ast.SetStmt;
 import com.starrocks.sql.ast.StatementBase;
 import com.starrocks.sql.ast.UserIdentity;
 import com.starrocks.sql.common.AuditEncryptionChecker;
@@ -228,9 +227,7 @@ public class ConnectProcessor {
                 MetricRepo.HISTO_QUERY_LATENCY.update(elapseMs);
                 ResourceGroupMetricMgr.updateQueryLatency(ctx, elapseMs);
                 if (elapseMs > Config.qe_slow_log_ms || ctx.getSessionVariable().isEnableSQLDigest()) {
-                    if (elapseMs > Config.qe_slow_log_ms) {
-                        MetricRepo.COUNTER_SLOW_QUERY.increase(1L);
-                    }
+                    MetricRepo.COUNTER_SLOW_QUERY.increase(1L);
                     ctx.getAuditEventBuilder().setDigest(computeStatementDigest(parsedStmt));
                 }
             }
@@ -304,7 +301,6 @@ public class ConnectProcessor {
 
         // execute this query.
         StatementBase parsedStmt = null;
-        boolean onlySetStmt = true;
         try {
             ctx.setQueryId(UUIDUtil.genUUID());
             if (Config.enable_print_sql) {
@@ -334,9 +330,6 @@ public class ConnectProcessor {
                     if (!(((PrepareStmt) parsedStmt).getInnerStmt() instanceof QueryStatement)) {
                         ErrorReport.reportAnalysisException(ErrorCode.ERR_UNSUPPORTED_PS, ErrorType.UNSUPPORTED);
                     }
-                }
-                if (!(parsedStmt instanceof SetStmt)) {
-                    onlySetStmt = false;
                 }
                 parsedStmt.setOrigStmt(new OriginStatement(originStmt, i));
                 Tracers.init(ctx, parsedStmt.getTraceMode(), parsedStmt.getTraceModule());
@@ -388,10 +381,6 @@ public class ConnectProcessor {
             ctx.getState().setErrType(QueryState.ErrType.INTERNAL_ERR);
         } finally {
             Tracers.close();
-            if (!onlySetStmt) {
-                // custom_query_id session is temporary, should be cleared after query finished
-                ctx.getSessionVariable().setCustomQueryId("");
-            }
         }
 
         // audit after exec
@@ -421,7 +410,7 @@ public class ConnectProcessor {
             return;
         }
         Locker locker = new Locker();
-        locker.lockDatabase(db.getId(), LockType.READ);
+        locker.lockDatabase(db, LockType.READ);
         try {
             // we should get table through metadata manager
             Table table = ctx.getGlobalStateMgr().getMetadataMgr().getTable(
@@ -445,7 +434,7 @@ public class ConnectProcessor {
         } catch (StarRocksConnectorException e) {
             LOG.error("errors happened when getting table {}", tableName, e);
         } finally {
-            locker.unLockDatabase(db.getId(), LockType.READ);
+            locker.unLockDatabase(db, LockType.READ);
         }
         ctx.getState().setEof();
     }
@@ -851,7 +840,6 @@ public class ConnectProcessor {
         }
         result.setPacket(getResultPacket());
         result.setState(ctx.getState().getStateType().toString());
-        result.setErrorMsg(ctx.getState().getErrorMessage());
         if (executor != null) {
             if (executor.getProxyResultSet() != null) {  // show statement
                 result.setResultSet(executor.getProxyResultSet().tothrift());

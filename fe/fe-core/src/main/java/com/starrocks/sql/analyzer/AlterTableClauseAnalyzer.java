@@ -60,7 +60,6 @@ import com.starrocks.sql.ast.AddPartitionClause;
 import com.starrocks.sql.ast.AddRollupClause;
 import com.starrocks.sql.ast.AlterClause;
 import com.starrocks.sql.ast.AlterMaterializedViewStatusClause;
-import com.starrocks.sql.ast.AlterTableOperationClause;
 import com.starrocks.sql.ast.AstVisitor;
 import com.starrocks.sql.ast.AsyncRefreshSchemeDesc;
 import com.starrocks.sql.ast.ColumnDef;
@@ -95,20 +94,12 @@ import com.starrocks.sql.ast.ReorderColumnsClause;
 import com.starrocks.sql.ast.ReplacePartitionClause;
 import com.starrocks.sql.ast.RollupRenameClause;
 import com.starrocks.sql.ast.SingleItemListPartitionDesc;
-import com.starrocks.sql.ast.SinglePartitionDesc;
 import com.starrocks.sql.ast.SingleRangePartitionDesc;
 import com.starrocks.sql.ast.StructFieldDesc;
 import com.starrocks.sql.ast.TableRenameClause;
 import com.starrocks.sql.common.MetaUtils;
-import com.starrocks.sql.optimizer.base.ColumnRefFactory;
-import com.starrocks.sql.optimizer.operator.scalar.ConstantOperator;
-import com.starrocks.sql.optimizer.operator.scalar.ScalarOperator;
-import com.starrocks.sql.optimizer.transformer.ExpressionMapping;
-import com.starrocks.sql.optimizer.transformer.SqlToScalarOperatorTranslator;
-import org.apache.commons.collections4.CollectionUtils;
 
 import java.time.format.DateTimeParseException;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -259,14 +250,14 @@ public class AlterTableClauseAnalyzer implements AstVisitor<Void, ConnectContext
             }
             if (table instanceof OlapTable) {
                 OlapTable olapTable = (OlapTable) table;
-                boolean hasNewIndex = false;
+                boolean hasGIN = false;
                 for (Index index : olapTable.getIndexes()) {
-                    if (IndexType.isCompatibleIndex(index.getIndexType())) {
-                        hasNewIndex = true;
+                    if (index.getIndexType() == IndexDef.IndexType.GIN) {
+                        hasGIN = true;
                         break;
                     }
                 }
-                if (properties.get(PropertyAnalyzer.PROPERTIES_REPLICATED_STORAGE).equalsIgnoreCase("true") && hasNewIndex) {
+                if (properties.get(PropertyAnalyzer.PROPERTIES_REPLICATED_STORAGE).equalsIgnoreCase("true") && hasGIN) {
                     ErrorReport.reportSemanticException(ErrorCode.ERR_GIN_REPLICATED_STORAGE_NOT_SUPPORTED);
                 }
             }
@@ -274,19 +265,6 @@ public class AlterTableClauseAnalyzer implements AstVisitor<Void, ConnectContext
             PropertyAnalyzer.analyzeBucketSize(properties);
         } else if (properties.containsKey(PropertyAnalyzer.PROPERTIES_MUTABLE_BUCKET_NUM)) {
             PropertyAnalyzer.analyzeMutableBucketNum(properties);
-        } else if (properties.containsKey(PropertyAnalyzer.PROPERTIES_ENABLE_LOAD_PROFILE)) {
-            PropertyAnalyzer.analyzeEnableLoadProfile(properties);
-        } else if (properties.containsKey(PropertyAnalyzer.PROPERTIES_BASE_COMPACTION_FORBIDDEN_TIME_RANGES)) {
-            if (table instanceof OlapTable) {
-                OlapTable olapTable = (OlapTable) table;
-                if (olapTable.getKeysType() == KeysType.PRIMARY_KEYS
-                        || olapTable.isCloudNativeTableOrMaterializedView()) {
-                    ErrorReport.reportSemanticException(ErrorCode.ERR_COMMON_ERROR,
-                            "Property " + PropertyAnalyzer.PROPERTIES_BASE_COMPACTION_FORBIDDEN_TIME_RANGES +
-                                    " not support primary keys table or cloud native table");
-                }
-            }
-            PropertyAnalyzer.analyzeBaseCompactionForbiddenTimeRanges(properties);
         } else if (properties.containsKey(PropertyAnalyzer.PROPERTIES_BINLOG_ENABLE) ||
                 properties.containsKey(PropertyAnalyzer.PROPERTIES_BINLOG_TTL) ||
                 properties.containsKey(PropertyAnalyzer.PROPERTIES_BINLOG_MAX_SIZE)) {
@@ -929,7 +907,6 @@ public class AlterTableClauseAnalyzer implements AstVisitor<Void, ConnectContext
             throw new SemanticException("Unknown properties: " + clause.getProperties());
         }
 
-
         if (table instanceof OlapTable) {
             List<String> partitionNames = clause.getPartitionNames();
             for (String partitionName : partitionNames) {
@@ -1191,77 +1168,13 @@ public class AlterTableClauseAnalyzer implements AstVisitor<Void, ConnectContext
 
     @Override
     public Void visitDropPartitionClause(DropPartitionClause clause, ConnectContext context) {
-        if (clause.getMultiRangePartitionDesc() != null) {
-            MultiRangePartitionDesc multiRangePartitionDesc = clause.getMultiRangePartitionDesc();
-            PartitionDescAnalyzer.analyze(multiRangePartitionDesc);
-
-            if (!(table instanceof OlapTable)) {
-                throw new SemanticException("Can't add multi-range partition to table type is not olap");
-            }
-            OlapTable olapTable = (OlapTable) table;
-            PartitionDescAnalyzer.analyzePartitionDescWithExistsTable(multiRangePartitionDesc, olapTable);
-
-            PartitionInfo partitionInfo = olapTable.getPartitionInfo();
-            List<SingleRangePartitionDesc> singleRangePartitionDescs =
-                    convertMultiRangePartitionDescToSingleRangePartitionDescs(
-                            partitionInfo.isAutomaticPartition(),
-                            olapTable.getTableProperty().getProperties(),
-                            clause.isTempPartition(),
-                            multiRangePartitionDesc,
-                            partitionInfo.getPartitionColumns(olapTable.getIdToColumn()),
-                            null);
-
-            clause.setResolvedPartitionNames(singleRangePartitionDescs.stream()
-                    .map(SinglePartitionDesc::getPartitionName).collect(Collectors.toList()));
-        } else if (clause.getPartitionName() != null) {
-            clause.setResolvedPartitionNames(Lists.newArrayList(clause.getPartitionName()));
-        } else if (clause.getPartitionNames() != null) {
-            clause.setResolvedPartitionNames(clause.getPartitionNames());
-        }
-
+        clause.setResolvedPartitionNames(Lists.newArrayList(clause.getPartitionName()));
         if (table instanceof OlapTable) {
             if (clause.getPartitionName() != null && clause.getPartitionName().startsWith(
                     ExpressionRangePartitionInfo.SHADOW_PARTITION_PREFIX)) {
                 throw new SemanticException("Deletion of shadow partitions is not allowed");
             }
-            List<String> partitionNames = clause.getPartitionNames();
-            if (CollectionUtils.isNotEmpty(partitionNames)) {
-                boolean hasShadowPartition = partitionNames.stream().anyMatch(partitionName ->
-                        partitionName.startsWith(ExpressionRangePartitionInfo.SHADOW_PARTITION_PREFIX));
-                if (hasShadowPartition) {
-                    throw new SemanticException("Deletion of shadow partitions is not allowed");
-                }
-            }
         }
-
-        return null;
-    }
-
-    @Override
-    public Void visitAlterTableOperationClause(AlterTableOperationClause clause, ConnectContext context) {
-        String tableOperationName = clause.getTableOperationName();
-        if (tableOperationName == null) {
-            throw new SemanticException("Table operation name should be null");
-        }
-
-        List<ConstantOperator> args = new ArrayList<>();
-        for (Expr expr : clause.getExprs()) {
-            ScalarOperator result;
-            try {
-                Scope scope = new Scope(RelationId.anonymous(), new RelationFields());
-                ExpressionAnalyzer.analyzeExpression(expr, new AnalyzeState(), scope, context);
-                ExpressionMapping expressionMapping = new ExpressionMapping(scope);
-                result = SqlToScalarOperatorTranslator.translate(expr, expressionMapping, new ColumnRefFactory());
-                if (result instanceof ConstantOperator) {
-                    args.add((ConstantOperator) result);
-                } else {
-                    throw new SemanticException("invalid arg " + expr);
-                }
-            } catch (Exception e) {
-                throw new SemanticException("Failed to resolve table operation args %s. msg: %s", expr, e.getMessage());
-            }
-        }
-        clause.setArgs(args);
         return null;
     }
 }

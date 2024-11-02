@@ -36,7 +36,6 @@ package com.starrocks.system;
 
 import com.google.gson.annotations.SerializedName;
 import com.starrocks.common.io.Writable;
-import com.starrocks.thrift.TStatusCode;
 
 import java.io.DataInput;
 import java.io.DataOutput;
@@ -66,10 +65,6 @@ public class BackendHbResponse extends HeartbeatResponse implements Writable {
     private long memLimitBytes;
     @SerializedName(value = "rebootTime")
     private long rebootTime = -1L;
-
-    @SerializedName(value = "statusCode")
-    private TStatusCode statusCode = TStatusCode.OK;
-
     private boolean isSetStoragePath = false;
 
     public BackendHbResponse() {
@@ -98,14 +93,11 @@ public class BackendHbResponse extends HeartbeatResponse implements Writable {
         this.memLimitBytes = memLimitBytes;
     }
 
-    public BackendHbResponse(long beId, TStatusCode statusCode, String errMsg) {
+    public BackendHbResponse(long beId, String errMsg) {
         super(HeartbeatResponse.Type.BACKEND);
         this.status = HbStatus.BAD;
         this.beId = beId;
-        this.statusCode = statusCode;
         this.msg = errMsg;
-        // still record the current timestamp as the heartbeat time
-        this.hbTime = System.currentTimeMillis();
     }
 
     public long getRebootTime() {
@@ -150,14 +142,6 @@ public class BackendHbResponse extends HeartbeatResponse implements Writable {
 
     public boolean isSetStoragePath() {
         return isSetStoragePath;
-    }
-
-    public TStatusCode getStatusCode() {
-        return statusCode;
-    }
-
-    public void setStatusCode(TStatusCode statusCode) {
-        this.statusCode = statusCode;
     }
 
     public static BackendHbResponse read(DataInput in) throws IOException {

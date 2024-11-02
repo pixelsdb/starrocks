@@ -215,11 +215,6 @@ message TxnLogPB {
     optional OpSchemaChange op_schema_change = 5;
     optional OpAlterMetadata op_alter_metadata = 6;
     optional OpReplication op_replication = 7;
-    optional int64 partition_id = 8;
-}
-
-message CombinedTxnLogPB {
-    repeated TxnLogPB txn_logs = 1;    
 }
 
 message TabletMetadataLockPB {}
@@ -232,4 +227,3 @@ message TxnInfoPB {
     optional TxnTypePB txn_type = 4;
     optional bool force_publish = 5; // only used for compaction
 };
-

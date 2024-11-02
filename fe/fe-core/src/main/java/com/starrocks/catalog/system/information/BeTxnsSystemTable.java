@@ -24,11 +24,9 @@ import static com.starrocks.catalog.system.SystemTable.NAME_CHAR_LEN;
 import static com.starrocks.catalog.system.SystemTable.builder;
 
 public class BeTxnsSystemTable {
-    private static final String NAME = "be_txns";
-
     public static SystemTable create() {
         return new SystemTable(SystemId.BE_TXNS_ID,
-                NAME,
+                "be_txns",
                 Table.TableType.SCHEMA,
                 builder()
                         .column("BE_ID", ScalarType.createType(PrimitiveType.BIGINT))

@@ -854,7 +854,7 @@ public class TabletSchedCtx implements Comparable<TabletSchedCtx> {
         }
         Locker locker = new Locker();
         try {
-            locker.lockDatabase(db.getId(), LockType.WRITE);
+            locker.lockDatabase(db, LockType.WRITE);
             if (tabletHealthStatus == TabletHealthStatus.REPLICA_MISSING
                     || tabletHealthStatus == TabletHealthStatus.REPLICA_RELOCATING
                     || tabletHealthStatus == TabletHealthStatus.LOCATION_MISMATCH
@@ -909,7 +909,7 @@ public class TabletSchedCtx implements Comparable<TabletSchedCtx> {
                 }
             }
         } finally {
-            locker.unLockDatabase(db.getId(), LockType.WRITE);
+            locker.unLockDatabase(db, LockType.WRITE);
         }
 
         this.state = State.RUNNING;
@@ -929,7 +929,7 @@ public class TabletSchedCtx implements Comparable<TabletSchedCtx> {
         }
         Locker locker = new Locker();
         try {
-            locker.lockDatabase(db.getId(), LockType.WRITE);
+            locker.lockDatabase(db, LockType.WRITE);
             OlapTable olapTable = (OlapTable) globalStateMgr.getLocalMetastore().getTableIncludeRecycleBin(
                     globalStateMgr.getLocalMetastore().getDbIncludeRecycleBin(dbId),
                     tblId);
@@ -983,7 +983,7 @@ public class TabletSchedCtx implements Comparable<TabletSchedCtx> {
             state = State.RUNNING;
             return task;
         } finally {
-            locker.unLockDatabase(db.getId(), LockType.WRITE);
+            locker.unLockDatabase(db, LockType.WRITE);
         }
     }
 
@@ -1041,7 +1041,7 @@ public class TabletSchedCtx implements Comparable<TabletSchedCtx> {
         }
         Locker locker = new Locker();
         try {
-            locker.lockDatabase(db.getId(), LockType.WRITE);
+            locker.lockDatabase(db, LockType.WRITE);
             OlapTable olapTable = (OlapTable) globalStateMgr.getLocalMetastore().getTableIncludeRecycleBin(db, tblId);
             if (olapTable == null) {
                 throw new SchedException(Status.UNRECOVERABLE, "tbl does not exist");
@@ -1093,7 +1093,7 @@ public class TabletSchedCtx implements Comparable<TabletSchedCtx> {
             }
             throw e;
         } finally {
-            locker.unLockDatabase(db.getId(), LockType.WRITE);
+            locker.unLockDatabase(db, LockType.WRITE);
         }
 
         if (request.isSetCopy_size()) {
@@ -1287,15 +1287,15 @@ public class TabletSchedCtx implements Comparable<TabletSchedCtx> {
             return true;
         }
 
-        Database db = GlobalStateMgr.getCurrentState().getLocalMetastore().getDb(dbId);
+        Database db = GlobalStateMgr.getCurrentState().getDb(dbId);
         if (db == null) {
             return true;
         }
 
         Locker locker = new Locker();
         try {
-            locker.lockDatabase(db.getId(), LockType.READ);
-            Table table = GlobalStateMgr.getCurrentState().getLocalMetastore().getTable(db.getId(), tblId);
+            locker.lockDatabase(db, LockType.READ);
+            Table table = db.getTable(tblId);
             if (table == null) {
                 return true;
             } else {
@@ -1313,7 +1313,7 @@ public class TabletSchedCtx implements Comparable<TabletSchedCtx> {
                 }
             }
         } finally {
-            locker.unLockDatabase(db.getId(), LockType.READ);
+            locker.unLockDatabase(db, LockType.READ);
         }
     }
 

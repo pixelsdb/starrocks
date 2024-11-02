@@ -26,13 +26,11 @@ namespace starrocks::lake {
 class StarletLocationProvider : public LocationProvider {
 public:
     StarletLocationProvider() = default;
-    ~StarletLocationProvider() override = default;
+    ~StarletLocationProvider() = default;
 
     DISALLOW_COPY_AND_MOVE(StarletLocationProvider);
 
     std::string root_location(int64_t tablet_id) const override;
-
-    StatusOr<std::string> real_location(const std::string& virtual_path) const override;
 };
 
 } // namespace starrocks::lake

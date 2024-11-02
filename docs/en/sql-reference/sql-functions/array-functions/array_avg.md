@@ -4,7 +4,7 @@ displayed_sidebar: docs
 
 # array_avg
 
-
+## Description
 
 Calculates the average value of all data in an ARRAY and return this result.
 

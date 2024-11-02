@@ -29,8 +29,11 @@ namespace starrocks {
 
 template <typename T>
 StatusOr<ColumnPtr> FixedLengthColumnBase<T>::upgrade_if_overflow() {
-    RETURN_IF_ERROR(capacity_limit_reached());
-    return nullptr;
+    if (capacity_limit_reached()) {
+        return Status::InternalError("Size of FixedLengthColumn exceed the limit");
+    } else {
+        return nullptr;
+    }
 }
 
 template <typename T>
@@ -62,7 +65,7 @@ void FixedLengthColumnBase<T>::append_value_multiple_times(const Column& src, ui
 
 //TODO(fzh): optimize copy using SIMD
 template <typename T>
-ColumnPtr FixedLengthColumnBase<T>::replicate(const Buffer<uint32_t>& offsets) {
+ColumnPtr FixedLengthColumnBase<T>::replicate(const std::vector<uint32_t>& offsets) {
     auto dest = this->clone_empty();
     auto& dest_data = down_cast<FixedLengthColumnBase<T>&>(*dest);
     dest_data._data.resize(offsets.back());
@@ -86,7 +89,7 @@ void FixedLengthColumnBase<T>::fill_default(const Filter& filter) {
 }
 
 template <typename T>
-Status FixedLengthColumnBase<T>::fill_range(const std::vector<T>& ids, const Filter& filter) {
+Status FixedLengthColumnBase<T>::fill_range(const Buffer<T>& ids, const std::vector<uint8_t>& filter) {
     DCHECK_EQ(filter.size(), _data.size());
     size_t j = 0;
     for (size_t i = 0; i < _data.size(); ++i) {

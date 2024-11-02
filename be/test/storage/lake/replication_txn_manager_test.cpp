@@ -58,13 +58,13 @@ public:
         std::vector<starrocks::StorePath> paths;
         CHECK_OK(starrocks::parse_conf_store_paths(starrocks::config::storage_root_path, &paths));
         _test_dir = paths[0].path + "/lake";
-        _location_provider = std::make_shared<lake::FixedLocationProvider>(_test_dir);
+        _location_provider = std::make_unique<lake::FixedLocationProvider>(_test_dir);
         CHECK_OK(FileSystem::Default()->create_dir_recursive(_location_provider->metadata_root_location(1)));
         CHECK_OK(FileSystem::Default()->create_dir_recursive(_location_provider->txn_log_root_location(1)));
         CHECK_OK(FileSystem::Default()->create_dir_recursive(_location_provider->segment_root_location(1)));
         _mem_tracker = std::make_unique<MemTracker>(1024 * 1024);
-        _update_manager = std::make_unique<lake::UpdateManager>(_location_provider, _mem_tracker.get());
-        _tablet_manager = std::make_unique<lake::TabletManager>(_location_provider, _update_manager.get(), 16384);
+        _update_manager = std::make_unique<lake::UpdateManager>(_location_provider.get(), _mem_tracker.get());
+        _tablet_manager = std::make_unique<lake::TabletManager>(_location_provider.get(), _update_manager.get(), 16384);
         _replication_txn_manager = std::make_unique<lake::ReplicationTxnManager>(_tablet_manager.get());
 
         ASSERT_TRUE(_tablet_manager->create_tablet(get_create_tablet_req(_tablet_id, _version, _schema_hash)).ok());
@@ -209,7 +209,7 @@ public:
 protected:
     std::unique_ptr<starrocks::lake::TabletManager> _tablet_manager;
     std::string _test_dir;
-    std::shared_ptr<lake::LocationProvider> _location_provider;
+    std::unique_ptr<lake::LocationProvider> _location_provider;
     std::unique_ptr<MemTracker> _mem_tracker;
     std::unique_ptr<lake::UpdateManager> _update_manager;
     std::unique_ptr<lake::ReplicationTxnManager> _replication_txn_manager;
@@ -337,13 +337,16 @@ TEST_P(LakeReplicationTxnManagerTest, test_publish_failed) {
     auto txn_info = TxnInfoPB();
     txn_info.set_txn_id(_transaction_id);
     txn_info.set_combined_txn_log(false);
-    txn_info.set_txn_type(TXN_REPLICATION);
     txn_info.set_commit_time(0);
-    auto txn_info_span = std::span<const TxnInfoPB>(&txn_info, 1);
-    auto status_or = lake::publish_version(_tablet_manager.get(), _tablet_id, _version, _src_version, txn_info_span);
+    txn_info.set_force_publish(false);
+    const int64_t txn_ids[] = {_transaction_id};
+    auto txn_id_span = std::span<const int64_t>(txn_ids, 1);
+    auto status_or = lake::publish_version(_tablet_manager.get(), _tablet_id, _version, _src_version, {txn_info});
     EXPECT_TRUE(!status_or.ok()) << status_or.status();
 
-    lake::abort_txn(_tablet_manager.get(), _tablet_id, txn_info_span);
+    const int32_t txn_types[] = {TxnTypePB::TXN_REPLICATION};
+    auto txn_type_span = std::span<const int32_t>(txn_types, 1);
+    lake::abort_txn(_tablet_manager.get(), _tablet_id, txn_id_span, txn_type_span);
 }
 
 TEST_P(LakeReplicationTxnManagerTest, test_run_normal) {
@@ -391,8 +394,8 @@ TEST_P(LakeReplicationTxnManagerTest, test_run_normal) {
     txn_info.set_txn_id(_transaction_id);
     txn_info.set_combined_txn_log(false);
     txn_info.set_commit_time(0);
-    auto txn_info_span = std::span<const TxnInfoPB>(&txn_info, 1);
-    auto status_or = lake::publish_version(_tablet_manager.get(), _tablet_id, _version, _src_version, txn_info_span);
+    txn_info.set_force_publish(false);
+    auto status_or = lake::publish_version(_tablet_manager.get(), _tablet_id, _version, _src_version, {txn_info});
     EXPECT_TRUE(status_or.ok()) << status_or.status();
 
     EXPECT_EQ(_src_version, status_or.value()->version());
@@ -457,8 +460,8 @@ TEST_P(LakeReplicationTxnManagerTest, test_run_normal_encrypted) {
     txn_info.set_txn_id(_transaction_id);
     txn_info.set_combined_txn_log(false);
     txn_info.set_commit_time(0);
-    auto txn_info_span = std::span<const TxnInfoPB>(&txn_info, 1);
-    auto status_or = lake::publish_version(_tablet_manager.get(), _tablet_id, _version, _src_version, txn_info_span);
+    txn_info.set_force_publish(false);
+    auto status_or = lake::publish_version(_tablet_manager.get(), _tablet_id, _version, _src_version, {txn_info});
     EXPECT_TRUE(status_or.ok()) << status_or.status();
 
     EXPECT_EQ(_src_version, status_or.value()->version());

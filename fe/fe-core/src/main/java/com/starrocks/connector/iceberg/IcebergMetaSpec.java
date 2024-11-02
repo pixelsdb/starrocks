@@ -20,18 +20,15 @@ import com.starrocks.connector.SerializedMetaSpec;
 import java.util.List;
 
 public class IcebergMetaSpec implements SerializedMetaSpec {
-    public static final IcebergMetaSpec EMPTY = new IcebergMetaSpec(null, null, false);
-
     private final String serializedTable;
     private final List<RemoteMetaSplit> splits;
-    private boolean loadColumnStats;
+    private final boolean loadColumnStats;
 
     public IcebergMetaSpec(String serializedTable, List<RemoteMetaSplit> splits, boolean loadColumnStats) {
         this.serializedTable = serializedTable;
         this.splits = splits;
         this.loadColumnStats = loadColumnStats;
     }
-
 
     @Override
     public String getTable() {
@@ -47,7 +44,4 @@ public class IcebergMetaSpec implements SerializedMetaSpec {
         return loadColumnStats;
     }
 
-    public void setLoadColumnStats(boolean loadColumnStats) {
-        this.loadColumnStats = loadColumnStats;
-    }
 }

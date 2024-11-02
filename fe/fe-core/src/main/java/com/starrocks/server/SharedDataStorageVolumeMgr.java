@@ -330,7 +330,7 @@ public class SharedDataStorageVolumeMgr extends StorageVolumeMgr {
         for (Long dbId : dbIds) {
             Database db = GlobalStateMgr.getCurrentState().getLocalMetastore().getDbIncludeRecycleBin(dbId);
             Locker locker = new Locker();
-            locker.lockDatabase(db.getId(), LockType.READ);
+            locker.lockDatabase(db, LockType.READ);
             if (dbToStorageVolume.containsKey(dbId)) {
                 continue;
             }
@@ -344,7 +344,7 @@ public class SharedDataStorageVolumeMgr extends StorageVolumeMgr {
                     }
                 }
             } finally {
-                locker.unLockDatabase(db.getId(), LockType.READ);
+                locker.unLockDatabase(db, LockType.READ);
             }
         }
         bindings.add(dbBindings);

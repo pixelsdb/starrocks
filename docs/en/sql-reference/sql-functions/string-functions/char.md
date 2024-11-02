@@ -4,7 +4,7 @@ displayed_sidebar: docs
 
 # char 
 
-
+## Description
 
 CHAR() returns the character value of the given integer value according to the ASCII table.
 

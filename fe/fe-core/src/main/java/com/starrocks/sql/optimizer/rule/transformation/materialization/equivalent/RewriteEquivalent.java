@@ -16,10 +16,8 @@ package com.starrocks.sql.optimizer.rule.transformation.materialization.equivale
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
-import com.starrocks.sql.optimizer.operator.scalar.CallOperator;
 import com.starrocks.sql.optimizer.operator.scalar.ColumnRefOperator;
 import com.starrocks.sql.optimizer.operator.scalar.ScalarOperator;
-import com.starrocks.sql.optimizer.rule.transformation.materialization.RewriteContext;
 
 import java.util.List;
 import java.util.Map;
@@ -31,8 +29,7 @@ public class RewriteEquivalent {
             BitmapRewriteEquivalent.INSTANCE,
             ArrayRewriteEquivalent.INSTANCE,
             HLLRewriteEquivalent.INSTANCE,
-            PercentileRewriteEquivalent.INSTANCE,
-            AggStateRewriteEquivalent.INSTANCE
+            PercentileRewriteEquivalent.INSTANCE
     );
     public static final List<IRewriteEquivalent> PREDICATE_EQUIVALENTS = Lists.newArrayList(
             TimeSliceRewriteEquivalent.INSTANCE,
@@ -64,9 +61,8 @@ public class RewriteEquivalent {
     public ScalarOperator rewrite(EquivalentShuttleContext shuttleContext,
                                   Map<ColumnRefOperator, ColumnRefOperator> columnMapping,
                                   ScalarOperator newInput) {
-        ScalarOperator result = null;
         if (columnMapping == null) {
-            result = this.iRewriteEquivalent.rewrite(this.rewriteEquivalentContext,
+            return this.iRewriteEquivalent.rewrite(this.rewriteEquivalentContext,
                     shuttleContext, rewriteEquivalentContext.getReplace(), newInput);
         } else {
             ColumnRefOperator oldReplace = rewriteEquivalentContext.getReplace();
@@ -74,17 +70,8 @@ public class RewriteEquivalent {
                 return null;
             }
             ColumnRefOperator target = columnMapping.get(oldReplace);
-            result = this.iRewriteEquivalent.rewrite(this.rewriteEquivalentContext,
+            return this.iRewriteEquivalent.rewrite(this.rewriteEquivalentContext,
                     shuttleContext, target, newInput);
         }
-        if (result != null) {
-            RewriteContext rewriteContext = shuttleContext.getRewriteContext();
-            if (rewriteContext != null && rewriteContext.getAggregatePushDownContext() != null &&
-                    newInput instanceof CallOperator && rewriteEquivalentContext.getInput() instanceof CallOperator) {
-                rewriteContext.getAggregatePushDownContext().registerOrigAggRewriteInfo((CallOperator) newInput,
-                        (CallOperator) rewriteEquivalentContext.getInput());
-            }
-        }
-        return result;
     }
 }

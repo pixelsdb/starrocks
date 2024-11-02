@@ -62,8 +62,7 @@ public class DictionaryGetExpr extends Expr {
     @Override
     protected String toSqlImpl() {
         String message = "DICTIONARY_GET(";
-        int size = (this.children.size() == 3) ? this.children.size() - 1 : this.children.size();
-        for (int i = 0; i < size; ++i) {
+        for (int i = 0; i < this.children.size(); ++i) {
             Expr expr = this.children.get(i);
             message += expr.toSql();
             message += ", ";

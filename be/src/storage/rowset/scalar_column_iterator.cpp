@@ -52,7 +52,7 @@ Status ScalarColumnIterator::init(const ColumnIteratorOptions& opts) {
     _opts = opts;
 
     IndexReadOptions index_opts;
-    index_opts.use_page_cache = !opts.temporary_data && opts.use_page_cache &&
+    index_opts.use_page_cache = !opts.temporary_data &&
                                 (config::enable_ordinal_index_memory_page_cache || !config::disable_storage_page_cache);
     index_opts.kept_in_memory = !opts.temporary_data && config::enable_ordinal_index_memory_page_cache;
     index_opts.lake_io_opts = opts.lake_io_opts;
@@ -373,8 +373,8 @@ Status ScalarColumnIterator::_read_data_page(const OrdinalPageIndexIterator& ite
 }
 
 Status ScalarColumnIterator::get_row_ranges_by_zone_map(const std::vector<const ColumnPredicate*>& predicates,
-                                                        const ColumnPredicate* del_predicate, SparseRange<>* row_ranges,
-                                                        CompoundNodeType pred_relation) {
+                                                        const ColumnPredicate* del_predicate,
+                                                        SparseRange<>* row_ranges) {
     DCHECK(row_ranges->empty());
     if (_reader->has_zone_map()) {
         if (!_delete_partial_satisfied_pages.has_value()) {
@@ -382,49 +382,38 @@ Status ScalarColumnIterator::get_row_ranges_by_zone_map(const std::vector<const 
         }
 
         IndexReadOptions opts;
-        opts.use_page_cache = !_opts.temporary_data && _opts.use_page_cache &&
+        opts.use_page_cache = !_opts.temporary_data &&
                               (config::enable_zonemap_index_memory_page_cache || !config::disable_storage_page_cache);
         opts.kept_in_memory = !_opts.temporary_data && config::enable_zonemap_index_memory_page_cache;
         opts.lake_io_opts = _opts.lake_io_opts;
         opts.read_file = _opts.read_file;
         opts.stats = _opts.stats;
         RETURN_IF_ERROR(_reader->zone_map_filter(predicates, del_predicate, &_delete_partial_satisfied_pages.value(),
-                                                 row_ranges, opts, pred_relation));
+                                                 row_ranges, opts));
     } else {
         row_ranges->add({0, static_cast<rowid_t>(_reader->num_rows())});
     }
     return Status::OK();
 }
 
-bool ScalarColumnIterator::has_original_bloom_filter_index() const {
-    return _reader->has_original_bloom_filter_index();
-}
-
-bool ScalarColumnIterator::has_ngram_bloom_filter_index() const {
-    return _reader->has_ngram_bloom_filter_index();
-}
-
 Status ScalarColumnIterator::get_row_ranges_by_bloom_filter(const std::vector<const ColumnPredicate*>& predicates,
                                                             SparseRange<>* row_ranges) {
     RETURN_IF(!_reader->has_bloom_filter_index(), Status::OK());
-
+    bool support = false;
     bool support_original_bloom_filter = false;
     bool support_ngram_bloom_filter = false;
-    // bloom filter index can only be either original bloom filter or ngram bloom filter
-    if (_reader->has_original_bloom_filter_index()) {
-        support_original_bloom_filter =
-                std::ranges::any_of(predicates, [](const auto* pred) { return pred->support_original_bloom_filter(); });
-    } else if (_reader->has_ngram_bloom_filter_index()) {
-        support_ngram_bloom_filter =
-                std::ranges::any_of(predicates, [](const auto* pred) { return pred->support_ngram_bloom_filter(); });
-    }
 
-    if (!support_original_bloom_filter && !support_ngram_bloom_filter) {
-        return Status::OK();
+    for (const auto* pred : predicates) {
+        // bloom filter index can only be either original bloom filter or ngram bloom filter
+        support_original_bloom_filter |=
+                pred->support_original_bloom_filter() && _reader->has_original_bloom_filter_index();
+        support_ngram_bloom_filter |= pred->support_ngram_bloom_filter() && _reader->has_ngram_bloom_filter_index();
+        support = support | support_original_bloom_filter | support_ngram_bloom_filter;
     }
+    RETURN_IF(!support, Status::OK());
 
     IndexReadOptions opts;
-    opts.use_page_cache = !_opts.temporary_data && !config::disable_storage_page_cache && _opts.use_page_cache;
+    opts.use_page_cache = !_opts.temporary_data && !config::disable_storage_page_cache;
     opts.kept_in_memory = false;
     opts.lake_io_opts = _opts.lake_io_opts;
     opts.read_file = _opts.read_file;
@@ -432,8 +421,10 @@ Status ScalarColumnIterator::get_row_ranges_by_bloom_filter(const std::vector<co
     // filter data using bloom filter or ngram bloom filter
     if (support_original_bloom_filter) {
         RETURN_IF_ERROR(_reader->original_bloom_filter(predicates, row_ranges, opts));
-    } else {
+    } else if (support_ngram_bloom_filter) {
         RETURN_IF_ERROR(_reader->ngram_bloom_filter(predicates, row_ranges, opts));
+    } else {
+        return Status::InternalError("this is a bug of bloom filter,you should report to starrocks community!");
     }
     return Status::OK();
 }

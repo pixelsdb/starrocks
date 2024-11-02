@@ -266,8 +266,6 @@ public:
 
     bool is_un_partitioned() const { return _partition_columns.empty(); }
 
-    const TOlapTablePartitionParam& param() const { return _t_param; }
-
 private:
     /**
      * @brief  find tablets with range partition table

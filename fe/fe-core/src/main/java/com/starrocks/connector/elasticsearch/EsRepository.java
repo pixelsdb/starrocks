@@ -35,6 +35,7 @@
 package com.starrocks.connector.elasticsearch;
 
 import com.google.common.collect.Maps;
+import com.starrocks.catalog.Database;
 import com.starrocks.catalog.EsTable;
 import com.starrocks.catalog.Table;
 import com.starrocks.catalog.Table.TableType;
@@ -118,7 +119,9 @@ public class EsRepository extends FrontendDaemon {
         }
         List<Long> dbIds = GlobalStateMgr.getCurrentState().getLocalMetastore().getDbIds();
         for (Long dbId : dbIds) {
-            List<Table> tables = GlobalStateMgr.getCurrentState().getLocalMetastore().getTables(dbId);
+            Database database = GlobalStateMgr.getCurrentState().getDb(dbId);
+
+            List<Table> tables = database.getTables();
             for (Table table : tables) {
                 if (table.getType() == TableType.ELASTICSEARCH) {
                     registerTable((EsTable) table);

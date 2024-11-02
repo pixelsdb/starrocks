@@ -146,7 +146,7 @@ Status PlanFragmentExecutor::prepare(const TExecPlanFragmentParams& request) {
         const std::vector<TScanRangeParams>& scan_ranges =
                 FindWithDefault(params.per_node_scan_ranges, scan_node->id(), no_scan_ranges);
         (void)scan_node->set_scan_ranges(scan_ranges);
-        VLOG(2) << "scan_node_Id=" << scan_node->id() << " size=" << scan_ranges.size();
+        VLOG(1) << "scan_node_Id=" << scan_node->id() << " size=" << scan_ranges.size();
     }
 
     _runtime_state->set_per_fragment_instance_idx(params.sender_id);
@@ -203,9 +203,13 @@ Status PlanFragmentExecutor::open() {
     }
 
     Status status = _open_internal_vectorized();
-    if (!status.ok() && !status.is_cancelled()) {
+    if (!status.ok() && !status.is_cancelled() && _runtime_state->log_has_space()) {
         LOG(WARNING) << "Fail to open fragment, instance_id=" << print_id(_runtime_state->fragment_instance_id())
                      << ", status=" << status;
+        // Log error message in addition to returning in Status. Queries that do not
+        // fetch results (e.g. insert) may not receive the message directly and can
+        // only retrieve the log.
+        _runtime_state->log_error(status.message());
     }
 
     update_status(status);

@@ -42,8 +42,6 @@ public:
 
     Status push_chunk(RuntimeState* state, const ChunkPtr& chunk) override;
 
-    void update_exec_stats(RuntimeState* state) override;
-
 private:
     bool _is_finished = false;
     std::atomic<int64_t>& _limit;

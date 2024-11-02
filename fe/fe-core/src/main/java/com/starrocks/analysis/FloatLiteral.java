@@ -76,11 +76,6 @@ public class FloatLiteral extends LiteralExpr {
         this(value, NodePosition.ZERO);
     }
 
-    public FloatLiteral(String value, Type type) throws AnalysisException {
-        this(value, NodePosition.ZERO);
-        this.type = type;
-    }
-
     public FloatLiteral(String value, NodePosition pos) throws AnalysisException {
         super(pos);
         Double floatValue = null;

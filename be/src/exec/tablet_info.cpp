@@ -24,6 +24,7 @@
 
 namespace starrocks {
 
+static const std::string LOAD_OP_COLUMN = "__op";
 // NOTE: This value should keep the same with the value in FE's `STARROCKS_DEFAULT_PARTITION_VALUE` constant.
 static const std::string STARROCKS_DEFAULT_PARTITION_VALUE = "__STARROCKS_DEFAULT_PARTITION__";
 
@@ -291,7 +292,7 @@ Status OlapTablePartitionParam::init(RuntimeState* state) {
         _partitions.emplace(part->id, part);
 
         if (t_part.is_shadow_partition) {
-            VLOG(2) << "add shadow partition:" << part->id;
+            VLOG(1) << "add shadow partition:" << part->id;
             continue;
         }
 
@@ -316,7 +317,7 @@ Status OlapTablePartitionParam::init(RuntimeState* state) {
             }
         } else {
             _partitions_map[&part->end_key].push_back(part->id);
-            VLOG(2) << "add partition:" << part->id << " start " << part->start_key.debug_string() << " end "
+            VLOG(1) << "add partition:" << part->id << " start " << part->start_key.debug_string() << " end "
                     << part->end_key.debug_string();
         }
     }
@@ -504,11 +505,11 @@ Status OlapTablePartitionParam::add_partitions(const std::vector<TOlapTableParti
         if (t_part.__isset.in_keys) {
             for (auto& in_key : part->in_keys) {
                 _partitions_map[&in_key].push_back(part->id);
-                VLOG(2) << "add automatic partition:" << part->id << ", in_key:" << in_key.debug_string();
+                VLOG(1) << "add automatic partition:" << part->id << ", in_key:" << in_key.debug_string();
             }
         } else {
             _partitions_map[&part->end_key].push_back(part->id);
-            VLOG(2) << "add automatic partition:" << part->id << " start " << part->start_key.debug_string() << " end "
+            VLOG(1) << "add automatic partition:" << part->id << " start " << part->start_key.debug_string() << " end "
                     << part->end_key.debug_string();
         }
     }

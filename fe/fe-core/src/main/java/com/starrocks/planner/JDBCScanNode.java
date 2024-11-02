@@ -166,6 +166,11 @@ public class JDBCScanNode extends ScanNode {
     }
 
     @Override
+    public int getNumInstances() {
+        return 1;
+    }
+
+    @Override
     public void computeStats(Analyzer analyzer) {
         super.computeStats(analyzer);
     }

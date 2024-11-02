@@ -248,16 +248,13 @@ public class TransactionLoadActionTest extends StarRocksHttpTestCase {
             new Expectations() {
                 {
                     streamLoadMgr.beginLoadTask(
-                            anyString, anyString, anyString, anyString, anyString,
-                            anyLong, anyInt, anyInt, (TransactionResult) any);
+                            anyString, anyString, anyString, anyLong, anyInt, anyInt, (TransactionResult) any);
                     times = 1;
                     result = new Delegate<Void>() {
 
                         public void beginLoadTask(String dbName,
                                                   String tableName,
                                                   String label,
-                                                  String user,
-                                                  String clientIp,
                                                   long timeoutMillis,
                                                   int channelNum,
                                                   int channelId,
@@ -288,8 +285,7 @@ public class TransactionLoadActionTest extends StarRocksHttpTestCase {
             new Expectations() {
                 {
                     streamLoadMgr.beginLoadTask(
-                            anyString, anyString, anyString, anyString, anyString,
-                            anyLong, anyInt, anyInt, (TransactionResult) any);
+                            anyString, anyString, anyString, anyLong, anyInt, anyInt, (TransactionResult) any);
                     times = 1;
                     result = new UserException("begin load task error");
                 }

@@ -20,15 +20,13 @@ public class ConnectorTableColumnStats {
 
     private final ColumnStatistic columnStatistic;
     private final long rowCount;
-    private final String updateTime;
 
     private static final ConnectorTableColumnStats UNKNOWN =
-            new ConnectorTableColumnStats(ColumnStatistic.unknown(), -1, "");
+            new ConnectorTableColumnStats(ColumnStatistic.unknown(), -1);
 
-    public ConnectorTableColumnStats(ColumnStatistic columnStatistic, long rowCount, String updateTime) {
+    public ConnectorTableColumnStats(ColumnStatistic columnStatistic, long rowCount) {
         this.columnStatistic = columnStatistic;
         this.rowCount = rowCount;
-        this.updateTime = updateTime;
     }
 
     public static ConnectorTableColumnStats unknown() {
@@ -45,9 +43,5 @@ public class ConnectorTableColumnStats {
 
     public long getRowCount() {
         return rowCount;
-    }
-
-    public String getUpdateTime() {
-        return updateTime;
     }
 }

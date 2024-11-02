@@ -4,7 +4,7 @@ displayed_sidebar: docs
 
 # log2
 
-
+## 功能
 
 返回以 2 为底数的 `x` 的对数。
 

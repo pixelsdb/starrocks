@@ -154,7 +154,8 @@ public class MaterializedViewRewriter implements IMaterializedViewRewriter {
         return MvUtils.isLogicalSPJ(expression);
     }
 
-    private boolean isMVApplicable(OptExpression mvExpression, MatchMode matchMode, OptExpression queryExpression) {
+    private boolean isMVApplicable(OptExpression mvExpression, List<Table> queryTables, List<Table> mvTables,
+                                   MatchMode matchMode, OptExpression queryExpression) {
         // Only care MatchMode.COMPLETE and VIEW_DELTA here, QUERY_DELTA also can be supported
         // because optimizer will match MV's pattern which is subset of query opt tree
         // from top-down iteration.
@@ -515,7 +516,7 @@ public class MaterializedViewRewriter implements IMaterializedViewRewriter {
             return null;
         }
         // Check whether mv can be applicable for the query.
-        if (!isMVApplicable(mvExpression, matchMode, queryExpression)) {
+        if (!isMVApplicable(mvExpression, queryTables, mvTables, matchMode, queryExpression)) {
             return null;
         }
 
@@ -642,11 +643,7 @@ public class MaterializedViewRewriter implements IMaterializedViewRewriter {
         // [B1, B1], [B1, B2], [B2, B1], [B2, B1].
         // In the next step, remove some redundant permutations below.
         PermutationGenerator generator = new PermutationGenerator(mvExtraTableScanDescLists);
-        int retries = 0;
         while (generator.hasNext()) {
-            if (retries++ >= optimizerContext.getSessionVariable().getMaterializedViewMaxRelationMappingSize()) {
-                break;
-            }
             List<TableScanDesc> mvExtraTableScanDescs = generator.next();
             if (mvExtraTableScanDescs.stream().distinct().count() != mvExtraTableScanDescs.size()) {
                 continue;
@@ -743,11 +740,7 @@ public class MaterializedViewRewriter implements IMaterializedViewRewriter {
         logMVRewrite(mvRewriteContext, "MV predicate split:{}", mvPredicateSplit);
         logMVRewrite(mvRewriteContext, "Query predicate split:{}", queryPredicateSplit);
         logMVRewrite(mvRewriteContext, "Construct {} relation id mappings from query to mv", relationIdMappings.size());
-        int retries = 0;
         for (BiMap<Integer, Integer> relationIdMapping : relationIdMappings) {
-            if (retries++ >= optimizerContext.getSessionVariable().getMaterializedViewMaxRelationMappingSize()) {
-                break;
-            }
             mvRewriteContext.setMvPruneConjunct(mvPrunePredicate);
             rewriteContext.setQueryToMvRelationIdMapping(relationIdMapping);
 
@@ -2036,7 +2029,7 @@ public class MaterializedViewRewriter implements IMaterializedViewRewriter {
     private OptExpression pushdownPredicatesForJoin(OptExpression optExpression, ScalarOperator predicate) {
         if (!(optExpression.getOp() instanceof LogicalJoinOperator)) {
             if (predicate != null) {
-                // predicate cannot be pushdown, we should add it optExpression
+                // predicate can not be pushdown, we should add it it optExpression
                 Operator.Builder builder = OperatorBuilderFactory.build(optExpression.getOp());
                 builder.withOperator(optExpression.getOp());
                 PredicateSplit predicateSplit = PredicateSplit.splitPredicate(

@@ -21,15 +21,14 @@ import com.starrocks.sql.parser.NodePosition;
 /**
  * Representation of a Kill statement.
  * Acceptable syntax:
- * KILL [QUERY | CONNECTION] connection_id | query_id
+ * KILL [QUERY | CONNECTION] connection_id
  */
 public class KillStmt extends StatementBase {
-    private boolean isConnectionKill;
-    private long connectionId;
-    private String queryId;
+    private final boolean isConnectionKill;
+    private final long connectionId;
 
-    public KillStmt(long connectionId, NodePosition pos) {
-        this(false, connectionId, pos);
+    public KillStmt(boolean isConnectionKill, long connectionId) {
+        this(isConnectionKill, connectionId, NodePosition.ZERO);
     }
 
     public KillStmt(boolean isConnectionKill, long connectionId, NodePosition pos) {
@@ -38,21 +37,12 @@ public class KillStmt extends StatementBase {
         this.connectionId = connectionId;
     }
 
-    public KillStmt(String queryId, NodePosition pos) {
-        super(pos);
-        this.queryId = queryId;
-    }
-
     public boolean isConnectionKill() {
         return isConnectionKill;
     }
 
     public long getConnectionId() {
         return connectionId;
-    }
-
-    public String getQueryId() {
-        return queryId;
     }
 
     @Override

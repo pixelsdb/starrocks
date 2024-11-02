@@ -106,7 +106,7 @@ public class NativeAnalyzeJob implements AnalyzeJob, Writable {
 
     @Override
     public String getDbName() throws MetaNotFoundException {
-        Database db = GlobalStateMgr.getCurrentState().getLocalMetastore().getDb(dbId);
+        Database db = GlobalStateMgr.getCurrentState().getDb(dbId);
         if (db == null) {
             throw new MetaNotFoundException("No found database: " + dbId);
         }
@@ -115,11 +115,11 @@ public class NativeAnalyzeJob implements AnalyzeJob, Writable {
 
     @Override
     public String getTableName() throws MetaNotFoundException {
-        Database db = GlobalStateMgr.getCurrentState().getLocalMetastore().getDb(dbId);
+        Database db = GlobalStateMgr.getCurrentState().getDb(dbId);
         if (db == null) {
             throw new MetaNotFoundException("No found database: " + dbId);
         }
-        Table table = GlobalStateMgr.getCurrentState().getLocalMetastore().getTable(db.getId(), tableId);
+        Table table = db.getTable(tableId);
         if (table == null) {
             throw new MetaNotFoundException("No found table: " + tableId);
         }

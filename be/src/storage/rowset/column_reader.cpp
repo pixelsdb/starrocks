@@ -52,8 +52,8 @@
 #include "gen_cpp/segment.pb.h"
 #include "runtime/types.h"
 #include "storage/column_predicate.h"
-#include "storage/index/index_descriptor.h"
-#include "storage/index/inverted/inverted_plugin_factory.h"
+#include "storage/inverted/index_descriptor.hpp"
+#include "storage/inverted/inverted_plugin_factory.h"
 #include "storage/rowset/array_column_iterator.h"
 #include "storage/rowset/binary_dict_page.h"
 #include "storage/rowset/bitmap_index_reader.h"
@@ -405,18 +405,19 @@ Status ColumnReader::bloom_filter(const std::vector<const ColumnPredicate*>& pre
     for (const auto& pid : page_ids) {
         std::unique_ptr<BloomFilter> bf;
         RETURN_IF_ERROR(bf_iter->read_bloom_filter(pid, &bf));
-
-        const bool satisfy = std::ranges::any_of(predicates, [&](const ColumnPredicate* pred) {
+        for (const auto* pred : predicates) {
             if constexpr (is_original_bf) {
-                return pred->support_original_bloom_filter() && pred->original_bloom_filter(bf.get());
+                if (pred->support_original_bloom_filter() && pred->original_bloom_filter(bf.get())) {
+                    bf_row_ranges.add(
+                            Range<>(_ordinal_index->get_first_ordinal(pid), _ordinal_index->get_last_ordinal(pid) + 1));
+                }
             } else {
-                return pred->support_ngram_bloom_filter() &&
-                       pred->ngram_bloom_filter(bf.get(), _get_reader_options_for_ngram());
+                if (pred->support_ngram_bloom_filter() &&
+                    pred->ngram_bloom_filter(bf.get(), _get_reader_options_for_ngram())) {
+                    bf_row_ranges.add(
+                            Range<>(_ordinal_index->get_first_ordinal(pid), _ordinal_index->get_last_ordinal(pid) + 1));
+                }
             }
-        });
-        if (satisfy) {
-            bf_row_ranges.add(
-                    Range<>(_ordinal_index->get_first_ordinal(pid), _ordinal_index->get_last_ordinal(pid) + 1));
         }
     }
     *row_ranges = row_ranges->intersection(bf_row_ranges);
@@ -562,24 +563,14 @@ Status ColumnReader::seek_by_page_index(int page_index, OrdinalPageIndexIterator
 Status ColumnReader::zone_map_filter(const std::vector<const ColumnPredicate*>& predicates,
                                      const ColumnPredicate* del_predicate,
                                      std::unordered_set<uint32_t>* del_partial_filtered_pages,
-                                     SparseRange<>* row_ranges, const IndexReadOptions& opts,
-                                     CompoundNodeType pred_relation) {
+                                     SparseRange<>* row_ranges, const IndexReadOptions& opts) {
     RETURN_IF_ERROR(_load_zonemap_index(opts));
-
     std::vector<uint32_t> page_indexes;
-    if (pred_relation == CompoundNodeType::AND) {
-        RETURN_IF_ERROR(_zone_map_filter<CompoundNodeType::AND>(predicates, del_predicate, del_partial_filtered_pages,
-                                                                &page_indexes));
-    } else {
-        RETURN_IF_ERROR(_zone_map_filter<CompoundNodeType::OR>(predicates, del_predicate, del_partial_filtered_pages,
-                                                               &page_indexes));
-    }
-
+    RETURN_IF_ERROR(_zone_map_filter(predicates, del_predicate, del_partial_filtered_pages, &page_indexes));
     RETURN_IF_ERROR(_calculate_row_ranges(page_indexes, row_ranges));
     return Status::OK();
 }
 
-template <CompoundNodeType PredRelation>
 Status ColumnReader::_zone_map_filter(const std::vector<const ColumnPredicate*>& predicates,
                                       const ColumnPredicate* del_predicate,
                                       std::unordered_set<uint32_t>* del_partial_filtered_pages,
@@ -595,24 +586,20 @@ Status ColumnReader::_zone_map_filter(const std::vector<const ColumnPredicate*>&
     } else {
         return Status::OK();
     }
-
-    auto page_satisfies_zone_map_filter = [&](const ZoneMapDetail& detail) {
-        if constexpr (PredRelation == CompoundNodeType::AND) {
-            return std::ranges::all_of(predicates, [&](const auto* pred) { return pred->zone_map_filter(detail); });
-        } else {
-            return predicates.empty() ||
-                   std::ranges::any_of(predicates, [&](const auto* pred) { return pred->zone_map_filter(detail); });
-        }
-    };
-
     const std::vector<ZoneMapPB>& zone_maps = _zonemap_index->page_zone_maps();
     int32_t page_size = _zonemap_index->num_pages();
     for (int32_t i = 0; i < page_size; ++i) {
         const ZoneMapPB& zm = zone_maps[i];
         ZoneMapDetail detail;
         RETURN_IF_ERROR(_parse_zone_map(lt, zm, &detail));
-
-        if (!page_satisfies_zone_map_filter(detail)) {
+        bool matched = true;
+        for (const auto* predicate : predicates) {
+            if (!predicate->zone_map_filter(detail)) {
+                matched = false;
+                break;
+            }
+        }
+        if (!matched) {
             continue;
         }
         pages->emplace_back(i);

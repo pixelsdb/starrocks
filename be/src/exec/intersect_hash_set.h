@@ -52,7 +52,7 @@ template <typename HashSet>
 class IntersectHashSet {
 public:
     using Iterator = typename HashSet::iterator;
-    using KeyVector = Buffer<Slice>;
+    using KeyVector = typename std::vector<Slice>;
 
     IntersectHashSet() = default;
 

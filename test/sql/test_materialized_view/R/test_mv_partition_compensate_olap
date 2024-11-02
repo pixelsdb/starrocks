@@ -1,4 +1,4 @@
--- name: test_mv_partition_compensate_olap @slow
+-- name: test_mv_partition_compensate_olap
 create database db_${uuid0};
 -- result:
 -- !result

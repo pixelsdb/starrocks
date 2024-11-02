@@ -17,19 +17,15 @@ package com.starrocks.connector;
 import com.starrocks.catalog.Table;
 import com.starrocks.sql.optimizer.operator.scalar.ScalarOperator;
 
-import java.util.StringJoiner;
-
 public class MetaPreparationItem {
     private final Table table;
     private final ScalarOperator predicate;
     private final long limit;
-    private final TableVersionRange version;
 
-    public MetaPreparationItem(Table table, ScalarOperator predicate, long limit, TableVersionRange version) {
+    public MetaPreparationItem(Table table, ScalarOperator predicate, long limit) {
         this.table = table;
         this.predicate = predicate;
         this.limit = limit;
-        this.version = version;
     }
 
     public Table getTable() {
@@ -44,17 +40,13 @@ public class MetaPreparationItem {
         return limit;
     }
 
-    public TableVersionRange getVersion() {
-        return version;
-    }
-
     @Override
     public String toString() {
-        return new StringJoiner(", ", MetaPreparationItem.class.getSimpleName() + "[", "]")
-                .add("table=" + table)
-                .add("predicate=" + predicate)
-                .add("limit=" + limit)
-                .add("version=" + version)
-                .toString();
+        final StringBuilder sb = new StringBuilder("MetaPreparationItem{");
+        sb.append("table=").append(table);
+        sb.append(", predicate=").append(predicate);
+        sb.append(", limit=").append(limit);
+        sb.append('}');
+        return sb.toString();
     }
 }

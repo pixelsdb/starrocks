@@ -4,7 +4,7 @@ displayed_sidebar: docs
 
 # array_remove
 
-
+## Description
 
 Removes an element from an array.
 

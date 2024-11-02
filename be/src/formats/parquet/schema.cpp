@@ -14,14 +14,10 @@
 
 #include "formats/parquet/schema.h"
 
-#include <boost/algorithm/string/case_conv.hpp>
-#include <boost/iterator/iterator_facade.hpp>
-#include <memory>
-#include <sstream>
-#include <utility>
+#include <boost/algorithm/string.hpp>
 
+#include "gutil/casts.h"
 #include "gutil/strings/substitute.h"
-#include "types/logical_type.h"
 #include "util/slice.h"
 
 namespace starrocks::parquet {

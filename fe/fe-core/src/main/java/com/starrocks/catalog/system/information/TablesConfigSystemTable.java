@@ -25,11 +25,9 @@ import static com.starrocks.catalog.system.SystemTable.NAME_CHAR_LEN;
 import static com.starrocks.catalog.system.SystemTable.builder;
 
 public class TablesConfigSystemTable {
-    public static final String NAME = "tables_config";
-
     public static SystemTable create() {
         return new SystemTable(SystemId.TABLES_CONFIG_ID,
-                NAME,
+                "tables_config",
                 Table.TableType.SCHEMA,
                 builder()
                         .column("TABLE_SCHEMA", ScalarType.createVarchar(NAME_CHAR_LEN))

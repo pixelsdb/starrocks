@@ -12,7 +12,7 @@ insert into t1 values(1);
 -- result:
 E: (1064, 'Getting analyzing error. Detail message: Table t1 is not found.')
 -- !result
-[UC]explain select * from (select id + 1 as v from t) t2;
+ explain select * from (select id + 1 as v from t) t2;
 -- result:
 PLAN FRAGMENT 0
  OUTPUT EXPRS:2: g1
@@ -22,7 +22,7 @@ PLAN FRAGMENT 0
 
   0:EMPTYSET
 -- !result
-[UC]explain select v from (select id + 1 as v from t) t2;
+ explain select v from (select id + 1 as v from t) t2;
 -- result:
 PLAN FRAGMENT 0
  OUTPUT EXPRS:2: g1
@@ -241,53 +241,5 @@ function: assert_explain_contains('SELECT COUNT(*) FROM t_generated_column_compl
 None
 -- !result
 DROP table t_generated_column_complex_rewrite_3;
--- result:
--- !result
-CREATE TABLE `t_generated_column_complex_rewrite_4` (
-  `pday` int(11) NOT NULL COMMENT ""
-) ENGINE=OLAP 
-PRIMARY KEY(`pday`)
-PARTITION BY (`pday`)
-DISTRIBUTED BY HASH(`pday`)
-PROPERTIES (
-"compression" = "LZ4",
-"enable_persistent_index" = "true",
-"fast_schema_evolution" = "true",
-"replicated_storage" = "true",
-"replication_num" = "1"
-);
--- result:
--- !result
-CREATE TABLE `t_generated_column_complex_rewrite_5` (
-  `id` bigint(20) NOT NULL COMMENT "",
-  `json_string` varchar(1048576) NOT NULL COMMENT "",
-  `col1` varchar(65533) NULL AS get_json_string(`json_string`, 'a') COMMENT "",
-  `col2` varchar(65533) NULL AS get_json_string(`json_string`, 'b') COMMENT ""
-) ENGINE=OLAP 
-PRIMARY KEY(`id`)
-DISTRIBUTED BY HASH(`id`)
-PROPERTIES (
-"compression" = "LZ4",
-"enable_persistent_index" = "true",
-"fast_schema_evolution" = "true",
-"replicated_storage" = "true",
-"replication_num" = "1"
-);
--- result:
--- !result
-INSERT INTO t_generated_column_complex_rewrite_4 values (1);
--- result:
--- !result
-INSERT INTO t_generated_column_complex_rewrite_5 values (1,"{\"a\" : \"b\"}");
--- result:
--- !result
-select * from (select t4.* from t_generated_column_complex_rewrite_4 as t4 left join t_generated_column_complex_rewrite_5 as t5 on t4.pday = t5.id) result;
--- result:
-1
--- !result
-DROP TABLE t_generated_column_complex_rewrite_4;
--- result:
--- !result
-DROP TABLE t_generated_column_complex_rewrite_5;
 -- result:
 -- !result

@@ -4,7 +4,7 @@ displayed_sidebar: docs
 
 # translate
 
-
+## Description
 
 Substitutes specified characters within a string. It works by taking a string (`source`) as the input and replaces the `from_string` characters in `source` with `to_string`.
 

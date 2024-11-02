@@ -123,9 +123,9 @@ public class MvRefreshConcurrencyTest extends MvRewriteTestBase {
                     System.out.println(sql);
                     starRocksAssert.withMaterializedView(sql);
 
-                    Database db = GlobalStateMgr.getCurrentState().getLocalMetastore().getDb("test");
+                    Database db = GlobalStateMgr.getCurrentState().getDb("test");
                     String mvName = buildMVName(i);
-                    Table table = GlobalStateMgr.getCurrentState().getLocalMetastore().getTable(db.getFullName(), mvName);
+                    Table table = db.getTable(mvName);
                     Assert.assertTrue(table != null);
                     mvs.add((MaterializedView) table);
                     starRocksAssert.useDatabase("test");

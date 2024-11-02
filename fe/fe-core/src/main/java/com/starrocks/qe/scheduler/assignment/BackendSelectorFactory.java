@@ -50,21 +50,15 @@ public class BackendSelectorFactory {
                                          ExecutionFragment execFragment,
                                          WorkerProvider workerProvider,
                                          ConnectContext connectContext,
-                                         Set<Integer> destReplicatedScanIds,
-                                         boolean useIncrementalScanRanges) {
-        SessionVariable sessionVariable = connectContext.getSessionVariable();
-        FragmentScanRangeAssignment assignment = execFragment.getScanRangeAssignment();
-
+                                         Set<Integer> destReplicatedScanIds) {
         // The parameters of getScanRangeLocations may ignore, It doesn't take effect.
-        int maxScanRangeLength = 0;
-        if (useIncrementalScanRanges) {
-            maxScanRangeLength = sessionVariable.getConnectorIncrementalScanRangeNumber();
-        }
-
-        List<TScanRangeLocations> locations = scanNode.getScanRangeLocations(maxScanRangeLength);
+        List<TScanRangeLocations> locations = scanNode.getScanRangeLocations(0);
         if (locations == null) {
             return new NoopBackendSelector();
         }
+
+        SessionVariable sessionVariable = connectContext.getSessionVariable();
+        FragmentScanRangeAssignment assignment = execFragment.getScanRangeAssignment();
 
         if (scanNode instanceof SchemaScanNode) {
             return new NormalBackendSelector(scanNode, locations, assignment, workerProvider, false);
@@ -74,7 +68,7 @@ public class BackendSelectorFactory {
                 || scanNode instanceof OdpsScanNode || scanNode instanceof IcebergMetadataScanNode) {
             return new HDFSBackendSelector(scanNode, locations, assignment, workerProvider,
                     sessionVariable.getForceScheduleLocal(),
-                    sessionVariable.getHDFSBackendSelectorScanRangeShuffle(), useIncrementalScanRanges);
+                    sessionVariable.getHDFSBackendSelectorScanRangeShuffle());
         } else {
             boolean hasColocate = execFragment.isColocated();
             boolean hasBucket = execFragment.isLocalBucketShuffleJoin();

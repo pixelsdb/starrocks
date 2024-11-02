@@ -72,7 +72,7 @@ public class AlterMVJobExecutor extends AlterJobExecutor {
         String newMvName = clause.getNewTableName();
         String oldMvName = table.getName();
 
-        if (GlobalStateMgr.getCurrentState().getLocalMetastore().getTable(db.getFullName(), newMvName) != null) {
+        if (db.getTable(newMvName) != null) {
             throw new SemanticException("Materialized view [" + newMvName + "] is already used");
         }
         table.setName(newMvName);
@@ -117,13 +117,7 @@ public class AlterMVJobExecutor extends AlterJobExecutor {
         }
         List<TableName> excludedTriggerTables = Lists.newArrayList();
         if (properties.containsKey(PropertyAnalyzer.PROPERTIES_EXCLUDED_TRIGGER_TABLES)) {
-            excludedTriggerTables = PropertyAnalyzer.analyzeExcludedTables(properties,
-                    PropertyAnalyzer.PROPERTIES_EXCLUDED_TRIGGER_TABLES, materializedView);
-        }
-        List<TableName> excludedRefreshBaseTables = Lists.newArrayList();
-        if (properties.containsKey(PropertyAnalyzer.PROPERTIES_EXCLUDED_REFRESH_TABLES)) {
-            excludedRefreshBaseTables = PropertyAnalyzer.analyzeExcludedTables(properties,
-                    PropertyAnalyzer.PROPERTIES_EXCLUDED_REFRESH_TABLES, materializedView);
+            excludedTriggerTables = PropertyAnalyzer.analyzeExcludedTriggerTables(properties, materializedView);
         }
         int maxMVRewriteStaleness = INVALID;
         if (properties.containsKey(PropertyAnalyzer.PROPERTIES_MV_REWRITE_STALENESS_SECOND)) {
@@ -247,12 +241,6 @@ public class AlterMVJobExecutor extends AlterJobExecutor {
             materializedView.getTableProperty().setExcludedTriggerTables(excludedTriggerTables);
             isChanged = true;
         }
-        if (propClone.containsKey(PropertyAnalyzer.PROPERTIES_EXCLUDED_REFRESH_TABLES)) {
-            curProp.put(PropertyAnalyzer.PROPERTIES_EXCLUDED_REFRESH_TABLES,
-                    propClone.get(PropertyAnalyzer.PROPERTIES_EXCLUDED_REFRESH_TABLES));
-            materializedView.getTableProperty().setExcludedRefreshTables(excludedTriggerTables);
-            isChanged = true;
-        }
         if (propClone.containsKey(PropertyAnalyzer.PROPERTIES_UNIQUE_CONSTRAINT)) {
             materializedView.setUniqueConstraints(uniqueConstraints);
             isChanged = true;
@@ -355,12 +343,12 @@ public class AlterMVJobExecutor extends AlterJobExecutor {
 
             final MaterializedView.MvRefreshScheme refreshScheme = materializedView.getRefreshScheme();
             Locker locker = new Locker();
-            if (!locker.lockDatabaseAndCheckExist(db, LockType.WRITE)) {
+            if (!locker.lockAndCheckExist(db, LockType.WRITE)) {
                 throw new DmlException("update meta failed. database:" + db.getFullName() + " not exist");
             }
             try {
                 // check
-                Table mv = GlobalStateMgr.getCurrentState().getLocalMetastore().getTable(db.getId(), materializedView.getId());
+                Table mv = db.getTable(materializedView.getId());
                 if (mv == null) {
                     throw new DmlException(
                             "update meta failed. materialized view:" + materializedView.getName() + " not exist");
@@ -391,7 +379,7 @@ public class AlterMVJobExecutor extends AlterJobExecutor {
                 final ChangeMaterializedViewRefreshSchemeLog log = new ChangeMaterializedViewRefreshSchemeLog(materializedView);
                 GlobalStateMgr.getCurrentState().getEditLog().logMvChangeRefreshScheme(log);
             } finally {
-                locker.unLockDatabase(db.getId(), LockType.WRITE);
+                locker.unLockDatabase(db, LockType.WRITE);
             }
             LOG.info("change materialized view refresh type {} to {}, id: {}", oldRefreshType,
                     newRefreshType, materializedView.getId());

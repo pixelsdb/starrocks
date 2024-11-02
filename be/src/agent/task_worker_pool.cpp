@@ -846,8 +846,7 @@ void* ReportDataCacheMetricsTaskWorkerPool::_worker_thread_callback(void* arg_th
             LOG(WARNING) << "Fail to report resource_usage to " << master_address.hostname << ":" << master_address.port
                          << ", err=" << status;
         }
-        size_t sleep_secs = config::report_datacache_metrics_interval_ms / 1000;
-        nap_sleep(sleep_secs, [&]() { return worker_pool_this->_stopped.load(); });
+        std::this_thread::sleep_for(std::chrono::milliseconds(config::report_datacache_metrics_interval_ms));
     }
 
     return nullptr;

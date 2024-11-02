@@ -32,29 +32,14 @@ import com.starrocks.sql.optimizer.operator.scalar.ScalarOperator;
 
 public interface IRewriteEquivalent {
     /**
-     * Different {@code RewriteEquivalentType} will be used to rewrite different scalar operators which can deduce lookup
-     * time to rewrite specific input expression.
+     * Different {@code RewriteEquivalentType} will be used to rewrite different scalar operators.
      * eg:
-     *  `PREDICATE` will be used to rewrite for `BinaryPredicateOperator` by using Predicate equivalents;
-     *  `AGGREGATE` will be used to rewrite for `CallOperator` by using Aggregate equivalents;
-     *  `ANY` type can be used to rewrite `CallOperator` for both `PREDICATE` type and `AGGREGATE` equivalents.
+     *  `PREDICATE` will be used to rewrite for `BinaryPredicateOperator`;
+     *  `CallOperator` will be used to rewrite for `BinaryPredicateOperator`;
      */
     enum RewriteEquivalentType {
         PREDICATE,
-        AGGREGATE,
-        ANY;
-
-        public boolean isPredicate() {
-            return this == PREDICATE;
-        }
-
-        public boolean isAggregate() {
-            return this == AGGREGATE;
-        }
-
-        public boolean isAny() {
-            return this == ANY;
-        }
+        AGGREGATE
     }
 
     class RewriteEquivalentContext {

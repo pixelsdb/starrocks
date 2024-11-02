@@ -28,7 +28,6 @@
 #include "storage/delta_writer.h"
 #include "storage/lake/filenames.h"
 #include "storage/lake/meta_file.h"
-#include "storage/lake/metacache.h"
 #include "storage/lake/pk_tablet_writer.h"
 #include "storage/lake/tablet.h"
 #include "storage/lake/tablet_manager.h"
@@ -42,7 +41,10 @@
 
 namespace starrocks::lake {
 
-using TxnLogPtr = DeltaWriter::TxnLogPtr;
+using Chunk = starrocks::Chunk;
+using Column = starrocks::Column;
+using MemTable = starrocks::MemTable;
+using MemTableSink = starrocks::MemTableSink;
 
 class TabletWriterSink : public MemTableSink {
 public:
@@ -101,9 +103,7 @@ public:
 
     Status write(const Chunk& chunk, const uint32_t* indexes, uint32_t indexes_size);
 
-    StatusOr<TxnLogPtr> finish_with_txnlog(DeltaWriterFinishMode mode);
-
-    Status finish();
+    Status finish(DeltaWriter::FinishMode mode);
 
     void close();
 
@@ -211,7 +211,7 @@ Status DeltaWriterImpl::check_immutable() {
         if (_tablet_manager->in_writing_data_size(_tablet_id) > _immutable_tablet_size) {
             _is_immutable.store(true, std::memory_order_relaxed);
         }
-        VLOG(2) << "check delta writer, tablet=" << _tablet_id << ", txn=" << _txn_id
+        VLOG(1) << "check delta writer, tablet=" << _tablet_id << ", txn=" << _txn_id
                 << ", immutable_tablet_size=" << _immutable_tablet_size
                 << ", data_size=" << _tablet_manager->in_writing_data_size(_tablet_id)
                 << ", is_immutable=" << _is_immutable.load(std::memory_order_relaxed);
@@ -276,7 +276,7 @@ inline Status DeltaWriterImpl::flush_async() {
                 if (_tablet_manager->in_writing_data_size(_tablet_id) > _immutable_tablet_size) {
                     _is_immutable.store(true, std::memory_order_relaxed);
                 }
-                VLOG(2) << "flush memtable, tablet=" << _tablet_id << ", txn=" << _txn_id
+                VLOG(1) << "flush memtable, tablet=" << _tablet_id << ", txn=" << _txn_id
                         << " _immutable_tablet_size=" << _immutable_tablet_size << ", segment_size=" << seg->data_size()
                         << ", in_writing_data_size=" << _tablet_manager->in_writing_data_size(_tablet_id)
                         << ", is_immutable=" << _is_immutable.load(std::memory_order_relaxed);
@@ -434,17 +434,15 @@ bool DeltaWriterImpl::is_partial_update() {
     return _write_schema->num_columns() < _tablet_schema->num_columns();
 }
 
-Status DeltaWriterImpl::finish() {
+Status DeltaWriterImpl::finish(DeltaWriter::FinishMode mode) {
     SCOPED_THREAD_LOCAL_MEM_SETTER(_mem_tracker, false);
     RETURN_IF_ERROR(build_schema_and_writer());
     RETURN_IF_ERROR(flush());
     RETURN_IF_ERROR(_tablet_writer->finish());
-    return Status::OK();
-}
 
-StatusOr<TxnLogPtr> DeltaWriterImpl::finish_with_txnlog(DeltaWriterFinishMode mode) {
-    SCOPED_THREAD_LOCAL_MEM_SETTER(_mem_tracker, false);
-    RETURN_IF_ERROR(finish());
+    if (mode == DeltaWriter::kDontWriteTxnLog) {
+        return Status::OK();
+    }
 
     if (UNLIKELY(_txn_id < 0)) {
         return Status::InvalidArgument(fmt::format("negative txn id: {}", _txn_id));
@@ -454,7 +452,6 @@ StatusOr<TxnLogPtr> DeltaWriterImpl::finish_with_txnlog(DeltaWriterFinishMode mo
     auto txn_log = std::make_shared<TxnLog>();
     txn_log->set_tablet_id(_tablet_id);
     txn_log->set_txn_id(_txn_id);
-    txn_log->set_partition_id(_partition_id);
     auto op_write = txn_log->mutable_op_write();
 
     for (auto& f : _tablet_writer->files()) {
@@ -530,17 +527,12 @@ StatusOr<TxnLogPtr> DeltaWriterImpl::finish_with_txnlog(DeltaWriterFinishMode mo
             }
         }
     }
-    if (mode == kWriteTxnLog) {
-        RETURN_IF_ERROR(tablet.put_txn_log(txn_log));
-    } else {
-        auto cache_key = _tablet_manager->txn_log_location(_tablet_id, _txn_id);
-        _tablet_manager->metacache()->cache_txn_log(cache_key, txn_log);
-    }
+    RETURN_IF_ERROR(tablet.put_txn_log(txn_log));
     if (_tablet_schema->keys_type() == KeysType::PRIMARY_KEYS && !skip_pk_preload) {
         // preload update state here to minimaze the cost when publishing.
         tablet.update_mgr()->preload_update_state(*txn_log, &tablet);
     }
-    return txn_log;
+    return Status::OK();
 }
 
 Status DeltaWriterImpl::fill_auto_increment_id(const Chunk& chunk) {
@@ -575,7 +567,7 @@ Status DeltaWriterImpl::fill_auto_increment_id(const Chunk& chunk) {
         st = tablet.update_mgr()->get_rowids_from_pkindex(tablet.id(), metadata->version(), upserts, &rss_rowids, true);
     }
 
-    Filter filter;
+    std::vector<uint8_t> filter;
     uint32_t gen_num = 0;
     // There are two cases we should allocate full id for this chunk for simplicity:
     // 1. We can not get the tablet meta from cache.
@@ -668,14 +660,9 @@ Status DeltaWriter::write(const Chunk& chunk, const uint32_t* indexes, uint32_t 
     return _impl->write(chunk, indexes, indexes_size);
 }
 
-StatusOr<TxnLogPtr> DeltaWriter::finish_with_txnlog(DeltaWriterFinishMode mode) {
-    DCHECK_EQ(0, bthread_self()) << "Should not invoke DeltaWriter::finish_with_txnlog() in a bthread";
-    return _impl->finish_with_txnlog(mode);
-}
-
-Status DeltaWriter::finish() {
+Status DeltaWriter::finish(FinishMode mode) {
     DCHECK_EQ(0, bthread_self()) << "Should not invoke DeltaWriter::finish() in a bthread";
-    return _impl->finish();
+    return _impl->finish(mode);
 }
 
 void DeltaWriter::close() {

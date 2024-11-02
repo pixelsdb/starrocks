@@ -56,19 +56,14 @@ vectorized_functions = [
     [10090, "tan", True, False, "DOUBLE", ["DOUBLE"], "MathFunctions::tan"],
     [10100, "atan", True, False, "DOUBLE", ["DOUBLE"], "MathFunctions::atan"],
     [10101, "tanh", True, False, "DOUBLE", ["DOUBLE"], "MathFunctions::tanh"],
-
-    #   cosine function
-    [10102, "cosine_similarity", True, False, "FLOAT", ["ARRAY_FLOAT", "ARRAY_FLOAT"], "MathFunctions::cosine_similarity<TYPE_FLOAT, false>"],
-    [10103, "cosine_similarity_norm", True, False, "FLOAT", ["ARRAY_FLOAT", "ARRAY_FLOAT"], "MathFunctions::cosine_similarity<TYPE_FLOAT, true>"],
-    [10106, "approx_cosine_similarity", True, False, "FLOAT", ["ARRAY_FLOAT", "ARRAY_FLOAT"], "MathFunctions::cosine_similarity<TYPE_FLOAT, false>"],
+    [10102, "cosine_similarity", True, False, "FLOAT", ["ARRAY_FLOAT", "ARRAY_FLOAT"],
+     "MathFunctions::cosine_similarity<TYPE_FLOAT, false>"],
+    [10103, "cosine_similarity_norm", True, False, "FLOAT", ["ARRAY_FLOAT", "ARRAY_FLOAT"],
+     "MathFunctions::cosine_similarity<TYPE_FLOAT, true>"],
 
     [10110, "ceil", True, False, "BIGINT", ["DOUBLE"], "MathFunctions::ceil"],
     [10111, "ceiling", True, False, "BIGINT", ["DOUBLE"], "MathFunctions::ceil"],
     [10112, "dceil", True, False, "BIGINT", ["DOUBLE"], "MathFunctions::ceil"],
-
-    #   l2 function
-    [10114, "l2_distance", True, False, "FLOAT", ["ARRAY_FLOAT", "ARRAY_FLOAT"], "MathFunctions::l2_distance<TYPE_FLOAT>"],
-    [10116, "approx_l2_distance", True, False, "FLOAT", ["ARRAY_FLOAT", "ARRAY_FLOAT"], "MathFunctions::l2_distance<TYPE_FLOAT>"],
 
     [10120, "floor", True, False, "BIGINT", ["DOUBLE"], "MathFunctions::floor"],
     [10121, "dfloor", True, False, "BIGINT", ["DOUBLE"], "MathFunctions::floor"],
@@ -348,10 +343,6 @@ vectorized_functions = [
      'StringFunctions::regexp_replace_prepare', 'StringFunctions::regexp_close'],
     [30332, 'replace', True, True, 'VARCHAR', ['VARCHAR', 'VARCHAR', 'VARCHAR'], 'StringFunctions::replace',
      'StringFunctions::replace_prepare', 'StringFunctions::replace_close'],
-    [30333, 'regexp_split', True, True, 'ARRAY_VARCHAR', ['VARCHAR', 'VARCHAR'], 'StringFunctions::regexp_split',
-     'StringFunctions::regexp_extract_prepare', 'StringFunctions::regexp_close'],
-    [30334, 'regexp_split', True, True, 'ARRAY_VARCHAR', ['VARCHAR', 'VARCHAR', 'INT'], 'StringFunctions::regexp_split',
-     'StringFunctions::regexp_extract_prepare', 'StringFunctions::regexp_close'],
     [30400, "money_format", True, False, "VARCHAR", ["BIGINT"], "StringFunctions::money_format_bigint"],
     [30401, "money_format", True, False, "VARCHAR", ["LARGEINT"], "StringFunctions::money_format_largeint"],
     [30402, "money_format", True, False, "VARCHAR", ["DECIMALV2"], "StringFunctions::money_format_decimalv2val"],
@@ -1215,44 +1206,8 @@ vectorized_functions = [
     # reserve 150281
     [150282, 'array_contains_all', True, False, 'BOOLEAN', ['ANY_ARRAY', 'ANY_ARRAY'],
      'ArrayFunctions::array_contains_all'],
-    [15028201, 'array_contains_all', True, False, 'BOOLEAN', ['ARRAY_BOOLEAN', 'ARRAY_BOOLEAN'], 'ArrayFunctions::array_contains_all_specific<TYPE_BOOLEAN>', 'ArrayFunctions::array_contains_all_specific_prepare<TYPE_BOOLEAN>', 'ArrayFunctions::array_contains_all_specific_close<TYPE_BOOLEAN>'],
-    [15028202, 'array_contains_all', True, False, 'BOOLEAN', ['ARRAY_TINYINT', 'ARRAY_TINYINT'], 'ArrayFunctions::array_contains_all_specific<TYPE_TINYINT>', 'ArrayFunctions::array_contains_all_specific_prepare<TYPE_TINYINT>', 'ArrayFunctions::array_contains_all_specific_close<TYPE_TINYINT>'],
-    [15028203, 'array_contains_all', True, False, 'BOOLEAN', ['ARRAY_SMALLINT', 'ARRAY_SMALLINT'], 'ArrayFunctions::array_contains_all_specific<TYPE_SMALLINT>', 'ArrayFunctions::array_contains_all_specific_prepare<TYPE_SMALLINT>', 'ArrayFunctions::array_contains_all_specific_close<TYPE_SMALLINT>'],
-    [15028204, 'array_contains_all', True, False, 'BOOLEAN', ['ARRAY_INT', 'ARRAY_INT'], 'ArrayFunctions::array_contains_all_specific<TYPE_INT>', 'ArrayFunctions::array_contains_all_specific_prepare<TYPE_INT>', 'ArrayFunctions::array_contains_all_specific_close<TYPE_INT>'],
-    [15028205, 'array_contains_all', True, False, 'BOOLEAN', ['ARRAY_BIGINT', 'ARRAY_BIGINT'], 'ArrayFunctions::array_contains_all_specific<TYPE_BIGINT>', 'ArrayFunctions::array_contains_all_specific_prepare<TYPE_BIGINT>', 'ArrayFunctions::array_contains_all_specific_close<TYPE_BIGINT>'],
-    [15028206, 'array_contains_all', True, False, 'BOOLEAN', ['ARRAY_LARGEINT', 'ARRAY_LARGEINT'], 'ArrayFunctions::array_contains_all_specific<TYPE_LARGEINT>', 'ArrayFunctions::array_contains_all_specific_prepare<TYPE_LARGEINT>', 'ArrayFunctions::array_contains_all_specific_close<TYPE_LARGEINT>'],
-    [15028207, 'array_contains_all', True, False, 'BOOLEAN', ['ARRAY_DECIMALV2', 'ARRAY_DECIMALV2'], 'ArrayFunctions::array_contains_all_specific<TYPE_DECIMALV2>', 'ArrayFunctions::array_contains_all_specific_prepare<TYPE_DECIMALV2>', 'ArrayFunctions::array_contains_all_specific_close<TYPE_DECIMALV2>'],
-    [15028208, 'array_contains_all', True, False, 'BOOLEAN', ['ARRAY_DECIMAL32', 'ARRAY_DECIMAL32'], 'ArrayFunctions::array_contains_all_specific<TYPE_DECIMAL32>', 'ArrayFunctions::array_contains_all_specific_prepare<TYPE_DECIMAL32>', 'ArrayFunctions::array_contains_all_specific_close<TYPE_DECIMAL32>'],
-    [15028209, 'array_contains_all', True, False, 'BOOLEAN', ['ARRAY_DECIMAL64', 'ARRAY_DECIMAL64'], 'ArrayFunctions::array_contains_all_specific<TYPE_DECIMAL64>', 'ArrayFunctions::array_contains_all_specific_prepare<TYPE_DECIMAL64>', 'ArrayFunctions::array_contains_all_specific_close<TYPE_DECIMAL64>'],
-    [15028210, 'array_contains_all', True, False, 'BOOLEAN', ['ARRAY_DECIMAL128', 'ARRAY_DECIMAL128'], 'ArrayFunctions::array_contains_all_specific<TYPE_DECIMAL128>', 'ArrayFunctions::array_contains_all_specific_prepare<TYPE_DECIMAL128>', 'ArrayFunctions::array_contains_all_specific_close<TYPE_DECIMAL128>'],
-    [15028211, 'array_contains_all', True, False, 'BOOLEAN', ['ARRAY_FLOAT', 'ARRAY_FLOAT'], 'ArrayFunctions::array_contains_all_specific<TYPE_FLOAT>', 'ArrayFunctions::array_contains_all_specific_prepare<TYPE_FLOAT>', 'ArrayFunctions::array_contains_all_specific_close<TYPE_FLOAT>'],
-    [15028212, 'array_contains_all', True, False, 'BOOLEAN', ['ARRAY_DOUBLE', 'ARRAY_DOUBLE'], 'ArrayFunctions::array_contains_all_specific<TYPE_DOUBLE>', 'ArrayFunctions::array_contains_all_specific_prepare<TYPE_DOUBLE>', 'ArrayFunctions::array_contains_all_specific_close<TYPE_DOUBLE>'],
-    [15028213, 'array_contains_all', True, False, 'BOOLEAN', ['ARRAY_VARCHAR', 'ARRAY_VARCHAR'], 'ArrayFunctions::array_contains_all_specific<TYPE_VARCHAR>', 'ArrayFunctions::array_contains_all_specific_prepare<TYPE_VARCHAR>', 'ArrayFunctions::array_contains_all_specific_close<TYPE_VARCHAR>'],
-    [15028214, 'array_contains_all', True, False, 'BOOLEAN', ['ARRAY_DATE', 'ARRAY_DATE'], 'ArrayFunctions::array_contains_all_specific<TYPE_DATE>', 'ArrayFunctions::array_contains_all_specific_prepare<TYPE_DATE>', 'ArrayFunctions::array_contains_all_specific_close<TYPE_DATE>'],
-    [15028215, 'array_contains_all', True, False, 'BOOLEAN', ['ARRAY_DATETIME', 'ARRAY_DATETIME'], 'ArrayFunctions::array_contains_all_specific<TYPE_DATETIME>', 'ArrayFunctions::array_contains_all_specific_prepare<TYPE_DATETIME>', 'ArrayFunctions::array_contains_all_specific_close<TYPE_DATETIME>'],
-
-
-
-    # TODO: sepecific type
     [150283, 'array_contains_seq', True, False, 'BOOLEAN', ['ANY_ARRAY', 'ANY_ARRAY'],
      'ArrayFunctions::array_contains_seq'],
-    [15028301, 'array_contains_seq', True, False, 'BOOLEAN', ['ARRAY_BOOLEAN', 'ARRAY_BOOLEAN'], 'ArrayFunctions::array_contains_seq_specific<TYPE_BOOLEAN>', 'ArrayFunctions::array_contains_seq_specific_prepare<TYPE_BOOLEAN>', 'ArrayFunctions::array_contains_seq_specific_close<TYPE_BOOLEAN>'],
-    [15028302, 'array_contains_seq', True, False, 'BOOLEAN', ['ARRAY_TINYINT', 'ARRAY_TINYINT'], 'ArrayFunctions::array_contains_seq_specific<TYPE_TINYINT>', 'ArrayFunctions::array_contains_seq_specific_prepare<TYPE_TINYINT>', 'ArrayFunctions::array_contains_seq_specific_close<TYPE_TINYINT>'],
-    [15028303, 'array_contains_seq', True, False, 'BOOLEAN', ['ARRAY_SMALLINT', 'ARRAY_SMALLINT'], 'ArrayFunctions::array_contains_seq_specific<TYPE_SMALLINT>', 'ArrayFunctions::array_contains_seq_specific_prepare<TYPE_SMALLINT>', 'ArrayFunctions::array_contains_seq_specific_close<TYPE_SMALLINT>'],
-    [15028304, 'array_contains_seq', True, False, 'BOOLEAN', ['ARRAY_INT', 'ARRAY_INT'], 'ArrayFunctions::array_contains_seq_specific<TYPE_INT>', 'ArrayFunctions::array_contains_seq_specific_prepare<TYPE_INT>', 'ArrayFunctions::array_contains_seq_specific_close<TYPE_INT>'],
-    [15028305, 'array_contains_seq', True, False, 'BOOLEAN', ['ARRAY_BIGINT', 'ARRAY_BIGINT'], 'ArrayFunctions::array_contains_seq_specific<TYPE_BIGINT>', 'ArrayFunctions::array_contains_seq_specific_prepare<TYPE_BIGINT>', 'ArrayFunctions::array_contains_seq_specific_close<TYPE_BIGINT>'],
-    [15028306, 'array_contains_seq', True, False, 'BOOLEAN', ['ARRAY_LARGEINT', 'ARRAY_LARGEINT'], 'ArrayFunctions::array_contains_seq_specific<TYPE_LARGEINT>', 'ArrayFunctions::array_contains_seq_specific_prepare<TYPE_LARGEINT>', 'ArrayFunctions::array_contains_seq_specific_close<TYPE_LARGEINT>'],
-    [15028307, 'array_contains_seq', True, False, 'BOOLEAN', ['ARRAY_DECIMALV2', 'ARRAY_DECIMALV2'], 'ArrayFunctions::array_contains_seq_specific<TYPE_DECIMALV2>', 'ArrayFunctions::array_contains_seq_specific_prepare<TYPE_DECIMALV2>', 'ArrayFunctions::array_contains_seq_specific_close<TYPE_DECIMALV2>'],
-    [15028308, 'array_contains_seq', True, False, 'BOOLEAN', ['ARRAY_DECIMAL32', 'ARRAY_DECIMAL32'], 'ArrayFunctions::array_contains_seq_specific<TYPE_DECIMAL32>', 'ArrayFunctions::array_contains_seq_specific_prepare<TYPE_DECIMAL32>', 'ArrayFunctions::array_contains_seq_specific_close<TYPE_DECIMAL32>'],
-    [15028309, 'array_contains_seq', True, False, 'BOOLEAN', ['ARRAY_DECIMAL64', 'ARRAY_DECIMAL64'], 'ArrayFunctions::array_contains_seq_specific<TYPE_DECIMAL64>', 'ArrayFunctions::array_contains_seq_specific_prepare<TYPE_DECIMAL64>', 'ArrayFunctions::array_contains_seq_specific_close<TYPE_DECIMAL64>'],
-    [15028310, 'array_contains_seq', True, False, 'BOOLEAN', ['ARRAY_DECIMAL128', 'ARRAY_DECIMAL128'], 'ArrayFunctions::array_contains_seq_specific<TYPE_DECIMAL128>', 'ArrayFunctions::array_contains_seq_specific_prepare<TYPE_DECIMAL128>', 'ArrayFunctions::array_contains_seq_specific_close<TYPE_DECIMAL128>'],
-    [15028311, 'array_contains_seq', True, False, 'BOOLEAN', ['ARRAY_FLOAT', 'ARRAY_FLOAT'], 'ArrayFunctions::array_contains_seq_specific<TYPE_FLOAT>', 'ArrayFunctions::array_contains_seq_specific_prepare<TYPE_FLOAT>', 'ArrayFunctions::array_contains_seq_specific_close<TYPE_FLOAT>'],
-    [15028312, 'array_contains_seq', True, False, 'BOOLEAN', ['ARRAY_DOUBLE', 'ARRAY_DOUBLE'], 'ArrayFunctions::array_contains_seq_specific<TYPE_DOUBLE>', 'ArrayFunctions::array_contains_seq_specific_prepare<TYPE_DOUBLE>', 'ArrayFunctions::array_contains_seq_specific_close<TYPE_DOUBLE>'],
-    [15028313, 'array_contains_seq', True, False, 'BOOLEAN', ['ARRAY_VARCHAR', 'ARRAY_VARCHAR'], 'ArrayFunctions::array_contains_seq_specific<TYPE_VARCHAR>', 'ArrayFunctions::array_contains_seq_specific_prepare<TYPE_VARCHAR>', 'ArrayFunctions::array_contains_seq_specific_close<TYPE_VARCHAR>'],
-    [15028314, 'array_contains_seq', True, False, 'BOOLEAN', ['ARRAY_DATE', 'ARRAY_DATE'], 'ArrayFunctions::array_contains_seq_specific<TYPE_DATE>', 'ArrayFunctions::array_contains_seq_specific_prepare<TYPE_DATE>', 'ArrayFunctions::array_contains_seq_specific_close<TYPE_DATE>'],
-    [15028315, 'array_contains_seq', True, False, 'BOOLEAN', ['ARRAY_DATETIME', 'ARRAY_DATETIME'], 'ArrayFunctions::array_contains_seq_specific<TYPE_DATETIME>', 'ArrayFunctions::array_contains_seq_specific_prepare<TYPE_DATETIME>', 'ArrayFunctions::array_contains_seq_specific_close<TYPE_DATETIME>'],
-
-
     [150300, 'array_filter', True, False, 'ANY_ARRAY', ['ANY_ARRAY', 'ARRAY_BOOLEAN'], 'ArrayFunctions::array_filter'],
     [150301, 'all_match', True, False, 'BOOLEAN', ['ARRAY_BOOLEAN'], 'ArrayFunctions::all_match'],
     [150302, 'any_match', True, False, 'BOOLEAN', ['ARRAY_BOOLEAN'], 'ArrayFunctions::any_match'],

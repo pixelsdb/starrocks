@@ -4,7 +4,7 @@ displayed_sidebar: docs
 
 # array_min
 
-
+## Description
 
 Obtains the minimum value of all data in an ARRAY and return this result.
 

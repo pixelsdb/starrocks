@@ -4,7 +4,7 @@ displayed_sidebar: docs
 
 # to_tera_timestamp
 
-
+## Description
 
 Parses a date or time string according to the specified format and converts the string to a DATETIME  value.
 

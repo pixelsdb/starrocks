@@ -62,12 +62,12 @@ public class ShowHistogramStatsMetaStmt extends ShowStmt {
         long dbId = histogramStatsMeta.getDbId();
         long tableId = histogramStatsMeta.getTableId();
 
-        Database db = GlobalStateMgr.getCurrentState().getLocalMetastore().getDb(dbId);
+        Database db = GlobalStateMgr.getCurrentState().getDb(dbId);
         if (db == null) {
             throw new MetaNotFoundException("No found database: " + dbId);
         }
         row.set(0, db.getOriginName());
-        Table table = GlobalStateMgr.getCurrentState().getLocalMetastore().getTable(db.getId(), tableId);
+        Table table = db.getTable(tableId);
         if (table == null) {
             throw new MetaNotFoundException("No found table: " + tableId);
         }

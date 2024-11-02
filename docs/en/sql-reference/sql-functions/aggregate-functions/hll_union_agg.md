@@ -4,7 +4,7 @@ displayed_sidebar: docs
 
 # hll_union_agg
 
-
+## Description
 
 HLL is an engineering implementation based on the HyperLogLog algorithm, which is used to save the intermediate results of HyperLogGog calculation process.
 

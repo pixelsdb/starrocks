@@ -4,7 +4,7 @@ displayed_sidebar: docs
 
 # json_string
 
-
+## 功能
 
 将 JSON 类型转化为 JSON 字符串。
 

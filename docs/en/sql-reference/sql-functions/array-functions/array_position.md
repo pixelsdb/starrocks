@@ -4,7 +4,7 @@ displayed_sidebar: docs
 
 # array_position
 
-
+## Description
 
 Obtains the position of an element in an array.
 

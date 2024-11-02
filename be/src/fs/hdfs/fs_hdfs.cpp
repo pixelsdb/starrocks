@@ -28,7 +28,6 @@
 #include "service/backend_options.h"
 #include "testutil/sync_point.h"
 #include "udf/java/utils.h"
-#include "util/failpoint/fail_point.h"
 #include "util/hdfs_util.h"
 
 using namespace fmt::literals;
@@ -37,7 +36,7 @@ namespace starrocks {
 
 class GetHdfsFileReadOnlyHandle {
 public:
-    GetHdfsFileReadOnlyHandle(const FSOptions& options, std::string path, int buffer_size)
+    GetHdfsFileReadOnlyHandle(const FSOptions options, std::string path, int buffer_size)
             : _options(std::move(options)), _path(std::move(path)), _buffer_size(buffer_size) {}
 
     StatusOr<hdfsFS> getOrCreateFS() {
@@ -326,7 +325,6 @@ private:
 };
 
 Status HDFSWritableFile::append(const Slice& data) {
-    FAIL_POINT_TRIGGER_RETURN(output_stream_io_error, Status::IOError("injected output_stream_io_error"));
     tSize r = hdfsWrite(_fs, _file, data.data, data.size);
     if (r == -1) { // error
         auto error_msg = fmt::format("Fail to append {}: {}", _path, get_hdfs_err_msg());
@@ -344,7 +342,6 @@ Status HDFSWritableFile::append(const Slice& data) {
 }
 
 Status HDFSWritableFile::appendv(const Slice* data, size_t cnt) {
-    FAIL_POINT_TRIGGER_RETURN(output_stream_io_error, Status::IOError("injected output_stream_io_error"));
     for (size_t i = 0; i < cnt; i++) {
         RETURN_IF_ERROR(append(data[i]));
     }
@@ -357,7 +354,6 @@ Status HDFSWritableFile::close() {
     }
     FileSystem::on_file_write_close(this);
     auto ret = call_hdfs_scan_function_in_pthread([this]() {
-        FAIL_POINT_TRIGGER_RETURN(output_stream_io_error, Status::IOError("injected output_stream_io_error"));
         int r = hdfsHSync(_fs, _file);
         TEST_SYNC_POINT_CALLBACK("HDFSWritableFile::close", &r);
         auto st = Status::OK();
@@ -367,7 +363,6 @@ Status HDFSWritableFile::close() {
             st.update(Status::IOError(error_msg));
         }
 
-        FAIL_POINT_TRIGGER_RETURN(output_stream_io_error, Status::IOError("injected output_stream_io_error"));
         r = hdfsCloseFile(_fs, _file);
         if (r == -1) {
             auto error_msg = fmt::format("Fail to close file {}: {}", _path, get_hdfs_err_msg());
@@ -384,7 +379,7 @@ Status HDFSWritableFile::close() {
 
 class HdfsFileSystem : public FileSystem {
 public:
-    HdfsFileSystem(const FSOptions& options) : _options(std::move(options)) {}
+    HdfsFileSystem(const FSOptions& options) : _options(options) {}
     ~HdfsFileSystem() override = default;
 
     HdfsFileSystem(const HdfsFileSystem&) = delete;

@@ -91,7 +91,7 @@ public class QueryRuntimeProfile {
     /**
      * True indicates that the profile has been reported.
      * <p> When {@link SessionVariable#isEnableLoadProfile()} is enabled,
-     * if the time costs of stream load is less than {@link Config#stream_load_profile_collect_threshold_second},
+     * if the time costs of stream load is less than {@link Config#stream_load_profile_collect_second},
      * the profile will not be reported to FE to reduce the overhead of profile under high-frequency import
      */
     private boolean profileAlreadyReported = false;
@@ -244,10 +244,7 @@ public class QueryRuntimeProfile {
     public void finishAllInstances(Status status) {
         if (profileDoneSignal != null) {
             profileDoneSignal.countDownToZero(status);
-            List<String> unFinishedInstanceIds = getUnfinishedInstanceIds();
-            if (!unFinishedInstanceIds.isEmpty()) {
-                LOG.info("unfinished instances: {}", unFinishedInstanceIds);
-            }
+            LOG.info("unfinished instances: {}", getUnfinishedInstanceIds());
         }
     }
 
@@ -404,9 +401,9 @@ public class QueryRuntimeProfile {
         newQueryProfile.copyAllInfoStringsFrom(queryProfile, null);
         newQueryProfile.copyAllCountersFrom(queryProfile);
 
-        Map<String, Long> peakMemoryEachBE = Maps.newHashMap();
         long sumQueryCumulativeCpuTime = 0;
         long sumQuerySpillBytes = 0;
+        long sumQueryPeakMemoryBytes = 0;
         long maxQueryPeakMemoryUsage = 0;
         long maxQueryExecutionWallTime = 0;
 
@@ -446,8 +443,7 @@ public class QueryRuntimeProfile {
                 toBeRemove = instanceProfile.getCounter("QueryPeakMemoryUsage");
                 if (toBeRemove != null) {
                     maxQueryPeakMemoryUsage = Math.max(maxQueryPeakMemoryUsage, toBeRemove.getValue());
-                    String beAddress = instanceProfile.getInfoString("Address");
-                    peakMemoryEachBE.merge(beAddress, toBeRemove.getValue(), Long::max);
+                    sumQueryPeakMemoryBytes += toBeRemove.getValue();
                 }
                 instanceProfile.removeCounter("QueryPeakMemoryUsage");
 
@@ -587,7 +583,7 @@ public class QueryRuntimeProfile {
         Counter queryPeakMemoryUsage = newQueryProfile.addCounter("QueryPeakMemoryUsagePerNode", TUnit.BYTES, null);
         queryPeakMemoryUsage.setValue(maxQueryPeakMemoryUsage);
         Counter sumQueryPeakMemoryUsage = newQueryProfile.addCounter("QuerySumMemoryUsage", TUnit.BYTES, null);
-        sumQueryPeakMemoryUsage.setValue(peakMemoryEachBE.values().stream().reduce(0L, Long::sum));
+        sumQueryPeakMemoryUsage.setValue(sumQueryPeakMemoryBytes);
         Counter queryExecutionWallTime = newQueryProfile.addCounter("QueryExecutionWallTime", TUnit.TIME_NS, null);
         queryExecutionWallTime.setValue(maxQueryExecutionWallTime);
         Counter querySpillBytes = newQueryProfile.addCounter("QuerySpillBytes", TUnit.BYTES, null);

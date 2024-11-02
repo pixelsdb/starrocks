@@ -23,18 +23,15 @@ import com.starrocks.analysis.SlotRef;
 import com.starrocks.analysis.StringLiteral;
 import com.starrocks.analysis.TableName;
 import com.starrocks.catalog.Column;
-import com.starrocks.catalog.Database;
 import com.starrocks.catalog.MaterializedView;
 import com.starrocks.catalog.OlapTable;
 import com.starrocks.catalog.Table;
 import com.starrocks.catalog.Type;
 import com.starrocks.qe.ConnectContext;
-import com.starrocks.server.GlobalStateMgr;
 import com.starrocks.sql.analyzer.SelectAnalyzer.RewriteAliasVisitor;
 import com.starrocks.sql.ast.ColumnAssignment;
 import com.starrocks.sql.ast.DefaultValueExpr;
 import com.starrocks.sql.ast.JoinRelation;
-import com.starrocks.sql.ast.LoadStmt;
 import com.starrocks.sql.ast.QueryStatement;
 import com.starrocks.sql.ast.Relation;
 import com.starrocks.sql.ast.SelectList;
@@ -60,23 +57,10 @@ public class UpdateAnalyzer {
         }
     }
 
-    private static void analyzeProperties(UpdateStmt updateStmt, ConnectContext session) {
-        Map<String, String> properties = updateStmt.getProperties();
-        properties.put(LoadStmt.MAX_FILTER_RATIO_PROPERTY,
-                String.valueOf(session.getSessionVariable().getInsertMaxFilterRatio()));
-        properties.put(LoadStmt.STRICT_MODE, String.valueOf(session.getSessionVariable().getEnableInsertStrict()));
-    }
-
     public static void analyze(UpdateStmt updateStmt, ConnectContext session) {
-        analyzeProperties(updateStmt, session);
-
         TableName tableName = updateStmt.getTableName();
-        tableName.normalization(session);
-        Database db = GlobalStateMgr.getCurrentState().getMetadataMgr()
-                .getDb(tableName.getCatalog(), tableName.getDb());
-        if (db == null) {
-            throw new SemanticException("Database %s is not found", tableName.getCatalogAndDb());
-        }
+        MetaUtils.normalizationTableName(session, tableName);
+        MetaUtils.getDatabase(session, tableName);
         Table table = MetaUtils.getSessionAwareTable(session, null, tableName);
 
         if (table instanceof MaterializedView) {

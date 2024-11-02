@@ -4,7 +4,7 @@ displayed_sidebar: docs
 
 # quarter
 
-
+## 功能
 
 返回给定的日期值对应的季度，范围 1~4。
 

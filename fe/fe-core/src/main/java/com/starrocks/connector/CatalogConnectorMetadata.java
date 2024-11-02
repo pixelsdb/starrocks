@@ -28,8 +28,6 @@ import com.starrocks.common.Pair;
 import com.starrocks.common.UserException;
 import com.starrocks.common.profile.Tracers;
 import com.starrocks.connector.informationschema.InformationSchemaMetadata;
-import com.starrocks.connector.metadata.MetadataTable;
-import com.starrocks.connector.metadata.MetadataTableType;
 import com.starrocks.connector.metadata.TableMetaMetadata;
 import com.starrocks.credential.CloudConfiguration;
 import com.starrocks.qe.ConnectContext;
@@ -90,14 +88,6 @@ public class CatalogConnectorMetadata implements ConnectorMetadata {
         return null;
     }
 
-    private ConnectorMetadata metadataOfTable(Table table) {
-        if (table instanceof MetadataTable) {
-            return tableMetadata;
-        }
-
-        return null;
-    }
-
     private ConnectorMetadata metadataOfDb(String dBName) {
         if (isInfoSchemaDb(dBName)) {
             return informationSchema;
@@ -125,8 +115,8 @@ public class CatalogConnectorMetadata implements ConnectorMetadata {
     }
 
     @Override
-    public List<String> listPartitionNames(String databaseName, String tableName, TableVersionRange version) {
-        return normal.listPartitionNames(databaseName, tableName, version);
+    public List<String> listPartitionNames(String databaseName, String tableName, long snapshotId) {
+        return normal.listPartitionNames(databaseName, tableName, snapshotId);
     }
 
     @Override
@@ -146,18 +136,6 @@ public class CatalogConnectorMetadata implements ConnectorMetadata {
     }
 
     @Override
-    public TableVersionRange getTableVersionRange(String dbName, Table table,
-                                                  Optional<ConnectorTableVersion> startVersion,
-                                                  Optional<ConnectorTableVersion> endVersion) {
-        ConnectorMetadata metadata = metadataOfTable(table);
-        if (metadata == null) {
-            metadata = metadataOfDb(dbName);
-        }
-
-        return metadata.getTableVersionRange(dbName, table, startVersion, endVersion);
-    }
-
-    @Override
     public boolean tableExists(String dbName, String tblName) {
         ConnectorMetadata metadata = metadataOfDb(dbName);
         return metadata.tableExists(dbName, tblName);
@@ -169,13 +147,9 @@ public class CatalogConnectorMetadata implements ConnectorMetadata {
     }
 
     @Override
-    public List<RemoteFileInfo> getRemoteFiles(Table table, GetRemoteFilesParams params) {
-        return normal.getRemoteFiles(table, params);
-    }
-
-    @Override
-    public RemoteFileInfoSource getRemoteFilesAsync(Table table, GetRemoteFilesParams params) {
-        return normal.getRemoteFilesAsync(table, params);
+    public List<RemoteFileInfo> getRemoteFileInfos(Table table, List<PartitionKey> partitionKeys, long snapshotId,
+                                                   ScalarOperator predicate, List<String> fieldNames, long limit) {
+        return normal.getRemoteFileInfos(table, partitionKeys, snapshotId, predicate, fieldNames, limit);
     }
 
     @Override
@@ -184,14 +158,9 @@ public class CatalogConnectorMetadata implements ConnectorMetadata {
     }
 
     @Override
-    public List<PartitionInfo> getRemotePartitions(Table table, List<String> partitionNames) {
-        return normal.getRemotePartitions(table, partitionNames);
-    }
-
-    @Override
     public SerializedMetaSpec getSerializedMetaSpec(String dbName, String tableName,
-                                                    long snapshotId, String serializedPredicate, MetadataTableType type) {
-        return normal.getSerializedMetaSpec(dbName, tableName, snapshotId, serializedPredicate, type);
+                                                    long snapshotId, String serializedPredicate) {
+        return normal.getSerializedMetaSpec(dbName, tableName, snapshotId, serializedPredicate);
     }
 
     @Override
@@ -201,14 +170,13 @@ public class CatalogConnectorMetadata implements ConnectorMetadata {
 
     @Override
     public Statistics getTableStatistics(OptimizerContext session, Table table, Map<ColumnRefOperator, Column> columns,
-                                         List<PartitionKey> partitionKeys, ScalarOperator predicate, long limit,
-                                         TableVersionRange version) {
-        return normal.getTableStatistics(session, table, columns, partitionKeys, predicate, limit, version);
+                                         List<PartitionKey> partitionKeys, ScalarOperator predicate, long limit) {
+        return normal.getTableStatistics(session, table, columns, partitionKeys, predicate, limit);
     }
 
     @Override
-    public List<PartitionKey> getPrunedPartitions(Table table, ScalarOperator predicate, long limit, TableVersionRange version) {
-        return normal.getPrunedPartitions(table, predicate, limit, version);
+    public List<PartitionKey> getPrunedPartitions(Table table, ScalarOperator predicate, long limit) {
+        return normal.getPrunedPartitions(table, predicate, limit);
     }
 
     @Override
@@ -259,8 +227,8 @@ public class CatalogConnectorMetadata implements ConnectorMetadata {
     }
 
     @Override
-    public void finishSink(String dbName, String table, List<TSinkCommitInfo> commitInfos, String branch) {
-        normal.finishSink(dbName, table, commitInfos, branch);
+    public void finishSink(String dbName, String table, List<TSinkCommitInfo> commitInfos) {
+        normal.finishSink(dbName, table, commitInfos);
     }
 
     @Override
@@ -295,7 +263,7 @@ public class CatalogConnectorMetadata implements ConnectorMetadata {
 
     @Override
     public void addPartitions(ConnectContext ctx, Database db, String tableName, AddPartitionClause addPartitionClause)
-            throws DdlException {
+            throws DdlException, AnalysisException {
         normal.addPartitions(ctx, db, tableName, addPartitionClause);
     }
 

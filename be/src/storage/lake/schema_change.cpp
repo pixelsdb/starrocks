@@ -265,7 +265,7 @@ Status SortedSchemaChange::process(RowsetPtr rowset, RowsetMetadata* new_rowset_
         // it will return fail if memory is exhausted
         if (cur_usage > CurrentThread::mem_tracker()->limit() * 0.9) {
             RETURN_IF_ERROR_WITH_WARN(writer->flush(), "failed to flush writer.");
-            VLOG(2) << "SortedSchemaChange memory usage: " << cur_usage << " after writer flush "
+            VLOG(1) << "SortedSchemaChange memory usage: " << cur_usage << " after writer flush "
                     << CurrentThread::mem_tracker()->consumption();
         }
 #endif
@@ -288,7 +288,7 @@ Status SortedSchemaChange::process(RowsetPtr rowset, RowsetMetadata* new_rowset_
         RETURN_IF_ERROR(writer->write(*_new_chunk, _selective->data(), _new_chunk->num_rows()));
     }
 
-    RETURN_IF_ERROR(writer->finish());
+    RETURN_IF_ERROR(writer->finish(DeltaWriter::kDontWriteTxnLog));
 
     for (auto& f : writer->files()) {
         new_rowset_metadata->add_segments(std::move(f.path));

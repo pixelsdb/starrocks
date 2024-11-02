@@ -37,6 +37,7 @@ package com.starrocks.load.loadv2;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.starrocks.analysis.BrokerDesc;
+import com.starrocks.analysis.DateLiteral;
 import com.starrocks.catalog.AggregateType;
 import com.starrocks.catalog.Column;
 import com.starrocks.catalog.ColumnId;
@@ -125,11 +126,11 @@ public class SparkLoadPendingTaskTest {
 
         new Expectations() {
             {
-                globalStateMgr.getLocalMetastore().getDb(dbId);
+                globalStateMgr.getDb(dbId);
                 result = database;
                 sparkLoadJob.getHandle();
                 result = handle;
-                GlobalStateMgr.getCurrentState().getLocalMetastore().getTable(database.getId(), tableId);
+                database.getTable(tableId);
                 result = table;
                 table.getPartitions();
                 result = partitions;
@@ -181,7 +182,7 @@ public class SparkLoadPendingTaskTest {
 
         new Expectations() {
             {
-                globalStateMgr.getLocalMetastore().getDb(dbId);
+                globalStateMgr.getDb(dbId);
                 result = null;
             }
         };
@@ -210,9 +211,9 @@ public class SparkLoadPendingTaskTest {
 
         new Expectations() {
             {
-                globalStateMgr.getLocalMetastore().getDb(dbId);
+                globalStateMgr.getDb(dbId);
                 result = database;
-                GlobalStateMgr.getCurrentState().getLocalMetastore().getTable(database.getId(), tableId);
+                database.getTable(tableId);
                 result = null;
             }
         };
@@ -286,9 +287,9 @@ public class SparkLoadPendingTaskTest {
 
         new Expectations() {
             {
-                globalStateMgr.getLocalMetastore().getDb(dbId);
+                globalStateMgr.getDb(dbId);
                 result = database;
-                GlobalStateMgr.getCurrentState().getLocalMetastore().getTable(database.getId(), tableId);
+                database.getTable(tableId);
                 result = table;
                 table.getPartitions();
                 result = partitions;
@@ -412,4 +413,14 @@ public class SparkLoadPendingTaskTest {
         Assert.assertEquals(partition3Id, etlPartitions.get(0).partitionId);
     }
 
+    @Test
+    public void testConvertDateLiteralToDouble() throws AnalysisException {
+        Object result = SparkLoadPendingTask.convertDateLiteralToNumber(
+                new DateLiteral("2015-03-01", ScalarType.DATE));
+        Assert.assertEquals(1031777L, result);
+
+        result = SparkLoadPendingTask.convertDateLiteralToNumber(
+                new DateLiteral("2015-03-01 12:00:00", ScalarType.DATETIME));
+        Assert.assertEquals(20150301120000L, result);
+    }
 }

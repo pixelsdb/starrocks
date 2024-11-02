@@ -235,9 +235,4 @@ public class MysqlTable extends Table {
     public boolean supportInsert() {
         return true;
     }
-
-    @Override
-    public boolean isTemporal() {
-        return true;
-    }
 }

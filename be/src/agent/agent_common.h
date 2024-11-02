@@ -99,7 +99,6 @@ using CloneAgentTaskRequest = AgentTaskRequestWithReqBody<TCloneReq>;
 using StorageMediumMigrateTaskRequest = AgentTaskRequestWithReqBody<TStorageMediumMigrateReq>;
 using CheckConsistencyTaskRequest = AgentTaskRequestWithReqBody<TCheckConsistencyReq>;
 using CompactionTaskRequest = AgentTaskRequestWithReqBody<TCompactionReq>;
-using CompactionControlTaskRequest = AgentTaskRequestWithReqBody<TCompactionControlReq>;
 using UploadAgentTaskRequest = AgentTaskRequestWithReqBody<TUploadReq>;
 using DownloadAgentTaskRequest = AgentTaskRequestWithReqBody<TDownloadReq>;
 using SnapshotAgentTaskRequest = AgentTaskRequestWithReqBody<TSnapshotRequest>;

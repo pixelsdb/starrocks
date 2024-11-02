@@ -97,6 +97,11 @@ public class EsScanNode extends ScanNode {
     }
 
     @Override
+    public int getNumInstances() {
+        return shardScanRanges.size();
+    }
+
+    @Override
     public List<TScanRangeLocations> getScanRangeLocations(long maxScanRangeLength) {
         return shardScanRanges;
     }

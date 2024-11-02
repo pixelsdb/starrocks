@@ -4,7 +4,7 @@ displayed_sidebar: docs
 
 # sign
 
-
+## 功能
 
 返回参数 `x` 的符号。
 

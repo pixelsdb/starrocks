@@ -4,8 +4,7 @@ properties
 (
     "type" = "iceberg",
     "iceberg.catalog.type" = "hive",
-    "hive.metastore.uris" = "${iceberg_catalog_hive_metastore_uris}",
-    "enable_get_stats_from_external_metadata"="true"
+    "hive.metastore.uris" = "${iceberg_catalog_hive_metastore_uris}"
 );
 
 create database ice_cat_${uuid0}.ice_db_${uuid0};

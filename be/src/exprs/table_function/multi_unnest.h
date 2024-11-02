@@ -116,7 +116,7 @@ public:
          */
     };
 
-    Status init(const TFunction& fn, TableFunctionState** state) const override {
+    [[nodiscard]] Status init(const TFunction& fn, TableFunctionState** state) const override {
         *state = new UnnestState();
         const auto& table_fn = fn.table_fn;
         if (table_fn.__isset.is_left_join) {
@@ -125,11 +125,13 @@ public:
         return Status::OK();
     }
 
-    Status prepare(TableFunctionState* state) const override { return Status::OK(); }
+    [[nodiscard]] Status prepare(TableFunctionState* state) const override { return Status::OK(); }
 
-    Status open(RuntimeState* runtime_state, TableFunctionState* state) const override { return Status::OK(); };
+    [[nodiscard]] Status open(RuntimeState* runtime_state, TableFunctionState* state) const override {
+        return Status::OK();
+    };
 
-    Status close(RuntimeState* runtime_state, TableFunctionState* state) const override {
+    [[nodiscard]] Status close(RuntimeState* runtime_state, TableFunctionState* state) const override {
         delete state;
         return Status::OK();
     }

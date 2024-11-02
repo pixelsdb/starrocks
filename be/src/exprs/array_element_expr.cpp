@@ -74,7 +74,7 @@ public:
             }
         }
 
-        NullData null_flags;
+        std::vector<uint8_t> null_flags;
         raw::make_room(&null_flags, num_rows);
 
         // Construct null flags.

@@ -18,7 +18,6 @@ import com.google.common.base.Preconditions;
 import com.starrocks.catalog.Column;
 import com.starrocks.catalog.IcebergTable;
 import com.starrocks.catalog.Table;
-import com.starrocks.connector.TableVersionRange;
 import com.starrocks.sql.optimizer.operator.OperatorType;
 import com.starrocks.sql.optimizer.operator.OperatorVisitor;
 import com.starrocks.sql.optimizer.operator.ScanOperatorPredicates;
@@ -33,33 +32,21 @@ public class LogicalIcebergScanOperator extends LogicalScanOperator {
 
     private boolean hasUnknownColumn = true;
 
-    // record if this scan is derived from IcebergEqualityDeleteRewriteRule.
-    private boolean fromEqDeleteRewriteRule;
-
     public LogicalIcebergScanOperator(Table table,
                                       Map<ColumnRefOperator, Column> colRefToColumnMetaMap,
                                       Map<Column, ColumnRefOperator> columnMetaToColRefMap,
                                       long limit,
                                       ScalarOperator predicate) {
-        this(table, colRefToColumnMetaMap, columnMetaToColRefMap, limit, predicate, TableVersionRange.empty());
-    }
-
-    public LogicalIcebergScanOperator(Table table,
-                                      Map<ColumnRefOperator, Column> colRefToColumnMetaMap,
-                                      Map<Column, ColumnRefOperator> columnMetaToColRefMap,
-                                      long limit,
-                                      ScalarOperator predicate,
-                                      TableVersionRange versionRange) {
         super(OperatorType.LOGICAL_ICEBERG_SCAN,
                 table,
                 colRefToColumnMetaMap,
                 columnMetaToColRefMap,
                 limit,
-                predicate, null, versionRange);
+                predicate, null);
 
         Preconditions.checkState(table instanceof IcebergTable);
         IcebergTable icebergTable = (IcebergTable) table;
-        partitionColumns.addAll(icebergTable.getPartitionColumns().stream().map(Column::getName).collect(Collectors.toList()));
+        partitionColumns.addAll(icebergTable.getPartitionColumns().stream().map(x -> x.getName()).collect(Collectors.toList()));
     }
 
     private LogicalIcebergScanOperator() {
@@ -74,14 +61,6 @@ public class LogicalIcebergScanOperator extends LogicalScanOperator {
     @Override
     public void setScanOperatorPredicates(ScanOperatorPredicates predicates) {
         this.predicates = predicates;
-    }
-
-    public boolean isFromEqDeleteRewriteRule() {
-        return fromEqDeleteRewriteRule;
-    }
-
-    public void setFromEqDeleteRewriteRule(boolean fromEqDeleteRewriteRule) {
-        this.fromEqDeleteRewriteRule = fromEqDeleteRewriteRule;
     }
 
     @Override
@@ -115,6 +94,7 @@ public class LogicalIcebergScanOperator extends LogicalScanOperator {
         @Override
         public LogicalIcebergScanOperator.Builder withOperator(LogicalIcebergScanOperator scanOperator) {
             super.withOperator(scanOperator);
+
             builder.predicates = scanOperator.predicates.clone();
             return this;
         }

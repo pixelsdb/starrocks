@@ -438,11 +438,6 @@ public class LogicalPlanPrinter {
         }
 
         @Override
-        public OperatorStr visitPhysicalIcebergEqualityDeleteScan(OptExpression optExpression, Integer step) {
-            return visitScanCommon(optExpression, step, "ICEBERG EQUALITY DELETE SCAN");
-        }
-
-        @Override
         public OperatorStr visitPhysicalPaimonScan(OptExpression optExpression, Integer step) {
             return visitScanCommon(optExpression, step, "PAIMON SCAN");
         }

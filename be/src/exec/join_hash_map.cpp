@@ -24,7 +24,6 @@
 #include "exec/hash_join_node.h"
 #include "serde/column_array_serde.h"
 #include "simd/simd.h"
-#include "util/runtime_profile.h"
 
 namespace starrocks {
 
@@ -36,7 +35,7 @@ void HashTableProbeState::consider_probe_time_locality() {
         if ((probe_chunks & (detect_step - 1)) == 0) {
             int window_size = std::min(active_coroutines * 4, 50);
             if (probe_row_count > window_size) {
-                phmap::flat_hash_map<uint32_t, uint32_t, StdHash<uint32_t>> occurrence;
+                phmap::flat_hash_map<uint32_t, uint32_t> occurrence;
                 occurrence.reserve(probe_row_count);
                 uint32_t unique_size = 0;
                 bool enable_interleaving = true;
@@ -304,13 +303,11 @@ JoinHashTable JoinHashTable::clone_readable_table() {
 
 void JoinHashTable::set_probe_profile(RuntimeProfile::Counter* search_ht_timer,
                                       RuntimeProfile::Counter* output_probe_column_timer,
-                                      RuntimeProfile::Counter* output_build_column_timer,
-                                      RuntimeProfile::Counter* probe_count) {
+                                      RuntimeProfile::Counter* output_build_column_timer) {
     if (_probe_state == nullptr) return;
     _probe_state->search_ht_timer = search_ht_timer;
     _probe_state->output_probe_column_timer = output_probe_column_timer;
     _probe_state->output_build_column_timer = output_build_column_timer;
-    _probe_state->probe_counter = probe_count;
 }
 
 float JoinHashTable::get_keys_per_bucket() const {
@@ -332,10 +329,9 @@ void JoinHashTable::create(const HashTableParam& param) {
         _probe_state->search_ht_timer = param.search_ht_timer;
         _probe_state->output_probe_column_timer = param.output_probe_column_timer;
         _probe_state->output_build_column_timer = param.output_build_column_timer;
-        _probe_state->probe_counter = param.probe_counter;
     }
 
-    _table_items->build_chunk = std::make_shared<SegmentedChunk>(param.build_chunk_segment_size);
+    _table_items->build_chunk = std::make_shared<Chunk>();
     _table_items->with_other_conjunct = param.with_other_conjunct;
     _table_items->join_type = param.join_type;
     _table_items->mor_reader_mode = param.mor_reader_mode;
@@ -486,7 +482,6 @@ void JoinHashTable::_init_build_column(const HashTableParam& param) {
             _table_items->build_column_count++;
         }
     }
-    _table_items->build_chunk->build_columns();
 }
 
 void JoinHashTable::_init_mor_reader() {
@@ -512,9 +507,13 @@ void JoinHashTable::_init_mor_reader() {
 
 void JoinHashTable::_init_join_keys() {
     for (const auto& key_desc : _table_items->join_keys) {
-        auto key_column = ColumnHelper::create_column(*key_desc.type, false);
-        key_column->append_default();
-        _table_items->key_columns.emplace_back(key_column);
+        if (key_desc.col_ref) {
+            _table_items->key_columns.emplace_back(nullptr);
+        } else {
+            auto key_column = ColumnHelper::create_column(*key_desc.type, false);
+            key_column->append_default();
+            _table_items->key_columns.emplace_back(key_column);
+        }
     }
 }
 
@@ -542,12 +541,12 @@ Status JoinHashTable::build(RuntimeState* state) {
     RETURN_IF_ERROR(_table_items->build_chunk->upgrade_if_overflow());
     _table_items->has_large_column = _table_items->build_chunk->has_large_column();
 
-    // build key_columns
+    // If the join key is column ref of build chunk, fetch from build chunk directly
     size_t join_key_count = _table_items->join_keys.size();
     for (size_t i = 0; i < join_key_count; i++) {
         if (_table_items->join_keys[i].col_ref != nullptr) {
             SlotId slot_id = _table_items->join_keys[i].col_ref->slot_id();
-            _table_items->key_columns[i] = _table_items->build_chunk->get_column_by_slot_id(slot_id)->materialize();
+            _table_items->key_columns[i] = _table_items->build_chunk->get_column_by_slot_id(slot_id);
         }
     }
 
@@ -623,15 +622,19 @@ Status JoinHashTable::probe_remain(RuntimeState* state, ChunkPtr* chunk, bool* e
 }
 
 void JoinHashTable::append_chunk(const ChunkPtr& chunk, const Columns& key_columns) {
-    // TODO: simplify the SlotId mapping, if the slot of input chunk is same as build_chunk, we don't need to remap them
-    std::vector<SlotId> slots;
+    Columns& columns = _table_items->build_chunk->columns();
+
     for (size_t i = 0; i < _table_items->build_column_count; i++) {
         SlotDescriptor* slot = _table_items->build_slots[i].slot;
-        slots.push_back(slot->id());
-    }
-    _table_items->build_chunk->append_chunk(chunk, slots);
+        ColumnPtr& column = chunk->get_column_by_slot_id(slot->id());
 
-    // TODO: it's useless for the optimizer, but there're stil some UT depending on it
+        if (!columns[i]->is_nullable() && column->is_nullable()) {
+            // upgrade to nullable column
+            columns[i] = NullableColumn::create(columns[i], NullColumn::create(columns[i]->size(), 0));
+        }
+        columns[i]->append(*column);
+    }
+
     for (size_t i = 0; i < _table_items->key_columns.size(); i++) {
         // If the join key is slot ref, will get from build chunk directly,
         // otherwise will append from key_column of input
@@ -647,26 +650,9 @@ void JoinHashTable::append_chunk(const ChunkPtr& chunk, const Columns& key_colum
     }
 
     _table_items->row_count += chunk->num_rows();
-    DCHECK_EQ(_table_items->row_count + 1, _table_items->build_chunk->num_rows());
 }
 
-void JoinHashTable::merge_ht(const JoinHashTable& ht) {
-    _table_items->row_count += ht._table_items->row_count;
-
-    auto& columns = _table_items->build_chunk->columns();
-    auto& other_columns = ht._table_items->build_chunk->columns();
-
-    for (size_t i = 0; i < _table_items->build_column_count; i++) {
-        if (!columns[i]->is_nullable() && other_columns[i]->is_nullable()) {
-            // upgrade to nullable column
-            columns[i]->upgrade_to_nullable();
-        }
-    }
-    _table_items->build_chunk->append(ht._table_items->build_chunk, 1);
-}
-
-ChunkPtr JoinHashTable::convert_to_spill_schema(const ChunkPtr& chunk) const {
-    DCHECK(chunk != nullptr && chunk->num_rows() > 0);
+StatusOr<ChunkPtr> JoinHashTable::convert_to_spill_schema(const ChunkPtr& chunk) const {
     ChunkPtr output = std::make_shared<Chunk>();
     //
     for (size_t i = 0; i < _table_items->build_column_count; i++) {

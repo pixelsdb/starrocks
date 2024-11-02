@@ -301,22 +301,6 @@ statement
     | showDictionaryStatement
     | cancelRefreshDictionaryStatement
 
-    // Plan advisor statement
-    | addPlanAdvisorStatement
-    | clearPlanAdvisorStatement
-    | delPlanAdvisorStatement
-    | showPlanAdvisorStatement
-
-    // Warehouse Statement
-    | createWarehouseStatement
-    | dropWarehouseStatement
-    | suspendWarehouseStatement
-    | resumeWarehouseStatement
-    | setWarehouseStatement
-    | showWarehousesStatement
-    | showClustersStatement
-    | showNodesStatement
-
     // Unsupported Statement
     | unsupportedStatement
     ;
@@ -389,7 +373,7 @@ createTableStatement
 
 
 columnDesc
-    : identifier type? charsetName? KEY? aggDesc? columnNullable?
+    : identifier type charsetName? KEY? aggDesc? (NULL | NOT NULL)?
     (defaultDesc | AUTO_INCREMENT | generatedColumnDesc)?
     comment?
     ;
@@ -432,19 +416,6 @@ orderByDesc
     : ORDER BY identifierList
     ;
 
-columnNullable
-    : NULL
-    | NOT NULL
-    ;
-
-typeWithNullable
-    : type columnNullable?
-    ;
-
-aggStateDesc
-    : identifier '(' typeWithNullable (',' typeWithNullable)* ')'
-    ;
-
 aggDesc
     : SUM
     | MAX
@@ -454,7 +425,6 @@ aggDesc
     | BITMAP_UNION
     | PERCENTILE_UNION
     | REPLACE_IF_NOT_NULL
-    | aggStateDesc
     ;
 
 rollupDesc
@@ -518,7 +488,7 @@ dropIndexStatement
     ;
 
 indexType
-    : USING (BITMAP | GIN | NGRAMBF | VECTOR)
+    : USING (BITMAP | GIN | NGRAMBF)
     ;
 
 showTableStatement
@@ -713,7 +683,7 @@ adminSetPartitionVersion
     ;
 
 killStatement
-    : KILL (CONNECTION? | QUERY) (connId=INTEGER_VALUE | queryId=string)
+    : KILL (CONNECTION? | QUERY) INTEGER_VALUE
     ;
 
 syncStatement
@@ -888,11 +858,6 @@ alterClause
     | optimizeClause
     | addFieldClause
     | dropFieldClause
-    | createOrReplaceBranchClause
-    | createOrReplaceTagClause
-    | dropBranchClause
-    | dropTagClause
-    | tableOperationClause
 
     //Alter partition clause
     | addPartitionClause
@@ -919,11 +884,11 @@ modifyFrontendHostClause
   ;
 
 addBackendClause
-   : ADD BACKEND string (',' string)* (INTO WAREHOUSE warehouseName=identifierOrString)?
+   : ADD BACKEND string (',' string)*
    ;
 
 dropBackendClause
-   : DROP BACKEND string (',' string)* (FROM WAREHOUSE warehouseName=identifierOrString)? FORCE?
+   : DROP BACKEND string (',' string)* FORCE?
    ;
 
 decommissionBackendClause
@@ -936,11 +901,11 @@ modifyBackendClause
    ;
 
 addComputeNodeClause
-   : ADD COMPUTE NODE string (',' string)* (INTO WAREHOUSE warehouseName=identifierOrString)?
+   : ADD COMPUTE NODE string (',' string)*
    ;
 
 dropComputeNodeClause
-   : DROP COMPUTE NODE string (',' string)* (FROM WAREHOUSE warehouseName=identifierOrString)?
+   : DROP COMPUTE NODE string (',' string)*
    ;
 
 modifyBrokerClause
@@ -1059,64 +1024,6 @@ dropFieldClause
     : MODIFY COLUMN identifier DROP FIELD nestedFieldName properties?
     ;
 
-createOrReplaceTagClause
-    : (CREATE OR)? REPLACE TAG identifier tagOptions
-    | CREATE TAG (IF NOT EXISTS)? identifier tagOptions
-    ;
-
-createOrReplaceBranchClause
-    : (CREATE OR)? REPLACE BRANCH identifier branchOptions
-    | CREATE BRANCH (IF NOT EXISTS)? identifier branchOptions
-    ;
-
-dropBranchClause
-    : DROP BRANCH (IF EXISTS)? identifier
-    ;
-
-dropTagClause
-    : DROP TAG (IF EXISTS)? identifier
-    ;
-
-tableOperationClause
-    : EXECUTE functionCall
-    ;
-
-tagOptions
-    : (AS OF VERSION snapshotId)? (refRetain)?
-    ;
-
-branchOptions
-    : (AS OF VERSION snapshotId)? (refRetain)? (snapshotRetention)?
-    ;
-
-snapshotRetention
-    : WITH SNAPSHOT RETENTION minSnapshotsToKeep
-    | WITH SNAPSHOT RETENTION maxSnapshotAge
-    | WITH SNAPSHOT RETENTION minSnapshotsToKeep maxSnapshotAge
-    ;
-
-refRetain
-    : RETAIN number timeUnit
-    ;
-
-maxSnapshotAge
-    : number timeUnit
-    ;
-
-minSnapshotsToKeep
-    : number SNAPSHOTS
-    ;
-
-snapshotId
-    : number
-    ;
-
-timeUnit
-    : DAYS
-    | HOURS
-    | MINUTES
-    ;
-
 // ---------Alter partition clause---------
 
 addPartitionClause
@@ -1125,8 +1032,7 @@ addPartitionClause
     ;
 
 dropPartitionClause
-    : DROP TEMPORARY? (PARTITION (IF EXISTS)? identifier | PARTITIONS (IF EXISTS)? identifierList) FORCE?
-    | DROP TEMPORARY? PARTITIONS (IF EXISTS)? multiRangePartition FORCE?
+    : DROP TEMPORARY? PARTITION (IF EXISTS)? identifier FORCE?
     ;
 
 truncatePartitionClause
@@ -1149,15 +1055,9 @@ partitionRenameClause
 // ------------------------------------------- DML Statement -----------------------------------------------------------
 
 insertStatement
-    : explainDesc? INSERT (INTO | OVERWRITE) (qualifiedName writeBranch? partitionNames? | (FILES propertyList) | (BLACKHOLE '(' ')'))
-        insertLabelOrColumnAliases* properties?
+    : explainDesc? INSERT (INTO | OVERWRITE) (qualifiedName partitionNames? | (FILES propertyList) | (BLACKHOLE '(' ')'))
+        (WITH LABEL label=identifier)? columnAliases?
         (queryStatement | (VALUES expressionsWithDefault (',' expressionsWithDefault)*))
-    ;
-
-// for compatibility with the case 'LABEL before columnAliases'
-insertLabelOrColumnAliases
-    : WITH LABEL label=identifier
-    | columnAliases
     ;
 
 updateStatement
@@ -1267,15 +1167,11 @@ dropStatsStatement
     : DROP STATS qualifiedName
     ;
 
-histogramStatement:
-    ANALYZE TABLE qualifiedName UPDATE HISTOGRAM ON qualifiedName (',' qualifiedName)*
+analyzeHistogramStatement
+    : ANALYZE TABLE qualifiedName UPDATE HISTOGRAM ON qualifiedName (',' qualifiedName)*
+        (WITH (SYNC | ASYNC) MODE)?
         (WITH bucket=INTEGER_VALUE BUCKETS)?
         properties?
-    ;
-
-analyzeHistogramStatement
-    : histogramStatement
-        (WITH (SYNC | ASYNC) MODE)?
     ;
 
 dropHistogramStatement
@@ -1286,7 +1182,6 @@ createAnalyzeStatement
     : CREATE ANALYZE (FULL | SAMPLE)? ALL properties?
     | CREATE ANALYZE (FULL | SAMPLE)? DATABASE db=identifier properties?
     | CREATE ANALYZE (FULL | SAMPLE)? TABLE qualifiedName ('(' qualifiedName (',' qualifiedName)* ')')? properties?
-    | CREATE histogramStatement
     ;
 
 dropAnalyzeJobStatement
@@ -1371,14 +1266,11 @@ showFunctionsStatement
     ;
 
 dropFunctionStatement
-    : DROP GLOBAL? FUNCTION (IF EXISTS)?  qualifiedName '(' typeList ')'
+    : DROP GLOBAL? FUNCTION qualifiedName '(' typeList ')'
     ;
 
 createFunctionStatement
-    : CREATE orReplace GLOBAL? functionType=(TABLE | AGGREGATE)? FUNCTION ifNotExists qualifiedName '(' typeList ')' RETURNS returnType=type (properties|inlineProperties)?? inlineFunction?
-    ;
-inlineFunction
-    : AS ATTACHMENT
+    : CREATE GLOBAL? functionType=(TABLE | AGGREGATE)? FUNCTION qualifiedName '(' typeList ')' RETURNS returnType=type (INTERMEDIATE intermediateType =  type)? properties?
     ;
 
 typeList
@@ -1982,55 +1874,6 @@ lock_type
     | LOW_PRIORITY? WRITE
     ;
 
-// ------------------------------------------- Plan Tuning Statement ---------------------------------------------------
-addPlanAdvisorStatement
-    : ADD INTO PLAN ADVISOR queryStatement;
-
-clearPlanAdvisorStatement
-    : CLEAR PLAN ADVISOR;
-
-delPlanAdvisorStatement
-    : DELETE PLAN ADVISOR string;
-
-showPlanAdvisorStatement
-    : SHOW PLAN ADVISOR;
-
-// ---------------------------------------- Warehouse Statement ---------------------------------------------------------
-
-createWarehouseStatement
-    : CREATE (WAREHOUSE) (IF NOT EXISTS)? warehouseName=identifierOrString
-    comment? properties?
-    ;
-
-dropWarehouseStatement
-    : DROP WAREHOUSE (IF EXISTS)? warehouseName=identifierOrString
-    ;
-
-suspendWarehouseStatement
-    : SUSPEND WAREHOUSE (IF EXISTS)? identifier
-    ;
-
-resumeWarehouseStatement
-    : RESUME WAREHOUSE (IF EXISTS)? identifier
-    ;
-
-setWarehouseStatement
-    : SET SESSION? WAREHOUSE EQ? identifierOrString
-    ;
-
-showWarehousesStatement
-    : SHOW WAREHOUSES (LIKE pattern=string)?
-    ;
-
-showClustersStatement
-    : SHOW CLUSTERS FROM WAREHOUSE identifier
-    ;
-
-showNodesStatement
-    : SHOW NODES FROM WAREHOUSES (LIKE pattern=string)?
-    | SHOW NODES FROM WAREHOUSE identifier
-    ;
-
 // ------------------------------------------- Query Statement ---------------------------------------------------------
 
 queryStatement
@@ -2048,17 +1891,13 @@ queryNoWith
     : queryPrimary (ORDER BY sortItem (',' sortItem)*)? (limitElement)?
     ;
 
-queryPeriod
-    : FOR? periodType BETWEEN expression AND expression
-    | FOR? periodType FROM expression TO expression
-    | FOR? periodType ALL
-    | FOR? periodType AS OF end=expression
-    ;
-
-periodType
-    : SYSTEM_TIME
-    | TIMESTAMP
-    | VERSION
+temporalClause
+    : AS OF expression
+    | FOR SYSTEM_TIME AS OF TIMESTAMP string
+    | FOR SYSTEM_TIME BETWEEN expression AND expression
+    | FOR SYSTEM_TIME FROM expression TO expression
+    | FOR SYSTEM_TIME ALL
+    | FOR VERSION AS OF expression
     ;
 
 queryPrimary
@@ -2134,8 +1973,8 @@ relation
     ;
 
 relationPrimary
-    : qualifiedName queryPeriod? partitionNames? tabletList? replicaList? (
-        AS? alias=identifier)? bracketHint? (BEFORE ts=string)?                          #tableAtom
+    : qualifiedName temporalClause? partitionNames? tabletList? replicaList? (
+        AS? alias=identifier)? bracketHint?                                             #tableAtom
     | '(' VALUES rowConstructor (',' rowConstructor)* ')'
         (AS? alias=identifier columnAliases?)?                                          #inlineTable
     | subquery (AS? alias=identifier columnAliases?)?                                   #subqueryWithAlias
@@ -2650,14 +2489,6 @@ property
     : key=string '=' value=string
     ;
 
-inlineProperties
-    : inlineProperty ( inlineProperty)*
-    ;
-
-inlineProperty
-    : key=identifier '=' value=string
-    ;
-
 varType
     : GLOBAL
     | LOCAL
@@ -2785,10 +2616,6 @@ qualifiedName
     : identifier (DOT_IDENTIFIER | '.' identifier)*
     ;
 
-writeBranch
-    : FOR? VERSION AS OF identifier
-    ;
-
 identifier
     : LETTER_IDENTIFIER      #unquotedIdentifier
     | nonReserved            #unquotedIdentifier
@@ -2836,43 +2663,43 @@ number
     ;
 
 nonReserved
-    : ACCESS | ACTIVE | ADVISOR | AFTER | AGGREGATE | APPLY | ASYNC | AUTHORS | AVG | ADMIN | ANTI | AUTHENTICATION | AUTO_INCREMENT
+    : ACCESS | ACTIVE | AFTER | AGGREGATE | APPLY | ASYNC | AUTHORS | AVG | ADMIN | ANTI | AUTHENTICATION | AUTO_INCREMENT
     | ARRAY_AGG | ARRAY_AGG_DISTINCT
-    | BACKEND | BACKENDS | BACKUP | BEGIN | BITMAP_UNION | BLACKLIST | BLACKHOLE | BINARY | BODY | BOOLEAN | BRANCH | BROKER | BUCKETS
-    | BUILTIN | BASE | BEFORE
+    | BACKEND | BACKENDS | BACKUP | BEGIN | BITMAP_UNION | BLACKLIST | BLACKHOLE | BINARY | BODY | BOOLEAN | BROKER | BUCKETS
+    | BUILTIN | BASE
     | CACHE | CAST | CANCEL | CATALOG | CATALOGS | CEIL | CHAIN | CHARSET | CLEAN | CLEAR | CLUSTER | CLUSTERS | CURRENT | COLLATION | COLUMNS
     | CUME_DIST | CUMULATIVE | COMMENT | COMMIT | COMMITTED | COMPUTE | CONNECTION | CONSISTENT | COSTS | COUNT
     | CONFIG | COMPACT
-    | DATA | DATE | DATACACHE | DATETIME | DAY | DAYS | DECOMMISSION | DISABLE | DISK | DISTRIBUTION | DUPLICATE | DYNAMIC | DISTRIBUTED | DICTIONARY | DICTIONARY_GET | DEALLOCATE
+    | DATA | DATE | DATACACHE | DATETIME | DAY | DECOMMISSION | DISABLE | DISK | DISTRIBUTION | DUPLICATE | DYNAMIC | DISTRIBUTED | DICTIONARY | DICTIONARY_GET | DEALLOCATE
     | ENABLE | END | ENGINE | ENGINES | ERRORS | EVENTS | EXECUTE | EXTERNAL | EXTRACT | EVERY | ENCLOSE | ESCAPE | EXPORT
     | FAILPOINT | FAILPOINTS | FIELDS | FILE | FILTER | FIRST | FLOOR | FOLLOWING | FORMAT | FN | FRONTEND | FRONTENDS | FOLLOWER | FREE
     | FUNCTIONS
     | GLOBAL | GRANTS | GROUP_CONCAT
-    | HASH | HISTOGRAM | HELP | HLL_UNION | HOST | HOUR | HOURS | HUB
+    | HASH | HISTOGRAM | HELP | HLL_UNION | HOST | HOUR | HUB
     | IDENTIFIED | IMAGE | IMPERSONATE | INACTIVE | INCREMENTAL | INDEXES | INSTALL | INTEGRATION | INTEGRATIONS | INTERMEDIATE
     | INTERVAL | ISOLATION
     | JOB
     | LABEL | LAST | LESS | LEVEL | LIST | LOCAL | LOCATION | LOGS | LOGICAL | LOW_PRIORITY | LOCK | LOCATIONS
-    | MANUAL | MAP | MAPPING | MAPPINGS | MASKING | MATCH | MAPPINGS | MATERIALIZED | MAX | META | MIN | MINUTE | MINUTES | MODE | MODIFY | MONTH | MERGE | MINUS
+    | MANUAL | MAP | MAPPING | MAPPINGS | MASKING | MATCH | MAPPINGS | MATERIALIZED | MAX | META | MIN | MINUTE | MODE | MODIFY | MONTH | MERGE | MINUS
     | NAME | NAMES | NEGATIVE | NO | NODE | NODES | NONE | NULLS | NUMBER | NUMERIC
     | OBSERVER | OF | OFFSET | ONLY | OPTIMIZER | OPEN | OPERATE | OPTION | OVERWRITE
-    | PARTITIONS | PASSWORD | PATH | PAUSE | PENDING | PERCENTILE_UNION | PIVOT | PLAN | PLUGIN | PLUGINS | POLICY | POLICIES
+    | PARTITIONS | PASSWORD | PATH | PAUSE | PENDING | PERCENTILE_UNION | PIVOT | PLUGIN | PLUGINS | POLICY | POLICIES
     | PERCENT_RANK | PRECEDING | PRIORITY | PROC | PROCESSLIST | PROFILE | PROFILELIST | PRIVILEGES | PROBABILITY | PROPERTIES | PROPERTY | PIPE | PIPES
     | QUARTER | QUERY | QUERIES | QUEUE | QUOTA | QUALIFY
     | REASON | REMOVE | REWRITE | RANDOM | RANK | RECOVER | REFRESH | REPAIR | REPEATABLE | REPLACE_IF_NOT_NULL | REPLICA | REPOSITORY
     | REPOSITORIES
-    | RESOURCE | RESOURCES | RESTORE | RESUME | RETAIN | RETENTION | RETURNS | RETRY | REVERT | ROLE | ROLES | ROLLUP | ROLLBACK | ROUTINE | ROW | RUNNING | RULE | RULES
-    | SAMPLE | SCHEDULE | SCHEDULER | SECOND | SECURITY | SEPARATOR | SERIALIZABLE |SEMI | SESSION | SETS | SIGNED | SNAPSHOT | SNAPSHOTS | SQLBLACKLIST | START
+    | RESOURCE | RESOURCES | RESTORE | RESUME | RETURNS | RETRY | REVERT | ROLE | ROLES | ROLLUP | ROLLBACK | ROUTINE | ROW | RUNNING | RULE | RULES
+    | SAMPLE | SCHEDULE | SCHEDULER | SECOND | SECURITY | SEPARATOR | SERIALIZABLE |SEMI | SESSION | SETS | SIGNED | SNAPSHOT | SQLBLACKLIST | START
     | STREAM | SUM | STATUS | STOP | SKIP_HEADER | SWAP
     | STORAGE| STRING | STRUCT | STATS | SUBMIT | SUSPEND | SYNC | SYSTEM_TIME
-    | TABLES | TABLET | TABLETS | TAG | TASK | TEMPORARY | TIMESTAMP | TIMESTAMPADD | TIMESTAMPDIFF | THAN | TIME | TIMES | TRANSACTION | TRACE
+    | TABLES | TABLET | TABLETS | TASK | TEMPORARY | TIMESTAMP | TIMESTAMPADD | TIMESTAMPDIFF | THAN | TIME | TIMES | TRANSACTION | TRACE
     | TRIM_SPACE
     | TRIGGERS | TRUNCATE | TYPE | TYPES
     | UNBOUNDED | UNCOMMITTED | UNSET | UNINSTALL | USAGE | USER | USERS | UNLOCK
     | VALUE | VARBINARY | VARIABLES | VIEW | VIEWS | VERBOSE | VERSION | VOLUME | VOLUMES
     | WARNINGS | WEEK | WHITELIST | WORK | WRITE  | WAREHOUSE | WAREHOUSES
     | YEAR
-    | DOTDOTDOT | NGRAMBF | VECTOR
+    | DOTDOTDOT | NGRAMBF
     | FIELD
     | ARRAY_ELEMENT
     ;

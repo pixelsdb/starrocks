@@ -42,9 +42,11 @@ import java.util.Collection;
 import java.util.Optional;
 
 public class SysObjectDependencies {
-    private static final Logger LOG = LogManager.getLogger(SysObjectDependencies.class);
 
     public static final String NAME = "object_dependencies";
+
+    private static final Logger LOG = LogManager.getLogger(SysObjectDependencies.class);
+
 
     public static SystemTable create() {
         return new SystemTable(SystemId.OBJECT_DEPENDENCIES, NAME, Table.TableType.SCHEMA,
@@ -81,9 +83,9 @@ public class SysObjectDependencies {
         for (Database db : CollectionUtils.emptyIfNull(dbs)) {
             String catalog = Optional.ofNullable(db.getCatalogName())
                     .orElse(InternalCatalog.DEFAULT_INTERNAL_CATALOG_NAME);
-            locker.lockDatabase(db.getId(), LockType.READ);
+            locker.lockDatabase(db, LockType.READ);
             try {
-                for (Table table : GlobalStateMgr.getCurrentState().getLocalMetastore().getTables(db.getId())) {
+                for (Table table : db.getTables()) {
                     // If it is not a materialized view, we do not need to verify permissions
                     if (!table.isMaterializedView()) {
                         continue;
@@ -121,7 +123,7 @@ public class SysObjectDependencies {
                     }
                 }
             } finally {
-                locker.unLockDatabase(db.getId(), LockType.READ);
+                locker.unLockDatabase(db, LockType.READ);
             }
         }
 

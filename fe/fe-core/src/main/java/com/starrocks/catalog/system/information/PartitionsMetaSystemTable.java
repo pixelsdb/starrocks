@@ -24,11 +24,9 @@ import static com.starrocks.catalog.system.SystemTable.NAME_CHAR_LEN;
 import static com.starrocks.catalog.system.SystemTable.builder;
 
 public class PartitionsMetaSystemTable {
-    public static final String NAME = "partitions_meta";
-
     public static SystemTable create() {
         return new SystemTable(SystemId.PARTITIONS_META_ID,
-                NAME,
+                "partitions_meta",
                 Table.TableType.SCHEMA,
                 builder()
                         .column("DB_NAME", ScalarType.createVarchar(NAME_CHAR_LEN))

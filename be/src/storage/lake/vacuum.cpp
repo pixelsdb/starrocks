@@ -416,11 +416,6 @@ static Status vacuum_txn_log(std::string_view root_location, int64_t min_active_
             if (txn_id >= min_active_txn_id) {
                 return true;
             }
-        } else if (is_combined_txn_log(entry.name)) {
-            auto txn_id = parse_combined_txn_log_filename(entry.name);
-            if (txn_id >= min_active_txn_id) {
-                return true;
-            }
         } else {
             return true;
         }
@@ -659,20 +654,14 @@ void delete_txn_log(TabletManager* tablet_mgr, const DeleteTxnLogRequest& reques
     DCHECK(response != nullptr);
 
     std::vector<std::string> files_to_delete;
-    files_to_delete.reserve(request.tablet_ids_size() * (request.txn_ids_size() + request.txn_infos_size()));
+    files_to_delete.reserve(request.tablet_ids_size() * request.txn_ids_size());
 
     for (auto tablet_id : request.tablet_ids()) {
-        // For each DeleteTxnLogRequest, FE will only set one of txn_ids and txn_infos, here we don't want
-        // to bother with determining which one is set, just iterate through both.
         for (auto txn_id : request.txn_ids()) {
             auto log_path = tablet_mgr->txn_log_location(tablet_id, txn_id);
             files_to_delete.emplace_back(log_path);
+
             tablet_mgr->metacache()->erase(log_path);
-        }
-        for (auto&& info : request.txn_infos()) {
-            auto log_path = info.combined_txn_log() ? tablet_mgr->combined_txn_log_location(tablet_id, info.txn_id())
-                                                    : tablet_mgr->txn_log_location(tablet_id, info.txn_id());
-            files_to_delete.emplace_back(log_path);
         }
     }
 

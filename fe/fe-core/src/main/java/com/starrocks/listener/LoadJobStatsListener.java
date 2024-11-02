@@ -104,7 +104,7 @@ public class LoadJobStatsListener implements LoadJobListener {
             List<Table> tables = transactionState.getIdToTableCommitInfos().values().stream()
                     .map(x -> x.getTableId())
                     .distinct()
-                    .map(tableId -> GlobalStateMgr.getCurrentState().getLocalMetastore().getTable(dbId, tableId))
+                    .map(db::getTable)
                     .filter(Objects::nonNull)
                     .filter(t -> !t.isMaterializedView()) // skip mvs since its stats will be triggered after refresh
                     .collect(Collectors.toList());

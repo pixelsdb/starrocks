@@ -65,9 +65,8 @@ public class SlotRef extends Expr {
     private TableName tblName;
     private String colName;
     private ColumnId columnId;
-    //label/isBackQuoted used in toSql
+    // Used in toSql
     private String label;
-    private boolean isBackQuoted = false;
 
     private QualifiedName qualifiedName;
 
@@ -171,14 +170,6 @@ public class SlotRef extends Expr {
 
     public SlotRef(SlotId slotId) {
         this(new SlotDescriptor(slotId, "", Type.INVALID, false));
-    }
-
-    public void setBackQuoted(boolean isBackQuoted) {
-        this.isBackQuoted = isBackQuoted;
-    }
-
-    public boolean isBackQuoted() {
-        return isBackQuoted;
     }
 
     public QualifiedName getQualifiedName() {
@@ -292,12 +283,7 @@ public class SlotRef extends Expr {
         if (tblName != null && !isFromLambda()) {
             return tblName.toSql() + "." + "`" + colName + "`";
         } else if (label != null) {
-            if (isBackQuoted && !(label.startsWith("`") && label.endsWith("`"))) {
-                sb.append("`").append(label).append("`");
-                return sb.toString();
-            } else {
-                return label;
-            }
+            return label;
         } else if (desc.getSourceExprs() != null) {
             sb.append("<slot ").append(desc.getId().asInt()).append(">");
             for (Expr expr : desc.getSourceExprs()) {

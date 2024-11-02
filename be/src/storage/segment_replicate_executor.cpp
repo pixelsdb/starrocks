@@ -93,7 +93,7 @@ Status ReplicateChannel::async_segment(SegmentPB* segment, butil::IOBuf& data, b
                                        std::vector<std::unique_ptr<PTabletInfo>>* failed_tablet_infos) {
     RETURN_IF_ERROR(_st);
 
-    VLOG(2) << "Async tablet " << _opt->tablet_id << " segment id " << (segment == nullptr ? -1 : segment->segment_id())
+    VLOG(1) << "Async tablet " << _opt->tablet_id << " segment id " << (segment == nullptr ? -1 : segment->segment_id())
             << " eos " << eos << " to [" << _host << ":" << _port;
 
     // 1. init sync channel
@@ -111,7 +111,7 @@ Status ReplicateChannel::async_segment(SegmentPB* segment, butil::IOBuf& data, b
         RETURN_IF_ERROR(_wait_response(replicate_tablet_infos, failed_tablet_infos));
     }
 
-    VLOG(2) << "Asynced tablet " << _opt->tablet_id << " segment id "
+    VLOG(1) << "Asynced tablet " << _opt->tablet_id << " segment id "
             << (segment == nullptr ? -1 : segment->segment_id()) << " eos " << eos << " to [" << _host << ":" << _port
             << "] res " << _closure->result.DebugString();
 
@@ -127,7 +127,7 @@ void ReplicateChannel::_send_request(SegmentPB* segment, butil::IOBuf& data, boo
     request.set_index_id(_opt->index_id);
     request.set_sink_id(_opt->sink_id);
 
-    VLOG(2) << "Send segment to " << debug_string()
+    VLOG(1) << "Send segment to " << debug_string()
             << " segment_id=" << (segment == nullptr ? -1 : segment->segment_id()) << " eos=" << eos
             << " txn_id=" << _opt->txn_id << " index_id=" << _opt->index_id << " sink_id=" << _opt->sink_id;
 
@@ -293,43 +293,6 @@ void ReplicateToken::_sync_segment(std::unique_ptr<SegmentPB> segment, bool eos)
                 LOG(WARNING) << "Failed to read delete file " << segment->DebugString() << " by " << debug_string()
                              << " err " << st;
                 return set_status(st);
-            }
-        }
-        if (!segment->seg_indexes().empty()) {
-            auto mutable_indexes = segment->mutable_seg_indexes();
-            size_t total_index_data_size = 0;
-            for (int i = 0; i < mutable_indexes->size(); i++) {
-                auto& index = mutable_indexes->at(i);
-                if (index.index_type() == VECTOR) {
-                    auto index_path = mutable_indexes->at(i).index_path();
-                    auto res = _fs->new_random_access_file(index_path);
-
-                    if (!res.ok()) {
-                        LOG(WARNING) << "Failed to open index file " << index_path << " by " << debug_string()
-                                     << " err " << res.status();
-                        return set_status(res.status());
-                    }
-
-                    auto file_size_res = _fs->get_file_size(index_path);
-                    if (!file_size_res.ok()) {
-                        LOG(WARNING) << "Failed to get index file size " << index_path << " err " << res.status();
-                        return set_status(res.status());
-                    }
-                    auto file_size = file_size_res.value();
-                    mutable_indexes->at(i).set_index_file_size(file_size);
-                    total_index_data_size += file_size;
-
-                    auto rfile = std::move(res.value());
-                    auto buf = new uint8[file_size];
-                    data.append_user_data(buf, file_size, [](void* buf) { delete[](uint8*) buf; });
-                    auto st = rfile->read_fully(buf, file_size);
-                    if (!st.ok()) {
-                        LOG(WARNING) << "Failed to read index file " << segment->DebugString() << " by "
-                                     << debug_string() << " err " << st;
-                        return set_status(st);
-                    }
-                }
-                segment->set_seg_index_data_size(total_index_data_size);
             }
         }
     }

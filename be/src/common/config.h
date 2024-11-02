@@ -129,13 +129,13 @@ CONF_Int32(check_consistency_worker_count, "1");
 // The count of thread to update scheam
 CONF_Int32(update_schema_worker_count, "3");
 // The count of thread to upload.
-CONF_mInt32(upload_worker_count, "0");
+CONF_Int32(upload_worker_count, "1");
 // The count of thread to download.
-CONF_mInt32(download_worker_count, "0");
+CONF_Int32(download_worker_count, "1");
 // The count of thread to make snapshot.
 CONF_mInt32(make_snapshot_worker_count, "5");
 // The count of thread to release snapshot.
-CONF_mInt32(release_snapshot_worker_count, "5");
+CONF_Int32(release_snapshot_worker_count, "5");
 // The interval time(seconds) for agent report tasks signatrue to FE.
 CONF_mInt32(report_task_interval_seconds, "10");
 // The interval time(seconds) for agent report disk state to FE.
@@ -294,6 +294,8 @@ CONF_mBool(enable_bitmap_index_memory_page_cache, "false");
 CONF_mBool(enable_zonemap_index_memory_page_cache, "false");
 // whether to enable the ordinal index memory cache
 CONF_mBool(enable_ordinal_index_memory_page_cache, "false");
+// whether to disable column pool
+CONF_Bool(disable_column_pool, "true");
 
 CONF_mInt32(base_compaction_check_interval_seconds, "60");
 CONF_mInt64(min_base_compaction_num_singleton_deltas, "5");
@@ -808,8 +810,6 @@ CONF_Int32(pipeline_analytic_removable_chunk_num, "128");
 CONF_Bool(pipeline_analytic_enable_streaming_process, "true");
 CONF_Bool(pipeline_analytic_enable_removable_cumulative_process, "true");
 CONF_Int32(pipline_limit_max_delivery, "4096");
-
-CONF_mBool(use_default_dop_when_shared_scan, "true");
 /// For parallel scan on the single tablet.
 // These three configs are used to calculate the minimum number of rows picked up from a segment at one time.
 // It is `splitted_scan_bytes/scan_row_bytes` and restricted in the range [min_splitted_scan_rows, max_splitted_scan_rows].
@@ -869,11 +869,6 @@ CONF_Int64(object_storage_request_timeout_ms, "-1");
 // Request timeout for object storage specialized for rename_file operation.
 // if this parameter is 0, use object_storage_request_timeout_ms instead.
 CONF_Int64(object_storage_rename_file_request_timeout_ms, "30000");
-
-// Retry strategy for read operation. The following two parameters are the default value of Aws
-// DefaultRetryStrategy
-CONF_Int64(object_storage_max_retries, "10");
-CONF_Int64(object_storage_retry_scale_factor, "25");
 
 CONF_Strings(fallback_to_hadoop_fs_list, "");
 CONF_Strings(s3_compatible_fs_list, "s3n://, s3a://, s3://, oss://, cos://, cosn://, obs://, ks3://, tos://");
@@ -943,9 +938,6 @@ CONF_String(aws_sdk_logging_trace_level, "trace");
 // Enabling RFC-3986 encoding will make sure these characters are properly encoded.
 CONF_Bool(aws_sdk_enable_compliant_rfc3986_encoding, "false");
 
-// use poco client to replace default curl client
-CONF_Bool(enable_poco_client_for_aws_sdk, "true");
-
 // default: 16MB
 CONF_mInt64(experimental_s3_max_single_part_size, "16777216");
 // default: 16MB
@@ -967,9 +959,6 @@ CONF_Int64(send_rpc_runtime_filter_timeout_ms, "1000");
 // if runtime filter size is larger than send_runtime_filter_via_http_rpc_min_size, be will transmit runtime filter via http protocol.
 // this is a default value, maybe changed by global_runtime_filter_rpc_http_min_size in session variable.
 CONF_Int64(send_runtime_filter_via_http_rpc_min_size, "67108864");
-
-// -1: ulimited, 0: limit by memory use, >0: limit by queue_size
-CONF_mInt64(runtime_filter_queue_limit, "-1");
 
 CONF_Int64(rpc_connect_timeout_ms, "30000");
 
@@ -1156,10 +1145,9 @@ CONF_Double(datacache_scheduler_threads_per_cpu, "0.125");
 // For object data, such as parquet footer object, which can only be cached in memory are not affected
 // by this configuration.
 CONF_Bool(datacache_tiered_cache_enable, "true");
-// DataCache engines, alternatives: starcache.
-// `cachelib` is not support now.
+// DataCache engines, alternatives: cachelib, starcache.
 // Set the default value empty to indicate whether it is manully configured by users.
-// If not, we need to adjust the default engine based on build switches like "WITH_STARCACHE".
+// If not, we need to adjust the default engine based on build switches like "WITH_CACHELIB" and "WITH_STARCACHE".
 CONF_String(datacache_engine, "");
 // The interval time (millisecond) for agent report datacache metrics to FE.
 CONF_mInt32(report_datacache_metrics_interval_ms, "60000");
@@ -1250,9 +1238,6 @@ CONF_Int64(query_cache_capacity, "536870912");
 // ranges in [1,16], default value is 4.
 CONF_mInt32(query_cache_num_lanes_per_driver, "4");
 
-// Used by vector query cache, 500MB in default
-CONF_Int64(vector_query_cache_capacity, "536870912");
-
 // Used to limit buffer size of tablet send channel.
 CONF_mInt64(send_channel_buffer_limit, "67108864");
 
@@ -1278,8 +1263,6 @@ CONF_String(rocksdb_db_options_string, "create_if_missing=true;create_missing_co
 CONF_Int64(local_exchange_buffer_mem_limit_per_driver, "134217728"); // 128MB
 // only used for test. default: 128M
 CONF_mInt64(streaming_agg_limited_memory_size, "134217728");
-// mem limit for partition hash join probe side buffer
-CONF_mInt64(partition_hash_join_probe_limit_size, "134217728");
 // pipeline streaming aggregate chunk buffer size
 CONF_mInt32(streaming_agg_chunk_buffer_size, "1024");
 CONF_mInt64(wait_apply_time, "6000"); // 6s
@@ -1353,7 +1336,7 @@ CONF_mBool(lake_enable_vertical_compaction_fill_data_cache, "false");
 CONF_mInt32(dictionary_cache_refresh_timeout_ms, "60000"); // 1 min
 CONF_mInt32(dictionary_cache_refresh_threadpool_size, "8");
 // json flat flag
-CONF_mBool(enable_json_flat, "true");
+CONF_mBool(enable_json_flat, "false");
 
 // enable compaction is base on flat json, not whole json
 CONF_mBool(enable_compaction_flat_json, "true");
@@ -1399,12 +1382,8 @@ CONF_mInt64(arrow_io_coalesce_read_max_buffer_size, "8388608");
 CONF_mInt64(arrow_io_coalesce_read_max_distance_size, "1048576");
 CONF_mInt64(arrow_read_batch_size, "4096");
 
-// default not to build the empty index
-CONF_mInt32(config_tenann_default_build_threshold, "0");
-
 // Set to true to enable socket_keepalive option in brpc
 CONF_mBool(brpc_socket_keepalive, "false");
-CONF_mBool(apply_del_vec_after_all_index_filter, "true");
 
 // connector sink memory watermark
 CONF_mDouble(connector_sink_mem_high_watermark_ratio, "0.3");
@@ -1414,17 +1393,13 @@ CONF_mDouble(connector_sink_mem_urgent_space_ratio, "0.1");
 // .crm file can be removed after 1day.
 CONF_mInt32(unused_crm_file_threshold_second, "86400" /** 1day **/);
 
-// python envs config
-// create time worker timeout
-CONF_mInt32(create_child_worker_timeout_ms, "1000");
-// config ENV PYTHONPATH
-CONF_Strings(python_envs, "");
-// report python worker STDERR to client
-CONF_Bool(report_python_worker_error, "true");
-CONF_Bool(python_worker_reuse, "true");
-CONF_Int32(python_worker_expire_time_sec, "300");
-CONF_mBool(enable_pk_strict_memcheck, "true");
+CONF_mBool(enable_pk_strict_memcheck, "false");
+
+CONF_mBool(apply_del_vec_after_all_index_filter, "true");
+
 CONF_mBool(skip_lake_pk_preload, "false");
+// Experimental feature, this configuration will be removed after testing is complete.
+CONF_mBool(lake_enable_alter_struct, "false");
 // Reduce core file size by not dumping jemalloc retain pages
 CONF_mBool(enable_core_file_size_optimization, "true");
 // Current supported modules:
@@ -1440,19 +1415,6 @@ CONF_mBool(enable_core_file_size_optimization, "true");
 // use commas to separate:
 // * means release all above
 CONF_mString(try_release_resource_before_core_dump, "data_cache");
-
-// Experimental feature, this configuration will be removed after testing is complete.
-CONF_mBool(lake_enable_alter_struct, "true");
-
-// vector index
-// Enable caching index blocks for IVF-family vector indexes
-CONF_mBool(enable_vector_index_block_cache, "true");
-
-// concurrency of building index
-CONF_mInt32(config_vector_index_build_concurrency, "8");
-
-// default not to build the empty index
-CONF_mInt32(config_vector_index_default_build_threshold, "0");
 
 // When upgrade thrift to 0.20.0, the MaxMessageSize member defines the maximum size of a (received) message, in bytes.
 // The default value is represented by a constant named DEFAULT_MAX_MESSAGE_SIZE, whose value is 100 * 1024 * 1024 bytes.
@@ -1476,11 +1438,5 @@ CONF_mInt32(thrift_max_recursion_depth, "64");
 CONF_mBool(enable_lake_compaction_use_partial_segments, "false");
 // chunk size used by lake compaction
 CONF_mInt32(lake_compaction_chunk_size, "4096");
-
-CONF_mBool(skip_schema_in_rowset_meta, "true");
-
-CONF_mBool(enable_bit_unpack_simd, "true");
-
-CONF_mInt32(max_committed_without_schema_rowset, "1000");
 
 } // namespace starrocks::config

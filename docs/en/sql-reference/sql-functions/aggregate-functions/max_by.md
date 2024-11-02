@@ -4,7 +4,7 @@ displayed_sidebar: docs
 
 # max_by
 
-
+## Description
 
 Returns the value of `x` associated with the maximum value of `y`.
 

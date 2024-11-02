@@ -23,13 +23,11 @@ import com.starrocks.thrift.TSchemaTableType;
 import static com.starrocks.catalog.system.SystemTable.builder;
 
 public class ColumnsSystemTable {
-    private static final String NAME = "columns";
-
     public static SystemTable create(String catalogName) {
         return new SystemTable(
                 catalogName,
                 SystemId.COLUMNS_ID,
-                NAME,
+                "columns",
                 Table.TableType.SCHEMA,
                 builder()
                         .column("TABLE_CATALOG", ScalarType.createVarchar(512))

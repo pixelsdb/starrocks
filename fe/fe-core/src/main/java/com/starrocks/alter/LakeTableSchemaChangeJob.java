@@ -664,6 +664,7 @@ public class LakeTableSchemaChangeJob extends AlterJobV2 {
             txnInfo.combinedTxnLog = false;
             txnInfo.txnType = TxnTypePB.TXN_NORMAL;
             txnInfo.commitTime = finishedTimeMs / 1000;
+            txnInfo.forcePublish = false;
             for (long partitionId : physicalPartitionIndexMap.rowKeySet()) {
                 long commitVersion = commitVersionMap.get(partitionId);
                 Map<Long, MaterializedIndex> shadowIndexMap = physicalPartitionIndexMap.row(partitionId);
@@ -697,10 +698,9 @@ public class LakeTableSchemaChangeJob extends AlterJobV2 {
         if (modifiedColumns.isEmpty()) {
             return;
         }
-        Database db = GlobalStateMgr.getCurrentState().getLocalMetastore().getDb(dbId);
+        Database db = GlobalStateMgr.getCurrentState().getDb(dbId);
         for (MvId mvId : tbl.getRelatedMaterializedViews()) {
-            MaterializedView mv = (MaterializedView) GlobalStateMgr.getCurrentState().getLocalMetastore()
-                        .getTable(db.getId(), mvId.getId());
+            MaterializedView mv = (MaterializedView) db.getTable(mvId.getId());
             if (mv == null) {
                 LOG.warn("Ignore materialized view {} does not exists", mvId);
                 continue;
@@ -1056,13 +1056,13 @@ public class LakeTableSchemaChangeJob extends AlterJobV2 {
 
     @Nullable
     ReadLockedDatabase getReadLockedDatabase(long dbId) {
-        Database db = GlobalStateMgr.getCurrentState().getLocalMetastore().getDb(dbId);
+        Database db = GlobalStateMgr.getCurrentState().getDb(dbId);
         return db != null ? new ReadLockedDatabase(db) : null;
     }
 
     @Nullable
     WriteLockedDatabase getWriteLockedDatabase(long dbId) {
-        Database db = GlobalStateMgr.getCurrentState().getLocalMetastore().getDb(dbId);
+        Database db = GlobalStateMgr.getCurrentState().getDb(dbId);
         return db != null ? new WriteLockedDatabase(db) : null;
     }
 
@@ -1089,7 +1089,7 @@ public class LakeTableSchemaChangeJob extends AlterJobV2 {
 
         @Nullable
         OlapTable getTable(long tableId) {
-            return (OlapTable) GlobalStateMgr.getCurrentState().getLocalMetastore().getTable(db.getId(), tableId);
+            return (OlapTable) db.getTable(tableId);
         }
 
         @Override
@@ -1105,12 +1105,12 @@ public class LakeTableSchemaChangeJob extends AlterJobV2 {
 
         @Override
         void lock(Database db) {
-            locker.lockDatabase(db.getId(), LockType.READ);
+            locker.lockDatabase(db, LockType.READ);
         }
 
         @Override
         void unlock(Database db) {
-            locker.unLockDatabase(db.getId(), LockType.READ);
+            locker.unLockDatabase(db, LockType.READ);
         }
     }
 
@@ -1121,12 +1121,12 @@ public class LakeTableSchemaChangeJob extends AlterJobV2 {
 
         @Override
         void lock(Database db) {
-            locker.lockDatabase(db.getId(), LockType.WRITE);
+            locker.lockDatabase(db, LockType.WRITE);
         }
 
         @Override
         void unlock(Database db) {
-            locker.unLockDatabase(db.getId(), LockType.WRITE);
+            locker.unLockDatabase(db, LockType.WRITE);
         }
     }
 

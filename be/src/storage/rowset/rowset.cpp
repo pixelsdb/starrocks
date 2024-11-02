@@ -48,7 +48,7 @@
 #include "storage/chunk_iterator.h"
 #include "storage/delete_predicates.h"
 #include "storage/empty_iterator.h"
-#include "storage/index/index_descriptor.h"
+#include "storage/inverted/index_descriptor.hpp"
 #include "storage/merge_iterator.h"
 #include "storage/projection_iterator.h"
 #include "storage/rowset/metadata_cache.h"
@@ -102,7 +102,7 @@ Status Rowset::load() {
         RETURN_IF_ERROR(do_load());
         RETURN_IF_ERROR(_rowset_state_machine.on_load());
     }
-    VLOG(2) << "rowset is loaded. rowset version:" << start_version() << "-" << end_version()
+    VLOG(1) << "rowset is loaded. rowset version:" << start_version() << "-" << end_version()
             << ", state from ROWSET_UNLOADED to ROWSET_LOADED. tabletid:" << _rowset_meta->tablet_id();
     return Status::OK();
 }
@@ -179,12 +179,9 @@ Status Rowset::do_load() {
         auto res = Segment::open(fs, seg_info, seg_id, _schema, &footer_size_hint,
                                  rowset_meta()->partial_rowset_footer(seg_id));
         if (!res.ok()) {
-            auto st = res.status().clone_and_prepend(fmt::format(
-                    "Load rowset failed tablet:{} rowset:{} rssid:{} seg:{} path:{}", _rowset_meta->tablet_id(),
-                    rowset_id().to_string(), _rowset_meta->get_rowset_seg_id(), seg_id, seg_path));
-            LOG(WARNING) << st.message();
+            LOG(WARNING) << "Fail to open " << seg_path << ": " << res.status();
             _segments.clear();
-            return st;
+            return res.status();
         }
         _segments.push_back(std::move(res).value());
     }
@@ -290,7 +287,7 @@ StatusOr<int64_t> Rowset::estimate_compaction_segment_iterator_num() {
         if (seg_ptr->num_rows() == 0) {
             continue;
         }
-        // When creating segment iterators for compaction, we don't provide rowid_range_option and pred_tree_for_zone_map,
+        // When creating segment iterators for compaction, we don't provide rowid_range_option and predicates_for_zone_map,
         // So here we don't need to consider the following two situation:
         //
         // if (options.rowid_range_option != nullptr) {
@@ -317,7 +314,7 @@ StatusOr<int64_t> Rowset::estimate_compaction_segment_iterator_num() {
 }
 
 Status Rowset::remove() {
-    VLOG(2) << "Removing files in rowset id=" << unique_id() << " version=" << start_version() << "-" << end_version()
+    VLOG(1) << "Removing files in rowset id=" << unique_id() << " version=" << start_version() << "-" << end_version()
             << " tablet_id=" << _rowset_meta->tablet_id();
     Status result;
     ASSIGN_OR_RETURN(auto fs, FileSystem::CreateSharedFromString(_rowset_path));
@@ -339,12 +336,6 @@ Status Rowset::remove() {
                 auto ist = fs->delete_dir_recursive(inverted_index_path);
                 LOG_IF(WARNING, !ist.ok()) << "Fail to delete vector_index_path " << inverted_index_path << ": " << ist;
                 merge_status(ist);
-            } else if (index.index_type() == IndexType::VECTOR) {
-                std::string vector_index_path = IndexDescriptor::vector_index_file_path(
-                        _rowset_path, rowset_id().to_string(), i, index.index_id());
-                auto vst = fs->delete_file(vector_index_path);
-                LOG_IF(WARNING, !vst.ok()) << "Fail to delete vector_index_path " << vector_index_path << ": " << vst;
-                merge_status(vst);
             }
         }
     }
@@ -399,7 +390,7 @@ Status Rowset::_remove_delta_column_group_files(const std::shared_ptr<FileSystem
                 for (const auto& column_file : column_files) {
                     auto st = fs->delete_file(column_file);
                     if (st.ok() || st.is_not_found()) {
-                        VLOG(2) << "Deleting delta column group's file: " << dcg->debug_string() << " st: " << st;
+                        VLOG(1) << "Deleting delta column group's file: " << dcg->debug_string() << " st: " << st;
                     } else {
                         return st;
                     }
@@ -452,15 +443,6 @@ Status Rowset::link_files_to(KVStore* kvstore, const std::string& dir, RowsetId 
                                                                             src_absolute_path, dst_absolute_path));
                         }
                     }
-                } else if (index.index_type() == VECTOR) {
-                    std::string dst_index_link_path = IndexDescriptor::vector_index_file_path(
-                            dir, new_rowset_id.to_string(), segment_n, index.index_id());
-                    std::string src_index_file_path = IndexDescriptor::vector_index_file_path(
-                            _rowset_path, rowset_id().to_string(), segment_n, index.index_id());
-                    if (link(src_index_file_path.c_str(), dst_index_link_path.c_str()) != 0) {
-                        PLOG(WARNING) << "Fail to link " << src_index_file_path << " to " << dst_index_link_path;
-                        return Status::RuntimeError("Fail to link index data file");
-                    }
                 }
             }
         }
@@ -481,7 +463,7 @@ Status Rowset::link_files_to(KVStore* kvstore, const std::string& dir, RowsetId 
             return Status::RuntimeError(
                     fmt::format("Fail to link segment update file, src: {}, dst {}", src_file_path, dst_link_path));
         } else {
-            VLOG(2) << "success to link " << src_file_path << " to " << dst_link_path;
+            VLOG(1) << "success to link " << src_file_path << " to " << dst_link_path;
         }
     }
     RETURN_IF_ERROR(_link_delta_column_group_files(kvstore, dir, version));
@@ -515,7 +497,7 @@ Status Rowset::_link_delta_column_group_files(KVStore* kvstore, const std::strin
                         return Status::RuntimeError(fmt::format("Fail to link segment cols file, src: {}, dst {}",
                                                                 src_file_path, dst_link_path));
                     } else {
-                        VLOG(2) << "success to link " << src_file_path << " to " << dst_link_path;
+                        VLOG(1) << "success to link " << src_file_path << " to " << dst_link_path;
                     }
                 }
             }
@@ -640,7 +622,7 @@ Status Rowset::_copy_delta_column_group_files(KVStore* kvstore, const std::strin
                         return Status::RuntimeError(fmt::format("Fail to copy segment cols file, src: {}, dst {}",
                                                                 src_file_path, dst_copy_path));
                     } else {
-                        VLOG(2) << "success to copy " << src_file_path << " to " << dst_copy_path;
+                        VLOG(1) << "success to copy " << src_file_path << " to " << dst_copy_path;
                     }
                 }
             }
@@ -671,12 +653,12 @@ public:
         _iter.reset();
     }
 
-    Status init_encoded_schema(ColumnIdToGlobalDictMap& dict_maps) override {
+    [[nodiscard]] Status init_encoded_schema(ColumnIdToGlobalDictMap& dict_maps) override {
         RETURN_IF_ERROR(ChunkIterator::init_encoded_schema(dict_maps));
         return _iter->init_encoded_schema(dict_maps);
     }
 
-    Status init_output_schema(const std::unordered_set<uint32_t>& unused_output_column_ids) override {
+    [[nodiscard]] Status init_output_schema(const std::unordered_set<uint32_t>& unused_output_column_ids) override {
         RETURN_IF_ERROR(ChunkIterator::init_output_schema(unused_output_column_ids));
         return _iter->init_output_schema(unused_output_column_ids);
     }
@@ -712,7 +694,7 @@ Status Rowset::get_segment_iterators(const Schema& schema, const RowsetReadOptio
     seg_options.stats = options.stats;
     seg_options.ranges = options.ranges;
     seg_options.pred_tree = options.pred_tree;
-    seg_options.pred_tree_for_zone_map = options.pred_tree_for_zone_map;
+    seg_options.predicates_for_zone_map = options.predicates_for_zone_map;
     seg_options.use_page_cache = options.use_page_cache;
     seg_options.profile = options.profile;
     seg_options.reader_type = options.reader_type;
@@ -722,9 +704,6 @@ Status Rowset::get_segment_iterators(const Schema& schema, const RowsetReadOptio
     seg_options.runtime_range_pruner = options.runtime_range_pruner;
     seg_options.column_access_paths = options.column_access_paths;
     seg_options.tablet_schema = options.tablet_schema;
-    seg_options.use_vector_index = options.use_vector_index;
-    seg_options.vector_search_option = options.vector_search_option;
-
     if (options.delete_predicates != nullptr) {
         seg_options.delete_predicates = options.delete_predicates->get_predicates(end_version());
     }
@@ -899,7 +878,6 @@ StatusOr<ChunkIteratorPtr> Rowset::get_update_file_iterator(const Schema& schema
     seg_options.stats = stats;
     seg_options.tablet_id = rowset_meta()->tablet_id();
     seg_options.rowset_id = rowset_meta()->get_rowset_seg_id();
-    seg_options.rowset_path = _rowset_path;
 
     // open update file
     DCHECK(update_file_id < num_update_files());

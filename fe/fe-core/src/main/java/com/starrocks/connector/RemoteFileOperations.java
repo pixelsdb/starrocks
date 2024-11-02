@@ -14,17 +14,13 @@
 
 package com.starrocks.connector;
 
-import com.google.common.base.Preconditions;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
-import com.starrocks.catalog.Table;
 import com.starrocks.common.profile.Timer;
 import com.starrocks.common.profile.Tracers;
 import com.starrocks.connector.exception.StarRocksConnectorException;
 import com.starrocks.connector.hive.HiveWriteUtils;
 import com.starrocks.connector.hive.Partition;
-import com.starrocks.qe.ConnectContext;
-import com.starrocks.qe.SessionVariable;
 import jline.internal.Log;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
@@ -36,10 +32,10 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
@@ -56,8 +52,6 @@ import static com.starrocks.connector.hive.HiveWriteUtils.fileCreatedByQuery;
 public class RemoteFileOperations {
     private static final Logger LOG = LogManager.getLogger(RemoteFileOperations.class);
     public static final String HMS_PARTITIONS_REMOTE_FILES = "HMS.PARTITIONS.LIST_FS_PARTITIONS";
-    public static final String HMS_PARTITIONS_LIST_FIES_ASYNC_GET = "HMS.PARTITIONS.LIST_FS_ASYNC.GET";
-    public static final String HMS_PARTITIONS_LIST_FILES_ASYNC_WAIT = "HMS.PARTITIONS.LIST_FS_ASYNC.WAIT";
     protected CachingRemoteFileIO remoteFileIO;
     private final ExecutorService pullRemoteFileExecutor;
     private final Executor updateRemoteFilesExecutor;
@@ -79,34 +73,27 @@ public class RemoteFileOperations {
         this.conf = conf;
     }
 
-    public static class Options {
-        public static Options DEFAULT = new Options();
-        public String hudiTableLocation = null;
-        public boolean useCache = true;
-
-        public static Options toUseHudiTableLocation(String hudiTableLocation) {
-            Options opt = new Options();
-            opt.hudiTableLocation = hudiTableLocation;
-            return opt;
-        }
-
-        public static Options toUseCache(boolean useCache) {
-            Options opt = new Options();
-            opt.useCache = useCache;
-            return opt;
-        }
+    public List<RemoteFileInfo> getRemoteFiles(List<Partition> partitions) {
+        return getRemoteFiles(partitions, Optional.empty(), true);
     }
 
-    public List<RemoteFileInfo> getRemoteFiles(Table table, List<Partition> partitions, GetRemoteFilesParams params) {
-        RemoteFileScanContext scanContext = new RemoteFileScanContext(table);
+    public List<RemoteFileInfo> getRemoteFiles(List<Partition> partitions, boolean useCache) {
+        return getRemoteFiles(partitions, Optional.empty(), useCache);
+    }
+
+    public List<RemoteFileInfo> getRemoteFiles(List<Partition> partitions, Optional<String> hudiTableLocation) {
+        return getRemoteFiles(partitions, hudiTableLocation, true);
+    }
+
+    public List<RemoteFileInfo> getRemoteFiles(List<Partition> partitions, Optional<String> hudiTableLocation, boolean useCache) {
         Map<RemotePathKey, Partition> pathKeyToPartition = Maps.newHashMap();
         for (Partition partition : partitions) {
-            RemotePathKey key = RemotePathKey.of(partition.getFullPath(), isRecursive);
+            RemotePathKey key = RemotePathKey.of(partition.getFullPath(), isRecursive, hudiTableLocation);
             pathKeyToPartition.put(key, partition);
         }
 
         int cacheMissSize = partitions.size();
-        if (enableCatalogLevelCache && params.isUseCache()) {
+        if (enableCatalogLevelCache && useCache) {
             cacheMissSize = cacheMissSize - remoteFileIO.getPresentRemoteFiles(
                     Lists.newArrayList(pathKeyToPartition.keySet())).size();
         }
@@ -115,13 +102,15 @@ public class RemoteFileOperations {
         List<Future<Map<RemotePathKey, List<RemoteFileDesc>>>> futures = Lists.newArrayList();
         List<Map<RemotePathKey, List<RemoteFileDesc>>> result = Lists.newArrayList();
 
+        RemotePathKey.HudiContext hudiContext = new RemotePathKey.HudiContext();
+
         Tracers.count(Tracers.Module.EXTERNAL, HMS_PARTITIONS_REMOTE_FILES, cacheMissSize);
         try (Timer ignored = Tracers.watchScope(Tracers.Module.EXTERNAL, HMS_PARTITIONS_REMOTE_FILES)) {
             for (Partition partition : partitions) {
-                RemotePathKey pathKey = RemotePathKey.of(partition.getFullPath(), isRecursive);
-                pathKey.setScanContext(scanContext);
+                RemotePathKey pathKey = RemotePathKey.of(partition.getFullPath(), isRecursive, hudiTableLocation);
+                pathKey.setHudiContext(hudiContext);
                 Future<Map<RemotePathKey, List<RemoteFileDesc>>> future = pullRemoteFileExecutor.submit(() ->
-                        remoteFileIO.getRemoteFiles(pathKey, params.isUseCache()));
+                        remoteFileIO.getRemoteFiles(pathKey, useCache));
                 futures.add(future);
             }
 
@@ -141,107 +130,28 @@ public class RemoteFileOperations {
         return resultRemoteFiles;
     }
 
-    public RemoteFileInfoSource getRemoteFilesAsync(Table table, List<Partition> partitions, GetRemoteFilesParams params) {
-        RemoteFileScanContext scanContext = new RemoteFileScanContext(table);
-
-        // compute cache miss size.
-        {
-            List<RemotePathKey> remotePathKeys = new ArrayList<>();
-            for (Partition partition : partitions) {
-                RemotePathKey key = RemotePathKey.of(partition.getFullPath(), isRecursive);
-                remotePathKeys.add(key);
-            }
-
-            int cacheMissSize = partitions.size();
-            if (enableCatalogLevelCache && params.isUseCache()) {
-                cacheMissSize = cacheMissSize - remoteFileIO.getPresentRemoteFiles(remotePathKeys).size();
-            }
-            Tracers.count(Tracers.Module.EXTERNAL, HMS_PARTITIONS_REMOTE_FILES, cacheMissSize);
-        }
-
-        class MyAsyncTaskQueue extends AsyncTaskQueue<RemoteFileInfo> implements RemoteFileInfoSource {
-            public MyAsyncTaskQueue(Executor executor) {
-                super(executor);
-            }
-
-            @Override
-            public List<RemoteFileInfo> getOutputs(int maxSize) {
-                try (Timer ignored = Tracers.watchScope(Tracers.Module.EXTERNAL, HMS_PARTITIONS_LIST_FIES_ASYNC_GET)) {
-                    return super.getOutputs(maxSize);
-                }
-            }
-
-            @Override
-            public boolean hasMoreOutput() {
-                // `hasMoreOutput` will trigger tasks to generate output.
-                try (Timer ignored = Tracers.watchScope(Tracers.Module.EXTERNAL, HMS_PARTITIONS_LIST_FILES_ASYNC_WAIT)) {
-                    return super.hasMoreOutput();
-                }
-            }
-
-            @Override
-            public int computeOutputSize(RemoteFileInfo output) {
-                List<RemoteFileDesc> files = (output.getFiles());
-                int size = 1;
-                if (files != null) {
-                    size = Math.max(size, files.size());
-                }
-                return size;
-            }
-
-            @Override
-            public RemoteFileInfo getOutput() {
-                List<RemoteFileInfo> res = getOutputs(1);
-                Preconditions.checkArgument(res.size() == 1);
-                return res.get(0);
-            }
-        }
-
-        SessionVariable sv = SessionVariable.DEFAULT_SESSION_VARIABLE;
-        if (ConnectContext.get() != null) {
-            sv = ConnectContext.get().getSessionVariable();
-        }
-        MyAsyncTaskQueue asyncTaskQueue = new MyAsyncTaskQueue(pullRemoteFileExecutor);
-        asyncTaskQueue.setMaxOutputQueueSize(sv.getConnectorRemoteFileAsyncQueueSize());
-        asyncTaskQueue.setMaxRunningTaskCount(sv.getConnectorRemoteFileAsyncTaskSize());
-        List<AsyncTaskQueue.Task<RemoteFileInfo>> tasks = new ArrayList<>();
-        List attachments = params.getPartitionAttachments();
-        for (int i = 0; i < partitions.size(); i++) {
-            final Partition partition = partitions.get(i);
-            final RemotePathKey pathKey = RemotePathKey.of(partition.getFullPath(), isRecursive);
-            final Object attachment = (attachments != null) ? attachments.get(i) : null;
-            pathKey.setScanContext(scanContext);
-            tasks.add(() -> {
-                Map<RemotePathKey, List<RemoteFileDesc>> res = remoteFileIO.getRemoteFiles(pathKey);
-                List<RemoteFileDesc> files = res.get(pathKey);
-                RemoteFileInfo remoteFileInfo = buildRemoteFileInfo(partition, files);
-                remoteFileInfo.setAttachment(attachment);
-                return List.of(remoteFileInfo);
-            });
-        }
-        asyncTaskQueue.start(tasks);
-        return asyncTaskQueue;
+    public List<RemoteFileInfo> getPresentFilesInCache(Collection<Partition> partitions) {
+        return getPresentFilesInCache(partitions, Optional.empty());
     }
 
-    public List<RemoteFileInfo> getPresentFilesInCache(Collection<Partition> partitions) {
+    public List<RemoteFileInfo> getPresentFilesInCache(Collection<Partition> partitions, Optional<String> hudiTableLocation) {
         Map<RemotePathKey, Partition> pathKeyToPartition = partitions.stream()
-                .collect(Collectors.toMap(
-                        partition -> RemotePathKey.of(partition.getFullPath(), isRecursive),
+                .collect(Collectors.toMap(partition -> RemotePathKey.of(partition.getFullPath(), isRecursive, hudiTableLocation),
                         Function.identity()));
 
         List<RemotePathKey> paths = partitions.stream()
-                .map(partition -> RemotePathKey.of(partition.getFullPath(), isRecursive))
+                .map(partition -> RemotePathKey.of(partition.getFullPath(), isRecursive, hudiTableLocation))
                 .collect(Collectors.toList());
 
         Map<RemotePathKey, List<RemoteFileDesc>> presentFiles = remoteFileIO.getPresentRemoteFiles(paths);
         return fillFileInfo(presentFiles, pathKeyToPartition);
     }
 
-    public List<RemoteFileInfo> getRemoteFileInfoForStats(Table table, List<Partition> partitions, GetRemoteFilesParams params) {
+    public List<RemoteFileInfo> getRemoteFileInfoForStats(List<Partition> partitions, Optional<String> hudiTableLocation) {
         if (enableCatalogLevelCache) {
-            return getPresentFilesInCache(partitions);
+            return getPresentFilesInCache(partitions, hudiTableLocation);
         } else {
-            return getRemoteFiles(table, partitions, params);
+            return getRemoteFiles(partitions, hudiTableLocation);
         }
     }
 
@@ -266,7 +176,7 @@ public class RemoteFileOperations {
 
     private RemoteFileInfo buildRemoteFileInfo(Partition partition, List<RemoteFileDesc> fileDescs) {
         RemoteFileInfo.Builder builder = RemoteFileInfo.builder()
-                .setFormat(partition.getFileFormat())
+                .setFormat(partition.getInputFormat())
                 .setFullPath(partition.getFullPath())
                 .setFiles(fileDescs.stream()
                         .map(desc -> desc.setTextFileFormatDesc(partition.getTextFileFormatDesc()))
@@ -379,42 +289,5 @@ public class RemoteFileOperations {
             LOG.error("Failed to list path {}", path, e);
             throw new StarRocksConnectorException("Failed to list path %s. msg: %s", path.toString(), e.getMessage());
         }
-    }
-
-    public FileStatus[] getFileStatus(Path... paths) {
-        try {
-            return remoteFileIO.getFileStatus(paths);
-        } catch (Exception e) {
-            LOG.error("Failed to get file status for paths: {}", paths, e);
-            throw new StarRocksConnectorException("Failed to get file status for paths: %s. msg: %s", paths, e.getMessage());
-        }
-    }
-
-    public List<PartitionInfo> getRemotePartitions(List<Partition> partitions) {
-        List<Path> paths = Lists.newArrayList();
-        for (Partition partition : partitions) {
-            Path partitionPath = new Path(partition.getFullPath());
-            paths.add(partitionPath);
-        }
-        FileStatus[] fileStatuses = getFileStatus(paths.toArray(new Path[0]));
-        List<PartitionInfo> result = Lists.newArrayList();
-        for (int i = 0; i < partitions.size(); i++) {
-            Partition partition = partitions.get(i);
-            FileStatus fileStatus = fileStatuses[i];
-            final String fullPath = partition.getFullPath();
-            final long time = fileStatus.getModificationTime();
-            result.add(new PartitionInfo() {
-                @Override
-                public long getModifiedTime() {
-                    return time;
-                }
-
-                @Override
-                public String getFullPath() {
-                    return fullPath;
-                }
-            });
-        }
-        return result;
     }
 }

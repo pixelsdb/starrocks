@@ -87,9 +87,9 @@ import com.starrocks.privilege.ObjectType;
 import com.starrocks.privilege.PEntryObject;
 import com.starrocks.privilege.PrivilegeType;
 import com.starrocks.sql.ast.AlterStorageVolumeStmt;
-import com.starrocks.sql.ast.AlterUserStmt;
 import com.starrocks.sql.ast.ArrayExpr;
 import com.starrocks.sql.ast.AstVisitor;
+import com.starrocks.sql.ast.BaseCreateAlterUserStmt;
 import com.starrocks.sql.ast.BaseGrantRevokePrivilegeStmt;
 import com.starrocks.sql.ast.BaseGrantRevokeRoleStmt;
 import com.starrocks.sql.ast.CTERelation;
@@ -136,7 +136,6 @@ import com.starrocks.sql.ast.SystemVariable;
 import com.starrocks.sql.ast.TableFunctionRelation;
 import com.starrocks.sql.ast.TableRelation;
 import com.starrocks.sql.ast.UnionRelation;
-import com.starrocks.sql.ast.UserAuthOption;
 import com.starrocks.sql.ast.UserIdentity;
 import com.starrocks.sql.ast.UserVariable;
 import com.starrocks.sql.ast.ValuesRelation;
@@ -203,56 +202,42 @@ public class AstToStringBuilder {
         // ------------------------------------------- Privilege Statement -------------------------------------------------
 
         @Override
-        public String visitCreateUserStatement(CreateUserStmt stmt, Void context) {
+        public String visitBaseCreateAlterUserStmt(BaseCreateAlterUserStmt statement, Void context) {
             StringBuilder sb = new StringBuilder();
-            sb.append("CREATE USER ").append(stmt.getUserIdentity());
-            sb.append(buildAuthOptionSql(stmt.getAuthOption()));
-
-            if (!stmt.getDefaultRoles().isEmpty()) {
-                sb.append(" DEFAULT ROLE ");
-                sb.append(Joiner.on(",").join(
-                        stmt.getDefaultRoles().stream().map(r -> "'" + r + "'").collect(toList())));
+            if (statement instanceof CreateUserStmt) {
+                sb.append("CREATE");
+            } else {
+                sb.append("ALTER");
             }
 
-            return sb.toString();
-        }
-
-        @Override
-        public String visitAlterUserStatement(AlterUserStmt stmt, Void context) {
-            StringBuilder sb = new StringBuilder();
-            sb.append("ALTER USER ").append(stmt.getUserIdentity());
-            sb.append(buildAuthOptionSql(stmt.getAuthOption()));
-
-            return sb.toString();
-        }
-
-
-        public StringBuilder buildAuthOptionSql(UserAuthOption authOption) {
-            StringBuilder sb = new StringBuilder();
-            if (authOption == null) {
-                return sb;
-            }
-
-            if (!Strings.isNullOrEmpty(authOption.getPassword())) {
-                if (authOption.isPasswordPlain()) {
+            sb.append(" USER ").append(statement.getUserIdentity());
+            if (!Strings.isNullOrEmpty(statement.getOriginalPassword())) {
+                if (statement.isPasswordPlain()) {
                     sb.append(" IDENTIFIED BY '").append("*XXX").append("'");
                 } else {
-                    sb.append(" IDENTIFIED BY PASSWORD '").append(authOption.getPassword()).append("'");
+                    sb.append(" IDENTIFIED BY PASSWORD '").append(statement.getOriginalPassword()).append("'");
                 }
             }
 
-            if (!Strings.isNullOrEmpty(authOption.getAuthPlugin())) {
-                sb.append(" IDENTIFIED WITH ").append(authOption.getAuthPlugin());
-                if (!Strings.isNullOrEmpty(authOption.getAuthString())) {
-                    if (authOption.isPasswordPlain()) {
+            if (!Strings.isNullOrEmpty(statement.getAuthPluginName())) {
+                sb.append(" IDENTIFIED WITH ").append(statement.getAuthPluginName());
+                if (!Strings.isNullOrEmpty(statement.getAuthStringUnResolved())) {
+                    if (statement.isPasswordPlain()) {
                         sb.append(" BY '");
                     } else {
                         sb.append(" AS '");
                     }
-                    sb.append(authOption.getAuthString()).append("'");
+                    sb.append(statement.getAuthStringUnResolved()).append("'");
                 }
             }
-            return sb;
+
+            if (!statement.getDefaultRoles().isEmpty()) {
+                sb.append(" DEFAULT ROLE ");
+                sb.append(Joiner.on(",").join(
+                        statement.getDefaultRoles().stream().map(r -> "'" + r + "'").collect(toList())));
+            }
+
+            return sb.toString();
         }
 
         @Override
@@ -280,8 +265,8 @@ public class AstToStringBuilder {
                     sb.append(stmt.getObjectType().name()).append(" ");
 
                     List<String> objectString = new ArrayList<>();
-                    for (PEntryObject pEntryObject : stmt.getObjectList()) {
-                        objectString.add(pEntryObject.toString());
+                    for (PEntryObject tablePEntryObject : stmt.getObjectList()) {
+                        objectString.add(tablePEntryObject.toString());
                     }
                     sb.append(Joiner.on(", ").join(objectString));
                 }
@@ -1513,7 +1498,7 @@ public class AstToStringBuilder {
         if (table.getType() == Table.TableType.MYSQL || table.getType() == Table.TableType.ELASTICSEARCH
                 || table.getType() == Table.TableType.BROKER || table.getType() == Table.TableType.HIVE
                 || table.getType() == Table.TableType.HUDI || table.getType() == Table.TableType.ICEBERG
-                || table.getType() == Table.TableType.OLAP_EXTERNAL || table.getType() == Table.TableType.JDBC
+                || table.getType() == Table.TableType.OLAP_EXTERNAL || table.getType() == JDBC
                 || table.getType() == Table.TableType.FILE) {
             sb.append("EXTERNAL ");
         }
@@ -1707,7 +1692,7 @@ public class AstToStringBuilder {
             sb.append("\"table\" = \"").append(icebergTable.getRemoteTableName()).append("\",\n");
             sb.append("\"resource\" = \"").append(icebergTable.getResourceName()).append("\"");
             sb.append("\n)");
-        } else if (table.getType() == Table.TableType.JDBC) {
+        } else if (table.getType() == JDBC) {
             JDBCTable jdbcTable = (JDBCTable) table;
             addTableComment(sb, table);
 

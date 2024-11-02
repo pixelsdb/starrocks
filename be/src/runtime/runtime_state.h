@@ -131,12 +131,14 @@ public:
     void set_desc_tbl(DescriptorTbl* desc_tbl) { _desc_tbl = desc_tbl; }
     int chunk_size() const { return _query_options.batch_size; }
     void set_chunk_size(int chunk_size) { _query_options.batch_size = chunk_size; }
+    bool use_column_pool() const;
     bool abort_on_default_limit_exceeded() const { return _query_options.abort_on_default_limit_exceeded; }
     int64_t timestamp_ms() const { return _timestamp_us / 1000; }
     int64_t timestamp_us() const { return _timestamp_us; }
     const std::string& timezone() const { return _timezone; }
     const cctz::time_zone& timezone_obj() const { return _timezone_obj; }
     const std::string& user() const { return _user; }
+    const std::vector<std::string>& error_log() const { return _error_log; }
     const std::string& last_query_id() const { return _last_query_id; }
     const TUniqueId& query_id() const { return _query_id; }
     const TUniqueId& fragment_instance_id() const { return _fragment_instance_id; }
@@ -164,10 +166,29 @@ public:
     RuntimeProfile* load_channel_profile() { return _load_channel_profile.get(); }
     std::shared_ptr<RuntimeProfile> load_channel_profile_ptr() { return _load_channel_profile; }
 
-    Status query_status() {
+    [[nodiscard]] Status query_status() {
         std::lock_guard<std::mutex> l(_process_status_lock);
         return _process_status;
     };
+
+    // Appends error to the _error_log if there is space
+    bool log_error(std::string_view error);
+
+    // If !status.ok(), appends the error to the _error_log
+    void log_error(const Status& status);
+
+    // Returns true if the error log has not reached _max_errors.
+    bool log_has_space() {
+        std::lock_guard<std::mutex> l(_error_log_lock);
+        return _error_log.size() < _query_options.max_errors;
+    }
+
+    // Returns the error log lines as a string joined with '\n'.
+    std::string error_log();
+
+    // Append all _error_log[_unreported_error_idx+] to new_errors and set
+    // _unreported_error_idx to _errors_log.size()
+    void get_unreported_errors(std::vector<std::string>* new_errors);
 
     bool is_cancelled() const { return _is_cancelled.load(std::memory_order_acquire); }
     void set_is_cancelled(bool v) { _is_cancelled.store(v, std::memory_order_release); }
@@ -202,17 +223,19 @@ public:
     // This value and tracker are only used for error reporting.
     // If 'msg' is not empty, it will be appended to query_status_ in addition to the
     // generic "Memory limit exceeded" error.
-    Status set_mem_limit_exceeded(MemTracker* tracker = nullptr, int64_t failed_allocation_size = 0,
-                                  std::string_view msg = {});
+    [[nodiscard]] Status set_mem_limit_exceeded(MemTracker* tracker = nullptr, int64_t failed_allocation_size = 0,
+                                                std::string_view msg = {});
 
-    Status set_mem_limit_exceeded(std::string_view msg) { return set_mem_limit_exceeded(nullptr, 0, msg); }
+    [[nodiscard]] Status set_mem_limit_exceeded(std::string_view msg) {
+        return set_mem_limit_exceeded(nullptr, 0, msg);
+    }
 
     // Returns a non-OK status if query execution should stop (e.g., the query was cancelled
     // or a mem limit was exceeded). Exec nodes should check this periodically so execution
     // doesn't continue if the query terminates abnormally.
-    Status check_query_state(const std::string& msg);
+    [[nodiscard]] Status check_query_state(const std::string& msg);
 
-    Status check_mem_limit(const std::string& msg);
+    [[nodiscard]] Status check_mem_limit(const std::string& msg);
 
     std::vector<std::string>& output_files() { return _output_files; }
 
@@ -241,7 +264,7 @@ public:
 
     bool has_reached_max_error_msg_num(bool is_summary = false);
 
-    Status create_rejected_record_file();
+    [[nodiscard]] Status create_rejected_record_file();
 
     bool enable_log_rejected_record() {
         return _query_options.log_rejected_record_num == -1 ||
@@ -441,10 +464,10 @@ public:
     const phmap::flat_hash_map<uint32_t, int64_t>& load_dict_versions() { return _load_dict_versions; }
 
     using GlobalDictLists = std::vector<TGlobalDict>;
-    Status init_query_global_dict(const GlobalDictLists& global_dict_list);
-    Status init_load_global_dict(const GlobalDictLists& global_dict_list);
+    [[nodiscard]] Status init_query_global_dict(const GlobalDictLists& global_dict_list);
+    [[nodiscard]] Status init_load_global_dict(const GlobalDictLists& global_dict_list);
 
-    Status init_query_global_dict_exprs(const std::map<int, TExpr>& exprs);
+    [[nodiscard]] Status init_query_global_dict_exprs(const std::map<int, TExpr>& exprs);
 
     void set_func_version(int func_version) { this->_func_version = func_version; }
     int func_version() const { return this->_func_version; }
@@ -454,7 +477,7 @@ public:
 
     std::shared_ptr<QueryStatisticsRecvr> query_recv();
 
-    Status reset_epoch();
+    [[nodiscard]] Status reset_epoch();
 
     int64_t get_rpc_http_min_size() {
         return _query_options.__isset.rpc_http_min_size ? _query_options.rpc_http_min_size : kRpcHttpMinSize;
@@ -510,10 +533,10 @@ private:
     void _init(const TUniqueId& fragment_instance_id, const TQueryOptions& query_options,
                const TQueryGlobals& query_globals, ExecEnv* exec_env);
 
-    Status create_error_log_file();
+    [[nodiscard]] Status create_error_log_file();
 
-    Status _build_global_dict(const GlobalDictLists& global_dict_list, GlobalDictMaps* result,
-                              phmap::flat_hash_map<uint32_t, int64_t>* version);
+    [[nodiscard]] Status _build_global_dict(const GlobalDictLists& global_dict_list, GlobalDictMaps* result,
+                                            phmap::flat_hash_map<uint32_t, int64_t>* version);
 
     // put runtime state before _obj_pool, so that it will be deconstructed after
     // _obj_pool. Because some object in _obj_pool will use profile when deconstructing.
@@ -527,6 +550,9 @@ private:
 
     // Lock protecting _error_log and _unreported_error_idx
     std::mutex _error_log_lock;
+
+    // Logs error messages.
+    std::vector<std::string> _error_log;
 
     std::mutex _rejected_record_lock;
     std::string _rejected_record_file_path;

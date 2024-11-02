@@ -35,7 +35,6 @@
 package com.starrocks.catalog;
 
 import com.google.common.base.Preconditions;
-import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.gson.annotations.SerializedName;
@@ -52,7 +51,6 @@ import com.starrocks.common.UserException;
 import com.starrocks.common.io.Text;
 import com.starrocks.common.io.Writable;
 import com.starrocks.common.util.DebugUtil;
-import com.starrocks.common.util.concurrent.LockUtils.SlowLockLogStats;
 import com.starrocks.common.util.concurrent.QueryableReentrantReadWriteLock;
 import com.starrocks.common.util.concurrent.lock.LockType;
 import com.starrocks.common.util.concurrent.lock.Locker;
@@ -73,6 +71,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -117,10 +116,9 @@ public class Database extends MetaObject implements Writable {
     private String catalogName;
 
     private final QueryableReentrantReadWriteLock rwLock;
-    private SlowLockLogStats slowLockLogStats = new SlowLockLogStats();
 
     // This param is used to make sure db not dropped when leader node writes wal,
-    // so this param does not need to be persisted,
+    // so this param does not need to be persistent,
     // and this param maybe not right when the db is dropped and the catalog has done a checkpoint,
     // but that's ok to meet our needs.
     private volatile boolean exist = true;
@@ -157,10 +155,6 @@ public class Database extends MetaObject implements Writable {
     @Deprecated
     public QueryableReentrantReadWriteLock getRwLock() {
         return rwLock;
-    }
-
-    public SlowLockLogStats getSlowLockLogStats() {
-        return slowLockLogStats;
     }
 
     public long getId() {
@@ -223,7 +217,7 @@ public class Database extends MetaObject implements Writable {
     public long getUsedDataQuotaWithLock() {
         long usedDataQuota = 0;
         Locker locker = new Locker();
-        locker.lockDatabase(id, LockType.READ);
+        locker.lockDatabase(this, LockType.READ);
         try {
             for (Table table : this.idToTable.values()) {
                 if (!table.isOlapTableOrMaterializedView()) {
@@ -235,7 +229,7 @@ public class Database extends MetaObject implements Writable {
             }
             return usedDataQuota;
         } finally {
-            locker.unLockDatabase(id, LockType.READ);
+            locker.unLockDatabase(this, LockType.READ);
         }
     }
 
@@ -262,7 +256,7 @@ public class Database extends MetaObject implements Writable {
     public void checkReplicaQuota() throws DdlException {
         long usedReplicaQuota = 0;
         Locker locker = new Locker();
-        locker.lockDatabase(id, LockType.READ);
+        locker.lockDatabase(this, LockType.READ);
         try {
             for (Table table : this.idToTable.values()) {
                 if (!table.isOlapTableOrMaterializedView()) {
@@ -273,7 +267,7 @@ public class Database extends MetaObject implements Writable {
                 usedReplicaQuota = usedReplicaQuota + olapTable.getReplicaCount();
             }
         } finally {
-            locker.unLockDatabase(id, LockType.READ);
+            locker.unLockDatabase(this, LockType.READ);
         }
 
         long leftReplicaQuota = Math.max(replicaQuotaSize - usedReplicaQuota, 0L);
@@ -315,9 +309,9 @@ public class Database extends MetaObject implements Writable {
     public void dropTable(String tableName, boolean isSetIfExists, boolean isForce) throws DdlException {
         Table table;
         Locker locker = new Locker();
-        locker.lockDatabase(id, LockType.WRITE);
+        locker.lockDatabase(this, LockType.WRITE);
         try {
-            table = nameToTable.get(tableName);
+            table = getTable(tableName);
             if (table == null && isSetIfExists) {
                 return;
             }
@@ -336,7 +330,7 @@ public class Database extends MetaObject implements Writable {
             DropInfo info = new DropInfo(id, table.getId(), -1L, isForce);
             GlobalStateMgr.getCurrentState().getEditLog().logDropTable(info);
         } finally {
-            locker.unLockDatabase(id, LockType.WRITE);
+            locker.unLockDatabase(this, LockType.WRITE);
         }
 
         if (isForce) {
@@ -350,9 +344,9 @@ public class Database extends MetaObject implements Writable {
     public void dropTemporaryTable(long tableId, String tableName, boolean isSetIfExists, boolean isForce) throws DdlException {
         Table table;
         Locker locker = new Locker();
-        locker.lockDatabase(id, LockType.WRITE);
+        locker.lockDatabase(this, LockType.WRITE);
         try {
-            table = idToTable.get(tableId);
+            table = getTable(tableId);
             if (table == null) {
                 if (isSetIfExists) {
                     return;
@@ -363,7 +357,7 @@ public class Database extends MetaObject implements Writable {
             DropInfo info = new DropInfo(id, table.getId(), -1L, isForce);
             GlobalStateMgr.getCurrentState().getEditLog().logDropTable(info);
         } finally {
-            locker.unLockDatabase(id, LockType.WRITE);
+            locker.unLockDatabase(this, LockType.WRITE);
         }
     }
 
@@ -461,23 +455,28 @@ public class Database extends MetaObject implements Writable {
 
     public Set<String> getTableNamesViewWithLock() {
         Locker locker = new Locker();
-        locker.lockDatabase(id, LockType.READ);
+        locker.lockDatabase(this, LockType.READ);
         try {
             return Collections.unmodifiableSet(this.nameToTable.keySet());
         } finally {
-            locker.unLockDatabase(id, LockType.READ);
+            locker.unLockDatabase(this, LockType.READ);
         }
     }
 
-    /**
-     * This is a thread-safe method when idToTable is a concurrent hash map
-     */
-    public Table getTable(long tableId) {
-        return idToTable.get(tableId);
+    public Optional<Table> tryGetTable(String tableName) {
+        return Optional.ofNullable(nameToTable.get(tableName));
+    }
+
+    public Optional<Table> tryGetTable(long tableId) {
+        return Optional.ofNullable(idToTable.get(tableId));
     }
 
     public Table getTable(String tableName) {
         return nameToTable.get(tableName);
+    }
+
+    public Optional<Table> mayGetTable(String tableName) {
+        return Optional.ofNullable(nameToTable.get(tableName));
     }
 
     public Pair<Table, MaterializedIndexMeta> getMaterializedViewIndex(String mvName) {
@@ -497,6 +496,17 @@ public class Database extends MetaObject implements Writable {
             }
         }
         return null;
+    }
+
+    /**
+     * This is a thread-safe method when idToTable is a concurrent hash map
+     */
+    public Table getTable(long tableId) {
+        return idToTable.get(tableId);
+    }
+
+    public Optional<Table> mayGetTable(long tableId) {
+        return Optional.ofNullable(getTable(tableId));
     }
 
     @Override
@@ -596,17 +606,13 @@ public class Database extends MetaObject implements Writable {
     }
 
     public synchronized void addFunction(Function function) throws UserException {
-        addFunction(function, false, false);
-    }
-
-    public synchronized void addFunction(Function function, boolean allowExists, boolean createIfNotExists) throws UserException {
-        addFunctionImpl(function, false, allowExists, createIfNotExists);
+        addFunctionImpl(function, false);
         GlobalStateMgr.getCurrentState().getEditLog().logAddFunction(function);
     }
 
     public synchronized void replayAddFunction(Function function) {
         try {
-            addFunctionImpl(function, true, false, false);
+            addFunctionImpl(function, true);
         } catch (UserException e) {
             Preconditions.checkArgument(false);
         }
@@ -614,46 +620,48 @@ public class Database extends MetaObject implements Writable {
 
     public static void replayCreateFunctionLog(Function function) {
         String dbName = function.getFunctionName().getDb();
-        Database db = GlobalStateMgr.getCurrentState().getLocalMetastore().getDb(dbName);
+        Database db = GlobalStateMgr.getCurrentState().getDb(dbName);
         if (db == null) {
             throw new Error("unknown database when replay log, db=" + dbName);
         }
         db.replayAddFunction(function);
     }
 
-    private void addFunctionImpl(Function function, boolean isReplay, boolean allowExists, boolean createIfNotExists)
-            throws UserException {
+    // return true if add success, false
+    private void addFunctionImpl(Function function, boolean isReplay) throws UserException {
         String functionName = function.getFunctionName().getFunction();
-        List<Function> existFuncs = name2Function.getOrDefault(functionName, ImmutableList.of());
-        if (allowExists && createIfNotExists) {
-            // In most DB system (like MySQL, Oracle, Snowflake etc.), these two conditions are now allowed to use together
-            throw new UserException(
-                    "\"IF NOT EXISTS\" and \"OR REPLACE\" cannot be used together in the same CREATE statement");
-        }
+        List<Function> existFuncs = name2Function.get(functionName);
         if (!isReplay) {
-            for (Function existFunc : existFuncs) {
-                if (function.compare(existFunc, Function.CompareMode.IS_IDENTICAL)) {
-                    if (createIfNotExists) {
-                        LOG.info("create function [{}] which already exists", functionName);
-                        return;
-                    } else if (!allowExists) {
+            if (existFuncs != null) {
+                for (Function existFunc : existFuncs) {
+                    if (function.compare(existFunc, Function.CompareMode.IS_IDENTICAL)) {
                         throw new UserException("function already exists");
                     }
                 }
             }
-            GlobalFunctionMgr.assignIdToUserDefinedFunction(function);
+            // Get function id for this UDF, use CatalogIdGenerator. Only get function id
+            // when isReplay is false
+            long functionId = GlobalStateMgr.getCurrentState().getNextId();
+            // all user-defined functions id are negative to avoid conflicts with the builtin function
+            function.setFunctionId(-functionId);
         }
-        name2Function.put(functionName, GlobalFunctionMgr.addOrReplaceFunction(function, existFuncs));
+
+        List<Function> functions = new ArrayList<>();
+        if (existFuncs != null) {
+            functions.addAll(existFuncs);
+        }
+        functions.add(function);
+        name2Function.put(functionName, functions);
     }
 
-    public synchronized void dropFunction(FunctionSearchDesc function, boolean dropIfExists) throws UserException {
-        dropFunctionImpl(function, dropIfExists);
+    public synchronized void dropFunction(FunctionSearchDesc function) throws UserException {
+        dropFunctionImpl(function);
         GlobalStateMgr.getCurrentState().getEditLog().logDropFunction(function);
     }
 
     public synchronized void replayDropFunction(FunctionSearchDesc functionSearchDesc) {
         try {
-            dropFunctionImpl(functionSearchDesc, false);
+            dropFunctionImpl(functionSearchDesc);
         } catch (UserException e) {
             Preconditions.checkArgument(false);
         }
@@ -661,7 +669,7 @@ public class Database extends MetaObject implements Writable {
 
     public static void replayDropFunctionLog(FunctionSearchDesc functionSearchDesc) {
         String dbName = functionSearchDesc.getName().getDb();
-        Database db = GlobalStateMgr.getCurrentState().getLocalMetastore().getDb(dbName);
+        Database db = GlobalStateMgr.getCurrentState().getDb(dbName);
         if (db == null) {
             throw new Error("unknown database when replay log, db=" + dbName);
         }
@@ -684,14 +692,10 @@ public class Database extends MetaObject implements Writable {
         return func;
     }
 
-    private void dropFunctionImpl(FunctionSearchDesc function, boolean dropIfExists) throws UserException {
+    private void dropFunctionImpl(FunctionSearchDesc function) throws UserException {
         String functionName = function.getName().getFunction();
         List<Function> existFuncs = name2Function.get(functionName);
         if (existFuncs == null) {
-            if (dropIfExists) {
-                LOG.info("drop function [{}] which does not exist", functionName);
-                return;
-            }
             throw new UserException("Unknown function, function=" + function.toString());
         }
         boolean isFound = false;
@@ -704,10 +708,6 @@ public class Database extends MetaObject implements Writable {
             }
         }
         if (!isFound) {
-            if (dropIfExists) {
-                LOG.info("drop function [{}] which does not exist", functionName);
-                return;
-            }
             throw new UserException("Unknown function, function=" + function.toString());
         }
         if (newFunctions.isEmpty()) {

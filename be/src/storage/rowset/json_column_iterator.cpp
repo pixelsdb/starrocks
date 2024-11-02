@@ -61,25 +61,25 @@ public:
         }
     }
 
-    Status init(const ColumnIteratorOptions& opts) override;
+    [[nodiscard]] Status init(const ColumnIteratorOptions& opts) override;
 
-    Status next_batch(size_t* n, Column* dst) override;
+    [[nodiscard]] Status next_batch(size_t* n, Column* dst) override;
 
-    Status next_batch(const SparseRange<>& range, Column* dst) override;
+    [[nodiscard]] Status next_batch(const SparseRange<>& range, Column* dst) override;
 
-    Status seek_to_first() override;
+    [[nodiscard]] Status seek_to_first() override;
 
-    Status seek_to_ordinal(ordinal_t ord) override;
+    [[nodiscard]] Status seek_to_ordinal(ordinal_t ord) override;
 
     ordinal_t get_current_ordinal() const override { return _flat_iters[0]->get_current_ordinal(); }
 
     ordinal_t num_rows() const override { return _flat_iters[0]->num_rows(); }
 
-    Status get_row_ranges_by_zone_map(const std::vector<const ColumnPredicate*>& predicates,
-                                      const ColumnPredicate* del_predicate, SparseRange<>* row_ranges,
-                                      CompoundNodeType pred_relation) override;
+    [[nodiscard]] Status get_row_ranges_by_zone_map(const std::vector<const ColumnPredicate*>& predicates,
+                                                    const ColumnPredicate* del_predicate,
+                                                    SparseRange<>* row_ranges) override;
 
-    Status fetch_values_by_rowid(const rowid_t* rowids, size_t size, Column* values) override;
+    [[nodiscard]] Status fetch_values_by_rowid(const rowid_t* rowids, size_t size, Column* values) override;
 
 private:
     template <typename FUNC>
@@ -114,7 +114,7 @@ Status JsonFlatColumnIterator::init(const ColumnIteratorOptions& opts) {
     }
 
     bool has_remain = _source_paths.size() != _flat_iters.size();
-    VLOG(2) << "JsonFlatColumnIterator init, target: "
+    VLOG(1) << "JsonFlatColumnIterator init, target: "
             << JsonFlatPath::debug_flat_json(_target_paths, _target_types, _need_remain)
             << ", source: " << JsonFlatPath::debug_flat_json(_source_paths, _source_types, has_remain);
 
@@ -283,7 +283,7 @@ Status JsonFlatColumnIterator::seek_to_ordinal(ordinal_t ord) {
 
 Status JsonFlatColumnIterator::get_row_ranges_by_zone_map(const std::vector<const ColumnPredicate*>& predicates,
                                                           const ColumnPredicate* del_predicate,
-                                                          SparseRange<>* row_ranges, CompoundNodeType pred_relation) {
+                                                          SparseRange<>* row_ranges) {
     row_ranges->add({0, static_cast<rowid_t>(_reader->num_rows())});
     return Status::OK();
 }
@@ -299,26 +299,26 @@ public:
 
     ~JsonDynamicFlatIterator() override = default;
 
-    Status init(const ColumnIteratorOptions& opts) override;
+    [[nodiscard]] Status init(const ColumnIteratorOptions& opts) override;
 
-    Status next_batch(size_t* n, Column* dst) override;
+    [[nodiscard]] Status next_batch(size_t* n, Column* dst) override;
 
-    Status next_batch(const SparseRange<>& range, Column* dst) override;
+    [[nodiscard]] Status next_batch(const SparseRange<>& range, Column* dst) override;
 
-    Status seek_to_first() override;
+    [[nodiscard]] Status seek_to_first() override;
 
-    Status seek_to_ordinal(ordinal_t ord) override;
+    [[nodiscard]] Status seek_to_ordinal(ordinal_t ord) override;
 
     ordinal_t get_current_ordinal() const override { return _json_iter->get_current_ordinal(); }
 
     ordinal_t num_rows() const override { return _json_iter->num_rows(); }
 
     /// for vectorized engine
-    Status get_row_ranges_by_zone_map(const std::vector<const ColumnPredicate*>& predicates,
-                                      const ColumnPredicate* del_predicate, SparseRange<>* row_ranges,
-                                      CompoundNodeType pred_relation) override;
+    [[nodiscard]] Status get_row_ranges_by_zone_map(const std::vector<const ColumnPredicate*>& predicates,
+                                                    const ColumnPredicate* del_predicate,
+                                                    SparseRange<>* row_ranges) override;
 
-    Status fetch_values_by_rowid(const rowid_t* rowids, size_t size, Column* values) override;
+    [[nodiscard]] Status fetch_values_by_rowid(const rowid_t* rowids, size_t size, Column* values) override;
 
 private:
     template <typename FUNC>
@@ -349,7 +349,7 @@ Status JsonDynamicFlatIterator::init(const ColumnIteratorOptions& opts) {
 
     SCOPED_RAW_TIMER(&_opts.stats->json_init_ns);
     _flattener = std::make_unique<JsonFlattener>(_target_paths, _target_types, _need_remain);
-    VLOG(2) << "JsonDynamicFlatIterator init, target: "
+    VLOG(1) << "JsonDynamicFlatIterator init, target: "
             << JsonFlatPath::debug_flat_json(_target_paths, _target_types, _need_remain);
     return Status::OK();
 }
@@ -416,8 +416,8 @@ Status JsonDynamicFlatIterator::seek_to_ordinal(ordinal_t ord) {
 
 Status JsonDynamicFlatIterator::get_row_ranges_by_zone_map(const std::vector<const ColumnPredicate*>& predicates,
                                                            const ColumnPredicate* del_predicate,
-                                                           SparseRange<>* row_ranges, CompoundNodeType pred_relation) {
-    return _json_iter->get_row_ranges_by_zone_map(predicates, del_predicate, row_ranges, pred_relation);
+                                                           SparseRange<>* row_ranges) {
+    return _json_iter->get_row_ranges_by_zone_map(predicates, del_predicate, row_ranges);
 }
 
 class JsonMergeIterator final : public ColumnIterator {
@@ -449,8 +449,8 @@ public:
 
     /// for vectorized engine
     [[nodiscard]] Status get_row_ranges_by_zone_map(const std::vector<const ColumnPredicate*>& predicates,
-                                                    const ColumnPredicate* del_predicate, SparseRange<>* row_ranges,
-                                                    CompoundNodeType pred_relation) override;
+                                                    const ColumnPredicate* del_predicate,
+                                                    SparseRange<>* row_ranges) override;
 
     [[nodiscard]] Status fetch_values_by_rowid(const rowid_t* rowids, size_t size, Column* values) override;
 
@@ -481,7 +481,7 @@ Status JsonMergeIterator::init(const ColumnIteratorOptions& opts) {
     }
 
     bool has_remain = _all_iter.size() != _src_paths.size();
-    VLOG(2) << "JsonMergeIterator init, source: " << JsonFlatPath::debug_flat_json(_src_paths, _src_types, has_remain);
+    VLOG(1) << "JsonMergeIterator init, source: " << JsonFlatPath::debug_flat_json(_src_paths, _src_types, has_remain);
     DCHECK(_all_iter.size() == _src_paths.size() || _all_iter.size() == _src_paths.size() + 1);
     for (int i = 0; i < _src_paths.size(); i++) {
         auto column = ColumnHelper::create_column(TypeDescriptor(_src_types[i]), true);
@@ -609,8 +609,7 @@ Status JsonMergeIterator::seek_to_ordinal(ordinal_t ord) {
 }
 
 Status JsonMergeIterator::get_row_ranges_by_zone_map(const std::vector<const ColumnPredicate*>& predicates,
-                                                     const ColumnPredicate* del_predicate, SparseRange<>* row_ranges,
-                                                     CompoundNodeType pred_relation) {
+                                                     const ColumnPredicate* del_predicate, SparseRange<>* row_ranges) {
     row_ranges->add({0, static_cast<rowid_t>(_reader->num_rows())});
     return Status::OK();
 }

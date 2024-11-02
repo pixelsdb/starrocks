@@ -4,7 +4,7 @@ displayed_sidebar: docs
 
 # utc_timestamp
 
-
+## 功能
 
 返回当前 UTC 日期时间。
 

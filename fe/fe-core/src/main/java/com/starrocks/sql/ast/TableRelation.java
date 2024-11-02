@@ -47,19 +47,14 @@ public class TableRelation extends Relation {
     private final List<Long> tabletIds;
     private final List<Long> replicaIds;
     private final Set<TableHint> tableHints = new HashSet<>();
-    // used for mysql external table
-    private String queryPeriodString;
-
-    // used for time travel
-    private QueryPeriod queryPeriod;
+    // optional temporal clause for external MySQL tables that support this syntax
+    private String temporalClause;
 
     private Expr partitionPredicate;
 
     private Map<Expr, SlotRef> generatedExprToColumnRef = new HashMap<>();
 
     private List<String> pruneScanColumns = Collections.emptyList();
-
-    private long gtid = 0;
 
     public TableRelation(TableName name) {
         super(name.getPos());
@@ -203,20 +198,12 @@ public class TableRelation extends Relation {
         return name.toString();
     }
 
-    public String getQueryPeriodString() {
-        return queryPeriodString;
+    public void setTemporalClause(String temporalClause) {
+        this.temporalClause = temporalClause;
     }
 
-    public void setQueryPeriodString(String queryPeriodString) {
-        this.queryPeriodString = queryPeriodString;
-    }
-
-    public QueryPeriod getQueryPeriod() {
-        return queryPeriod;
-    }
-
-    public void setQueryPeriod(QueryPeriod queryPeriod) {
-        this.queryPeriod = queryPeriod;
+    public String getTemporalClause() {
+        return this.temporalClause;
     }
 
     public void setGeneratedExprToColumnRef(Map<Expr, SlotRef> generatedExprToColumnRef) {
@@ -225,13 +212,5 @@ public class TableRelation extends Relation {
 
     public Map<Expr, SlotRef> getGeneratedExprToColumnRef() {
         return generatedExprToColumnRef;
-    }
-
-    public void setGtid(long gtid) {
-        this.gtid = gtid;
-    }
-
-    public long getGtid() {
-        return gtid;
     }
 }

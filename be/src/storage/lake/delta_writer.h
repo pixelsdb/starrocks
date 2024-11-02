@@ -20,7 +20,6 @@
 #include "common/statusor.h"
 #include "gen_cpp/olap_file.pb.h"
 #include "gutil/macros.h"
-#include "storage/lake/delta_writer_finish_mode.h"
 
 namespace starrocks {
 class MemTracker;
@@ -29,7 +28,6 @@ class Chunk;
 class TabletSchema;
 class ThreadPool;
 struct FileInfo;
-class TxnLogPB;
 } // namespace starrocks
 
 namespace starrocks::lake {
@@ -42,7 +40,10 @@ class DeltaWriter {
     friend class DeltaWriterBuilder;
 
 public:
-    using TxnLogPtr = std::shared_ptr<const TxnLogPB>;
+    enum FinishMode {
+        kWriteTxnLog,
+        kDontWriteTxnLog,
+    };
 
     // Return the thread pool used for performing write IO.
     static ThreadPool* io_threads();
@@ -60,10 +61,7 @@ public:
     Status write(const Chunk& chunk, const uint32_t* indexes, uint32_t indexes_size);
 
     // NOTE: Do NOT invoke this method in a bthread.
-    StatusOr<TxnLogPtr> finish_with_txnlog(DeltaWriterFinishMode mode = kWriteTxnLog);
-
-    // NOTE: Do NOT invoke this method in a bthread.
-    Status finish();
+    Status finish(FinishMode mode = kWriteTxnLog);
 
     // Manual flush, mainly used in UT
     // NOTE: Do NOT invoke this method in a bthread.

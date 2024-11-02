@@ -4,7 +4,7 @@ displayed_sidebar: docs
 
 # is_role_in_session
 
-
+## Description
 
 Verifies whether a role (or a nested role) is active in the current session.
 

@@ -21,11 +21,8 @@ import com.starrocks.sql.optimizer.RowOutputInfo;
 import com.starrocks.sql.optimizer.base.ColumnRefSet;
 import com.starrocks.sql.optimizer.operator.OperatorType;
 import com.starrocks.sql.optimizer.operator.OperatorVisitor;
-import com.starrocks.sql.optimizer.property.DomainProperty;
-import org.apache.commons.collections4.CollectionUtils;
 
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
 
 /*
@@ -51,14 +48,6 @@ public class LogicalCTEProduceOperator extends LogicalOperator {
     @Override
     public RowOutputInfo deriveRowOutputInfo(List<OptExpression> inputs) {
         return projectInputRow(inputs.get(0).getRowOutputInfo());
-    }
-
-    @Override
-    public DomainProperty deriveDomainProperty(List<OptExpression> inputs) {
-        if (CollectionUtils.isEmpty(inputs)) {
-            return new DomainProperty(Map.of());
-        }
-        return inputs.get(0).getDomainProperty();
     }
 
     public int getCteId() {

@@ -37,10 +37,9 @@ package com.starrocks.persist;
 import com.google.common.base.Objects;
 import com.google.gson.annotations.SerializedName;
 import com.starrocks.catalog.DataProperty;
-import com.starrocks.common.io.Text;
 import com.starrocks.common.io.Writable;
-import com.starrocks.persist.gson.GsonUtils;
 
+import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
 
@@ -98,6 +97,12 @@ public class ModifyPartitionInfo implements Writable {
         return isInMemory;
     }
 
+    public static ModifyPartitionInfo read(DataInput in) throws IOException {
+        ModifyPartitionInfo info = new ModifyPartitionInfo();
+        info.readFields(in);
+        return info;
+    }
+
     @Override
     public int hashCode() {
         return Objects.hashCode(dbId, tableId);
@@ -119,6 +124,35 @@ public class ModifyPartitionInfo implements Writable {
 
     @Override
     public void write(DataOutput out) throws IOException {
-        Text.writeString(out, GsonUtils.GSON.toJson(this));
+        out.writeLong(dbId);
+        out.writeLong(tableId);
+        out.writeLong(partitionId);
+
+        if (dataProperty == null) {
+            out.writeBoolean(false);
+        } else {
+            out.writeBoolean(true);
+            dataProperty.write(out);
+        }
+
+        out.writeShort(replicationNum);
+        out.writeBoolean(isInMemory);
     }
+
+    public void readFields(DataInput in) throws IOException {
+        dbId = in.readLong();
+        tableId = in.readLong();
+        partitionId = in.readLong();
+
+        boolean hasDataProperty = in.readBoolean();
+        if (hasDataProperty) {
+            dataProperty = DataProperty.read(in);
+        } else {
+            dataProperty = null;
+        }
+
+        replicationNum = in.readShort();
+        isInMemory = in.readBoolean();
+    }
+
 }

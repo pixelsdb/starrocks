@@ -92,4 +92,10 @@ public interface AuthorizationProvider {
             List<PrivilegeType> wants,
             List<PEntryObject> objects,
             PrivilegeCollectionV2 currentPrivilegeCollection);
+
+    /**
+     * Used for metadata upgrade
+     */
+    void upgradePrivilegeCollection(
+            PrivilegeCollectionV2 info, short pluginId, short metaVersion) throws PrivilegeException;
 }

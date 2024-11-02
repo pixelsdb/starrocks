@@ -37,6 +37,7 @@ package com.starrocks.sql.optimizer.rewrite;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
+import com.google.re2j.Pattern;
 import com.starrocks.analysis.DecimalLiteral;
 import com.starrocks.catalog.ScalarType;
 import com.starrocks.catalog.Type;
@@ -99,7 +100,6 @@ import static com.starrocks.catalog.PrimitiveType.SMALLINT;
 import static com.starrocks.catalog.PrimitiveType.TIME;
 import static com.starrocks.catalog.PrimitiveType.TINYINT;
 import static com.starrocks.catalog.PrimitiveType.VARCHAR;
-import static com.starrocks.sql.analyzer.FunctionAnalyzer.HAS_TIME_PART;
 
 /**
  * Constant Functions List
@@ -107,6 +107,8 @@ import static com.starrocks.sql.analyzer.FunctionAnalyzer.HAS_TIME_PART;
 public class ScalarOperatorFunctions {
     public static final Set<String> SUPPORT_JAVA_STYLE_DATETIME_FORMATTER =
             ImmutableSet.<String>builder().add("yyyy-MM-dd").add("yyyy-MM-dd HH:mm:ss").add("yyyyMMdd").build();
+
+    private static final Pattern HAS_TIME_PART = Pattern.compile("^.*[HhIiklrSsT]+.*$");
 
     private static final int CONSTANT_128 = 128;
     private static final BigInteger INT_128_OPENER = BigInteger.ONE.shiftLeft(CONSTANT_128 + 1);
@@ -230,28 +232,6 @@ public class ScalarOperatorFunctions {
         return ConstantOperator.createInt((int) Duration.between(
                 second.getDatetime().truncatedTo(ChronoUnit.DAYS),
                 first.getDatetime().truncatedTo(ChronoUnit.DAYS)).toDays());
-    }
-
-    @ConstantFunction.List(list = {
-            @ConstantFunction(name = "to_days", argTypes = {DATETIME}, returnType = INT, isMonotonic = true),
-            @ConstantFunction(name = "to_days", argTypes = {DATE}, returnType = INT, isMonotonic = true)
-    })
-    public static ConstantOperator to_days(ConstantOperator first) {
-        ConstantOperator second = ConstantOperator.createDatetime(LocalDateTime.of(0000, 01, 01, 00, 00, 00));
-        return ConstantOperator.createInt((int) Duration.between(
-                second.getDatetime().truncatedTo(ChronoUnit.DAYS),
-                first.getDatetime().truncatedTo(ChronoUnit.DAYS)).toDays());
-    }
-
-    @ConstantFunction.List(list = {
-            @ConstantFunction(name = "dayofweek", argTypes = {DATETIME}, returnType = INT),
-            @ConstantFunction(name = "dayofweek", argTypes = {DATE}, returnType = INT),
-            @ConstantFunction(name = "dayofweek", argTypes = {INT}, returnType = INT)
-    })
-    public static ConstantOperator dayofweek(ConstantOperator date) {
-        // LocalDateTime.getDayOfWeek is return day of the week, such as monday is 1 and sunday is 7.
-        // function of dayofweek in starrocks monday is 2 and sunday is 1, so need mod 7 and plus 1.
-        return ConstantOperator.createInt((date.getDatetime().getDayOfWeek().getValue()) % 7 + 1);
     }
 
     @ConstantFunction.List(list = {

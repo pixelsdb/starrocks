@@ -17,7 +17,8 @@
 
 package com.starrocks.common.util.concurrent;
 
-import com.starrocks.common.util.LogUtil;
+import com.starrocks.common.util.Util;
+import com.starrocks.common.util.concurrent.QueryableReentrantLock;
 import org.junit.Assert;
 import org.junit.Test;
 
@@ -60,7 +61,7 @@ public class QueryableReentrantLockTest {
                         Thread owner = lock.getOwner();
                         Assert.assertEquals("thread1", owner.getName());
 
-                        System.out.println(LogUtil.dumpThread(owner, 10));
+                        System.out.println(Util.dumpThread(owner, 10));
 
                     }
                 } catch (InterruptedException e) {

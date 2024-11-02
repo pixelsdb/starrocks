@@ -34,10 +34,8 @@ import static com.starrocks.catalog.system.SystemTable.NAME_CHAR_LEN;
 import static com.starrocks.catalog.system.SystemTable.builder;
 
 public class RoleEdges {
-    private static final String NAME = "role_edges";
-
     public static SystemTable create() {
-        return new SystemTable(SystemId.ROLE_EDGES_ID, NAME, Table.TableType.SCHEMA,
+        return new SystemTable(SystemId.ROLE_EDGES_ID, "role_edges", Table.TableType.SCHEMA,
                 builder()
                         .column("FROM_ROLE", ScalarType.createVarchar(NAME_CHAR_LEN))
                         .column("TO_ROLE", ScalarType.createVarchar(NAME_CHAR_LEN))

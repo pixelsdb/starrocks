@@ -4,7 +4,7 @@ displayed_sidebar: docs
 
 # cosh
 
-
+## 功能
 
 计算输入数值的双曲余弦值。
 

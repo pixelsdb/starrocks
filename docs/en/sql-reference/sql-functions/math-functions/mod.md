@@ -4,7 +4,7 @@ displayed_sidebar: docs
 
 # mod
 
-
+## Description
 
 The modulus function that returns the remainder of `dividend` divided by `divisor`.
 

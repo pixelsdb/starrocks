@@ -20,7 +20,6 @@ import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import com.starrocks.catalog.Database;
 import com.starrocks.catalog.ExternalOlapTable;
-import com.starrocks.catalog.Index;
 import com.starrocks.catalog.KeysType;
 import com.starrocks.catalog.OlapTable;
 import com.starrocks.catalog.Table;
@@ -28,12 +27,7 @@ import com.starrocks.catalog.system.SystemTable;
 import com.starrocks.common.AnalysisException;
 import com.starrocks.common.Config;
 import com.starrocks.common.DuplicatedRequestException;
-import com.starrocks.common.ErrorCode;
-import com.starrocks.common.ErrorReport;
 import com.starrocks.common.LabelAlreadyUsedException;
-import com.starrocks.common.VectorIndexParams.CommonIndexParamKey;
-import com.starrocks.common.VectorIndexParams.VectorIndexType;
-import com.starrocks.common.VectorSearchOptions;
 import com.starrocks.common.profile.Timer;
 import com.starrocks.common.profile.Tracers;
 import com.starrocks.http.HttpConnectContext;
@@ -51,7 +45,6 @@ import com.starrocks.sql.analyzer.PlannerMetaLocker;
 import com.starrocks.sql.analyzer.SemanticException;
 import com.starrocks.sql.ast.DeleteStmt;
 import com.starrocks.sql.ast.DmlStmt;
-import com.starrocks.sql.ast.IndexDef;
 import com.starrocks.sql.ast.InsertStmt;
 import com.starrocks.sql.ast.QueryRelation;
 import com.starrocks.sql.ast.QueryStatement;
@@ -86,7 +79,6 @@ import org.apache.logging.log4j.Logger;
 
 import java.util.Collections;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
@@ -133,14 +125,13 @@ public class StatementPlanner {
                 boolean areTablesCopySafe = AnalyzerUtils.areTablesCopySafe(queryStmt);
                 needWholePhaseLock = isLockFree(areTablesCopySafe, session) ? false : true;
                 ExecPlan plan;
-                VectorSearchOptions vectorSearchOptions = new VectorSearchOptions();
                 if (needWholePhaseLock) {
-                    plan = createQueryPlan(queryStmt, session, resultSinkType, vectorSearchOptions);
+                    plan = createQueryPlan(queryStmt, session, resultSinkType);
                 } else {
                     long planStartTime = OptimisticVersion.generate();
                     unLock(plannerMetaLocker);
                     plan = createQueryPlanWithReTry(queryStmt, session, resultSinkType, plannerMetaLocker,
-                                                    planStartTime, vectorSearchOptions);
+                                                    planStartTime);
                 }
                 setOutfileSink(queryStmt, plan);
                 return plan;
@@ -236,10 +227,8 @@ public class StatementPlanner {
 
     private static ExecPlan createQueryPlan(StatementBase stmt,
                                             ConnectContext session,
-                                            TResultSinkType resultSinkType,
-                                            VectorSearchOptions vectorSearchOptions) {
+                                            TResultSinkType resultSinkType) {
         QueryStatement queryStmt = (QueryStatement) stmt;
-        checkVectorIndex(queryStmt, vectorSearchOptions);
         QueryRelation query = (QueryRelation) queryStmt.getQueryRelation();
         List<String> colNames = query.getColumnOutputNames();
         // 1. Build Logical plan
@@ -266,8 +255,7 @@ public class StatementPlanner {
                     stmt,
                     new PhysicalPropertySet(),
                     new ColumnRefSet(logicalPlan.getOutputColumn()),
-                    columnRefFactory,
-                    vectorSearchOptions);
+                    columnRefFactory);
         }
 
         try (Timer ignored = Tracers.watchScope("ExecPlanBuild")) {
@@ -291,12 +279,9 @@ public class StatementPlanner {
                                                     ConnectContext session,
                                                     TResultSinkType resultSinkType,
                                                     PlannerMetaLocker plannerMetaLocker,
-                                                    long planStartTime,
-                                                    VectorSearchOptions vectorSearchOptions) {
+                                                    long planStartTime) {
         QueryRelation query = queryStmt.getQueryRelation();
         List<String> colNames = query.getColumnOutputNames();
-
-        checkVectorIndex(queryStmt, vectorSearchOptions);
 
         // 1. Build Logical plan
         ColumnRefFactory columnRefFactory = new ColumnRefFactory();
@@ -340,8 +325,7 @@ public class StatementPlanner {
                         queryStmt,
                         new PhysicalPropertySet(),
                         new ColumnRefSet(logicalPlan.getOutputColumn()),
-                        columnRefFactory,
-                        vectorSearchOptions);
+                        columnRefFactory);
             }
 
             try (Timer ignored = Tracers.watchScope("ExecPlanBuild")) {
@@ -372,36 +356,6 @@ public class StatementPlanner {
 
         throw new StarRocksPlannerException(ErrorType.INTERNAL_ERROR,
                 "schema of %s had been updated frequently during the plan generation", updatedTables);
-    }
-
-    private static boolean checkAndSetVectorIndex(OlapTable olapTable, VectorSearchOptions vectorSearchOptions) {
-        for (Index index : olapTable.getIndexes()) {
-            if (index.getIndexType() == IndexDef.IndexType.VECTOR) {
-                Map<String, String> indexProperties = index.getProperties();
-                String indexType = indexProperties.get(CommonIndexParamKey.INDEX_TYPE.name().toLowerCase(Locale.ROOT));
-
-                if (VectorIndexType.IVFPQ.name().equalsIgnoreCase(indexType)) {
-                    vectorSearchOptions.setUseIVFPQ(true);
-                }
-
-                vectorSearchOptions.setEnableUseANN(true);
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private static void checkVectorIndex(QueryStatement queryStmt, VectorSearchOptions vectorSearchOptions) {
-        Set<OlapTable> olapTables = Sets.newHashSet();
-        AnalyzerUtils.copyOlapTable(queryStmt, olapTables);
-        boolean hasVectorIndex = false;
-        for (OlapTable olapTable : olapTables) {
-            if (checkAndSetVectorIndex(olapTable, vectorSearchOptions)) {
-                hasVectorIndex = true;
-                break;
-            }
-        }
-        vectorSearchOptions.setEnableUseANN(hasVectorIndex);
     }
 
     public static Set<OlapTable> collectOriginalOlapTables(ConnectContext session, StatementBase queryStmt) {
@@ -479,15 +433,12 @@ public class StatementPlanner {
             }
         }
 
-        stmt.getTableName().normalization(session);
+        MetaUtils.normalizationTableName(session, stmt.getTableName());
         String catalogName = stmt.getTableName().getCatalog();
         String dbName = stmt.getTableName().getDb();
         String tableName = stmt.getTableName().getTbl();
 
-        Database db = GlobalStateMgr.getCurrentState().getMetadataMgr().getDb(catalogName, dbName);
-        if (db == null) {
-            ErrorReport.reportSemanticException(ErrorCode.ERR_BAD_DB_ERROR, dbName);
-        }
+        Database db = MetaUtils.getDatabase(catalogName, dbName);
         Table targetTable = MetaUtils.getSessionAwareTable(session, db, stmt.getTableName());
         if (targetTable == null) {
             throw new SemanticException("Table %s is not found", tableName);
@@ -573,13 +524,10 @@ public class StatementPlanner {
             return;
         }
 
-        stmt.getTableName().normalization(session);
+        MetaUtils.normalizationTableName(session, stmt.getTableName());
         String catalogName = stmt.getTableName().getCatalog();
         String dbName = stmt.getTableName().getDb();
-        Database db = GlobalStateMgr.getCurrentState().getMetadataMgr().getDb(catalogName, dbName);
-        if (db == null) {
-            ErrorReport.reportSemanticException(ErrorCode.ERR_BAD_DB_ERROR, dbName);
-        }
+        Database db = MetaUtils.getDatabase(catalogName, dbName);
         Table targetTable = MetaUtils.getSessionAwareTable(session, db, stmt.getTableName());
         try {
             if (targetTable instanceof ExternalOlapTable) {

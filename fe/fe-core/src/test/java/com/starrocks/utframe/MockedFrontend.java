@@ -258,6 +258,8 @@ public class MockedFrontend {
                 };
 
                 GlobalStateMgr.getCurrentState().initialize(args);
+                StateChangeExecutor.getInstance().setMetaContext(
+                        GlobalStateMgr.getCurrentState().getMetaContext());
 
                 if (RunMode.isSharedDataMode()) {
                     // setup and start StarManager service

@@ -23,7 +23,6 @@ import com.starrocks.catalog.PhysicalPartition;
 import com.starrocks.catalog.Tablet;
 import com.starrocks.common.util.concurrent.lock.LockType;
 import com.starrocks.common.util.concurrent.lock.Locker;
-import com.starrocks.server.GlobalStateMgr;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -98,15 +97,14 @@ public class TransactionChecker {
     public static TransactionChecker create(TransactionState txn, Database db) {
         List<PartitionChecker> partitions = new ArrayList<>();
         for (TableCommitInfo tableCommitInfo : txn.getIdToTableCommitInfos().values()) {
-            OlapTable table = (OlapTable) GlobalStateMgr.getCurrentState().getLocalMetastore()
-                        .getTable(db.getId(), tableCommitInfo.getTableId());
+            OlapTable table = (OlapTable) db.getTable(tableCommitInfo.getTableId());
             if (table == null || table.isCloudNativeTableOrMaterializedView()) {
                 continue;
             }
 
             Locker locker = new Locker();
             try {
-                locker.lockTablesWithIntensiveDbLock(db.getId(), Lists.newArrayList(table.getId()), LockType.READ);
+                locker.lockTablesWithIntensiveDbLock(db, Lists.newArrayList(table.getId()), LockType.READ);
 
                 for (PartitionCommitInfo partitionCommitInfo : tableCommitInfo.getIdToPartitionCommitInfo().values()) {
                     long partitionId = partitionCommitInfo.getPartitionId();
@@ -126,7 +124,7 @@ public class TransactionChecker {
                     partitions.add(partitionChecker);
                 }
             } finally {
-                locker.unLockTablesWithIntensiveDbLock(db.getId(), Lists.newArrayList(table.getId()), LockType.READ);
+                locker.unLockTablesWithIntensiveDbLock(db, Lists.newArrayList(table.getId()), LockType.READ);
             }
         }
         return new TransactionChecker(partitions);

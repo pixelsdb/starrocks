@@ -112,7 +112,7 @@ public:
     void end_driver_process(PipelineDriver* driver) override;
     bool is_running_all_io_tasks() const override;
 
-    Status append_morsels(std::vector<MorselPtr>&& morsels);
+    void append_morsels(std::vector<MorselPtr>&& morsels);
     ConnectorScanOperatorAdaptiveProcessor* adaptive_processor() const { return _adaptive_processor; }
     bool enable_adaptive_io_tasks() const { return _enable_adaptive_io_tasks; }
 

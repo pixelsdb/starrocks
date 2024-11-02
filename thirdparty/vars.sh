@@ -145,10 +145,10 @@ ZLIB_SOURCE=zlib-1.2.11
 ZLIB_MD5SUM="0095d2d2d1f3442ce1318336637b695f"
 
 # lz4
-LZ4_DOWNLOAD="https://github.com/lz4/lz4/archive/v1.9.4.tar.gz"
-LZ4_NAME=lz4-1.9.4.tar.gz
-LZ4_SOURCE=lz4-1.9.4
-LZ4_MD5SUM="e9286adb64040071c5e23498bf753261"
+LZ4_DOWNLOAD="https://github.com/lz4/lz4/archive/v1.9.3.tar.gz"
+LZ4_NAME=lz4-1.9.3.tar.gz
+LZ4_SOURCE=lz4-1.9.3
+LZ4_MD5SUM="3a1ab1684e14fc1afc66228ce61b2db3"
 
 # bzip
 BZIP_DOWNLOAD="https://fossies.org/linux/misc/bzip2-1.0.8.tar.gz"
@@ -325,12 +325,6 @@ AWS_SDK_CPP_NAME="aws-sdk-cpp-1.11.267.tar.gz"
 AWS_SDK_CPP_SOURCE="aws-sdk-cpp-1.11.267"
 AWS_SDK_CPP_MD5SUM="fdf43e7262f9d08968eb34f9ad18b8e7"
 
-# poco
-POCO_DOWNLOAD="https://github.com/pocoproject/poco/archive/refs/tags/poco-1.12.5-release.tar.gz"
-POCO_NAME="poco-1.12.5-release.tar.gz"
-POCO_SOURCE="poco-1.12.5-release"
-POCO_MD5SUM="282e54a68911f516b15d07136c78592b"
-
 # velocypack: A fast and compact format for serialization and storage
 VPACK_DOWNLOAD="https://github.com/arangodb/velocypack/archive/refs/tags/XYZ1.0.tar.gz"
 VPACK_NAME="velocypack-XYZ1.0.tar.gz"
@@ -415,40 +409,15 @@ CLUCENE_NAME="starrocks-clucene-2024.06.03.tar.gz"
 CLUCENE_SOURCE="starrocks-clucene-2024.06.03"
 CLUCENE_MD5SUM="c218eb0fbbfe7f295e81ab1c8a9317cb"
 
-
-#absl
-ABSL_DOWNLOAD="https://github.com/abseil/abseil-cpp/archive/refs/tags/20220623.0.tar.gz"
-ABSL_NAME="abseil-cpp-20220623.0.tar.gz"
-ABSL_SOURCE="abseil-cpp-20220623.0"
-ABSL_MD5SUM="955b6faedf32ec2ce1b7725561d15618"
-
-# cares - grpc dependency
-CARES_DOWNLOAD="https://github.com/c-ares/c-ares/archive/tags/cares-1_19_1.tar.gz"
-CARES_NAME=cares-1_19_1.tar.gz
-CARES_SOURCE=cares-1_19_1
-CARES_MD5SUM="ae2177836c9dbbacb8f303d167fe700f"
-
-# grpc
-GRPC_DOWNLOAD="https://github.com/grpc/grpc/archive/refs/tags/v1.43.0.tar.gz"
-GRPC_NAME="grpc-1.43.0.tar.gz"
-GRPC_SOURCE="grpc-1.43.0"
-GRPC_MD5SUM="92559743e7b5d3f67486c4c0de2f5cbe"
-
 # simdutf
 SIMDUTF_DOWNLOAD="https://github.com/simdutf/simdutf/archive/refs/tags/v5.2.8.tar.gz"
 SIMDUTF_NAME="simdutf-5.2.8.tar.gz"
 SIMDUTF_SOURCE="simdutf-5.2.8"
 SIMDUTF_MD5SUM="731c78ab5a10c6073942dc93d5c4b04c"
 
-# tenann
-TENANN_DOWNLOAD="https://github.com/StarRocks/tenann/releases/download/v0.4.2-RELEASE/tenann-v0.4.2-RELEASE.tar.gz"
-TENANN_NAME="tenann-v0.4.2-RELEASE.tar.gz"
-TENANN_SOURCE="tenann-v0.4.2-RELEASE"
-TENANN_MD5SUM="40a00643d953982845901ae60766aad4"
-
 # all thirdparties which need to be downloaded is set in array TP_ARCHIVES
 TP_ARCHIVES="CLUCENE LIBEVENT OPENSSL THRIFT PROTOBUF GFLAGS GLOG GTEST RAPIDJSON SIMDJSON SNAPPY GPERFTOOLS ZLIB LZ4 BZIP CURL \
             RE2 BOOST LEVELDB BRPC ROCKSDB KRB5 SASL LIBRDKAFKA PULSAR FLATBUFFERS ARROW BROTLI ZSTD S2 BITSHUFFLE CROARINGBITMAP \
             JEMALLOC CCTZ FMT RYU BREAK_PAD HADOOP JDK RAGEL HYPERSCAN MARIADB JINDOSDK AWS_SDK_CPP VPACK OPENTELEMETRY \
             BENCHMARK FAST_FLOAT STARCACHE STREAMVBYTE JANSSON AVRO SERDES GCS_CONNECTOR LZO2 DATASKETCHES \
-            ASYNC_PROFILER FIU LIBDEFLATE LLVM ABSL CARES GRPC SIMDUTF TENANN POCO"
+            ASYNC_PROFILER FIU LIBDEFLATE LLVM SIMDUTF"

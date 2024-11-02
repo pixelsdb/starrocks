@@ -4,7 +4,7 @@ displayed_sidebar: docs
 
 # hours_add
 
-
+## Description
 
 Adds hours to a date or datetime.
 

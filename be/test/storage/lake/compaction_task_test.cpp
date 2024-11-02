@@ -157,7 +157,7 @@ TEST_P(LakeDuplicateKeyCompactionTest, test1) {
                                                    .build());
         ASSERT_OK(delta_writer->open());
         ASSERT_OK(delta_writer->write(chunk0, indexes.data(), indexes.size()));
-        ASSERT_OK(delta_writer->finish_with_txnlog());
+        ASSERT_OK(delta_writer->finish());
         delta_writer->close();
         // Publish version
         ASSERT_OK(publish_single_version(tablet_id, version + 1, txn_id).status());
@@ -298,7 +298,7 @@ TEST_P(LakeDuplicateKeyOverlapSegmentsCompactionTest, test) {
             ASSERT_OK(delta_writer->write(chunk0, indexes.data(), indexes.size()));
             ASSERT_OK(delta_writer->flush());
         }
-        ASSERT_OK(delta_writer->finish_with_txnlog());
+        ASSERT_OK(delta_writer->finish());
         delta_writer->close();
         // Publish version
         ASSERT_OK(publish_single_version(tablet_id, version + 1, txn_id).status());
@@ -454,7 +454,7 @@ TEST_P(LakeUniqueKeyCompactionTest, test1) {
                                                    .build());
         ASSERT_OK(delta_writer->open());
         ASSERT_OK(delta_writer->write(chunk0, indexes.data(), indexes.size()));
-        ASSERT_OK(delta_writer->finish_with_txnlog());
+        ASSERT_OK(delta_writer->finish());
         delta_writer->close();
         // Publish version
         ASSERT_OK(publish_single_version(tablet_id, version + 1, txn_id).status());
@@ -577,7 +577,7 @@ TEST_P(LakeUniqueKeyCompactionWithDeleteTest, test_base_compaction_with_delete) 
                                                    .build());
         ASSERT_OK(delta_writer->open());
         ASSERT_OK(delta_writer->write(chunk0, indexes.data(), indexes.size()));
-        ASSERT_OK(delta_writer->finish_with_txnlog());
+        ASSERT_OK(delta_writer->finish());
         delta_writer->close();
         // Publish version
         ASSERT_OK(publish_single_version(tablet_id, version + 1, txn_id).status());

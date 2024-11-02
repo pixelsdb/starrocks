@@ -14,23 +14,11 @@
 
 #pragma once
 
-#include <stddef.h>
-#include <stdint.h>
-
-#include <atomic>
-#include <memory>
-#include <set>
-#include <string>
 #include <unordered_map>
-#include <vector>
 
 #include "column/chunk.h"
 #include "column/vectorized_fwd.h"
 #include "common/config.h"
-#include "common/global_types.h"
-#include "common/object_pool.h"
-#include "common/status.h"
-#include "common/statusor.h"
 #include "exprs/expr_context.h"
 #include "formats/parquet/column_read_order_ctx.h"
 #include "formats/parquet/column_reader.h"
@@ -40,19 +28,11 @@
 #include "io/shared_buffered_input_stream.h"
 #include "runtime/descriptors.h"
 #include "runtime/runtime_state.h"
-#include "storage/range.h"
 #include "util/runtime_profile.h"
-
 namespace starrocks {
 class RandomAccessFile;
-struct HdfsScanStats;
-class ExprContext;
-class TIcebergSchemaField;
 
-namespace parquet {
-class FileMetaData;
-} // namespace parquet
-struct TypeDescriptor;
+struct HdfsScanStats;
 } // namespace starrocks
 
 namespace starrocks::parquet {
@@ -75,6 +55,7 @@ struct GroupReaderParam {
         const SlotId slot_id() const { return slot_desc->id(); }
     };
 
+    const TupleDescriptor* tuple_desc = nullptr;
     // conjunct_ctxs that column is materialized in group reader
     std::unordered_map<SlotId, std::vector<ExprContext*>> conjunct_ctxs_by_slot;
 
@@ -132,8 +113,9 @@ private:
     void _use_as_dict_filter_column(int col_idx, SlotId slot_id, std::vector<std::string>& sub_field_path);
     Status _rewrite_conjunct_ctxs_to_predicates(bool* is_group_filtered);
 
+    void _init_chunk_dict_column(ChunkPtr* chunk);
     StatusOr<bool> _filter_chunk_with_dict_filter(ChunkPtr* chunk, Filter* filter);
-    Status _fill_dst_chunk(ChunkPtr& read_chunk, ChunkPtr* chunk);
+    Status _fill_dst_chunk(const ChunkPtr& read_chunk, ChunkPtr* chunk);
 
     Status _init_column_readers();
     Status _create_column_reader(const GroupReaderParam::Column& column);

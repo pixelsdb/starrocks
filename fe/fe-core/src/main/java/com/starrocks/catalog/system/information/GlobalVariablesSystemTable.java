@@ -22,11 +22,9 @@ import com.starrocks.thrift.TSchemaTableType;
 import static com.starrocks.catalog.system.SystemTable.builder;
 
 public class GlobalVariablesSystemTable {
-    private static final String NAME = "global_variables";
-
     public static SystemTable create() {
         return new SystemTable(SystemId.GLOBAL_VARIABLES_ID,
-                NAME,
+                "global_variables",
                 Table.TableType.SCHEMA,
                 builder()
                         .column("VARIABLE_NAME", ScalarType.createVarchar(64))

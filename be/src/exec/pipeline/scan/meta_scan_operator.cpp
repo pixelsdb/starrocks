@@ -23,7 +23,7 @@
 namespace starrocks::pipeline {
 MetaScanOperatorFactory::MetaScanOperatorFactory(int32_t id, ScanNode* meta_scan_node, size_t dop,
                                                  std::shared_ptr<MetaScanContextFactory> ctx_factory)
-        : ScanOperatorFactory(id, meta_scan_node), _ctx_factory(std::move(ctx_factory)) {}
+        : ScanOperatorFactory(id, meta_scan_node), _ctx_factory(std::move(std::move(ctx_factory))) {}
 
 Status MetaScanOperatorFactory::do_prepare(RuntimeState* state) {
     return Status::OK();
@@ -38,7 +38,7 @@ OperatorPtr MetaScanOperatorFactory::do_create(int32_t dop, int32_t driver_seque
 
 MetaScanOperator::MetaScanOperator(OperatorFactory* factory, int32_t id, int32_t driver_sequence, int32_t dop,
                                    ScanNode* meta_scan_node, MetaScanContextPtr ctx)
-        : ScanOperator(factory, id, driver_sequence, dop, meta_scan_node), _ctx(std::move(ctx)) {}
+        : ScanOperator(factory, id, driver_sequence, dop, meta_scan_node), _ctx(std::move(std::move(ctx))) {}
 
 bool MetaScanOperator::has_output() const {
     if (!_ctx->is_prepare_finished()) {

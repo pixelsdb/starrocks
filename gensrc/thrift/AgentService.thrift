@@ -144,11 +144,6 @@ enum TAlterJobType {
     DECOMMISSION_BACKEND = 2
 }
 
-struct TAlterMaterializedViewParam {
-    1: required string column_name
-    2: optional string origin_column_name
-    3: optional Exprs.TExpr mv_expr
-}
 
 // This v2 request will replace the old TAlterTabletReq.
 // TAlterTabletReq should be deprecated after new alter job process merged.
@@ -172,6 +167,12 @@ struct TAlterTabletReqV2 {
     16: optional Descriptors.TDescriptorTable desc_tbl
     17: optional Exprs.TExpr where_expr
     18: optional list<string> base_table_column_names 
+}
+
+struct TAlterMaterializedViewParam {
+    1: required string column_name
+    2: optional string origin_column_name
+    3: optional Exprs.TExpr mv_expr
 }
 
 struct TClusterInfo {
@@ -248,10 +249,6 @@ struct TCheckConsistencyReq {
 struct TCompactionReq {
     1: optional list<Types.TTableId> tablet_ids
     2: optional bool is_base_compaction
-}
-
-struct TCompactionControlReq {
-    1: optional map<Types.TTableId, i64> table_to_disable_deadline
 }
 
 struct TUpdateSchemaReq {
@@ -418,9 +415,7 @@ enum TTabletMetaType {
     BUCKET_SIZE,
     PRIMARY_INDEX_CACHE_EXPIRE_SEC,
     STORAGE_TYPE,
-    MUTABLE_BUCKET_NUM,
-    ENABLE_LOAD_PROFILE,
-    BASE_COMPACTION_FORBIDDEN_TIME_RANGES
+    MUTABLE_BUCKET_NUM
 }
 
 struct TTabletMetaInfo {
@@ -484,7 +479,6 @@ struct TAgentTaskRequest {
     29: optional TRemoteSnapshotRequest remote_snapshot_req
     30: optional TReplicateSnapshotRequest replicate_snapshot_req
     31: optional TUpdateSchemaReq update_schema_req
-    32: optional TCompactionControlReq compaction_control_req
 }
 
 struct TAgentResult {

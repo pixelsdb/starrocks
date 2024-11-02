@@ -146,31 +146,22 @@ public class HiveMetastoreOperations {
         String dbName = stmt.getDbName();
         String tableName = stmt.getTableName();
         Map<String, String> properties = stmt.getProperties() != null ? stmt.getProperties() : new HashMap<>();
-        Path tablePath = null;
+        checkLocationProperties(properties);
+        Path tablePath;
+
         boolean tableLocationExists = false;
-        if (!stmt.isExternal()) {
-            checkLocationProperties(properties);
-            if (!Strings.isNullOrEmpty(properties.get(LOCATION_PROPERTY))) {
-                String tableLocationWithUserAssign = properties.get(LOCATION_PROPERTY);
-                tablePath = new Path(tableLocationWithUserAssign);
-                if (pathExists(tablePath, hadoopConf)) {
-                    tableLocationExists = true;
-                    if (!isEmpty(tablePath, hadoopConf)) {
-                        throw new StarRocksConnectorException("not support creating table under non-empty directory: %s",
-                                tableLocationWithUserAssign);
-                    }
+        if (!Strings.isNullOrEmpty(properties.get(LOCATION_PROPERTY))) {
+            String tableLocationWithUserAssign = properties.get(LOCATION_PROPERTY);
+            tablePath = new Path(tableLocationWithUserAssign);
+            if (pathExists(tablePath, hadoopConf)) {
+                tableLocationExists = true;
+                if (!isEmpty(tablePath, hadoopConf)) {
+                    throw new StarRocksConnectorException("not support creating table under non-empty directory: %s",
+                            tableLocationWithUserAssign);
                 }
-            } else {
-                tablePath = getDefaultLocation(dbName, tableName);
             }
         } else {
-            // checkExternalLocationProperties(properties);
-            if (properties.containsKey(EXTERNAL_LOCATION_PROPERTY)) {
-                tablePath = new Path(properties.get(EXTERNAL_LOCATION_PROPERTY));
-            } else if (properties.containsKey(LOCATION_PROPERTY)) {
-                tablePath = new Path(properties.get(LOCATION_PROPERTY));
-            }
-            tableLocationExists = true;
+            tablePath = getDefaultLocation(dbName, tableName);
         }
 
         HiveStorageFormat.check(properties);
@@ -183,11 +174,6 @@ public class HiveMetastoreOperations {
             partitionColNames = partitionColumns.stream().map(Column::getName).collect(Collectors.toList());
         }
 
-        // default is managed table
-        HiveTable.HiveTableType tableType = HiveTable.HiveTableType.MANAGED_TABLE;
-        if (stmt.isExternal()) {
-            tableType = HiveTable.HiveTableType.EXTERNAL_TABLE;
-        }
         HiveTable.Builder builder = HiveTable.builder()
                 .setId(ConnectorTableId.CONNECTOR_ID_GENERATOR.getNextId().asInt())
                 .setTableName(tableName)
@@ -200,11 +186,10 @@ public class HiveMetastoreOperations {
                         .map(Column::getName)
                         .collect(Collectors.toList()).subList(0, stmt.getColumns().size() - partitionColNames.size()))
                 .setFullSchema(stmt.getColumns())
-                .setTableLocation(tablePath == null ? null : tablePath.toString())
+                .setTableLocation(tablePath.toString())
                 .setProperties(stmt.getProperties())
                 .setStorageFormat(HiveStorageFormat.get(properties.getOrDefault(FILE_FORMAT, "parquet")))
-                .setCreateTime(System.currentTimeMillis())
-                .setHiveTableType(tableType);
+                .setCreateTime(System.currentTimeMillis());
         Table table = builder.build();
         try {
             if (!tableLocationExists) {

@@ -236,7 +236,7 @@ public class StatisticsCollectionTrigger {
         TableCommitInfo tableCommitInfo = txnState.getIdToTableCommitInfos().get(table.getId());
         Locker locker = new Locker();
         if (useLock) {
-            locker.lockTablesWithIntensiveDbLock(db.getId(), List.of(table.getId()), LockType.READ);
+            locker.lockTablesWithIntensiveDbLock(db, List.of(table.getId()), LockType.READ);
         }
         try {
             for (var entry : tableCommitInfo.getIdToPartitionCommitInfo().entrySet()) {
@@ -252,7 +252,7 @@ public class StatisticsCollectionTrigger {
             }
         } finally {
             if (useLock) {
-                locker.unLockTablesWithIntensiveDbLock(db.getId(), List.of(table.getId()), LockType.READ);
+                locker.unLockTablesWithIntensiveDbLock(db, List.of(table.getId()), LockType.READ);
             }
         }
         if (partitionIds.isEmpty()) {

@@ -199,8 +199,8 @@ public class AddDecodeNodeForDictStringRule implements TreeRewriteRule {
             return !couldApplyCtx.canDictOptBeApplied && couldApplyCtx.stopOptPropagateUpward;
         }
 
-        public static boolean isSimpleStrictPredicate(ScalarOperator operator, boolean enablePushdownOrPredicate) {
-            return operator.accept(new IsSimpleStrictPredicateVisitor(enablePushdownOrPredicate), null);
+        public static boolean isSimpleStrictPredicate(ScalarOperator operator) {
+            return operator.accept(new IsSimpleStrictPredicateVisitor(), null);
         }
 
         private void visitProjectionBefore(OptExpression optExpression, DecodeContext context) {
@@ -485,8 +485,7 @@ public class AddDecodeNodeForDictStringRule implements TreeRewriteRule {
                                     scanOperator.getSelectedIndexId(), scanOperator.getSelectedPartitionId(),
                                     scanOperator.getSelectedTabletId(), scanOperator.getHintsReplicaId(),
                                     newPrunedPredicates,
-                                    scanOperator.getProjection(), scanOperator.isUsePkIndex(),
-                                    scanOperator.getVectorSearchOptions());
+                                    scanOperator.getProjection(), scanOperator.isUsePkIndex());
                     newOlapScan.setScanOptimzeOption(scanOperator.getScanOptimzeOption());
                     newOlapScan.setPreAggregation(scanOperator.isPreAggregation());
                     newOlapScan.setGlobalDicts(globalDicts);
@@ -1207,28 +1206,12 @@ public class AddDecodeNodeForDictStringRule implements TreeRewriteRule {
     // The predicate no function all, this implementation is consistent with BE olap scan node
     private static class IsSimpleStrictPredicateVisitor extends ScalarOperatorVisitor<Boolean, Void> {
 
-        private final boolean enablePushDownOrPredicate;
-
-        public IsSimpleStrictPredicateVisitor(boolean enablePushDownOrPredicate) {
-            this.enablePushDownOrPredicate = enablePushDownOrPredicate;
+        public IsSimpleStrictPredicateVisitor() {
         }
 
         @Override
         public Boolean visit(ScalarOperator scalarOperator, Void context) {
             return false;
-        }
-
-        @Override
-        public Boolean visitCompoundPredicate(CompoundPredicateOperator predicate, Void context) {
-            if (!enablePushDownOrPredicate) {
-                return false;
-            }
-
-            if (!predicate.isAnd() && !predicate.isOr()) {
-                return false;
-            }
-
-            return predicate.getChildren().stream().allMatch(child -> child.accept(this, context));
         }
 
         @Override

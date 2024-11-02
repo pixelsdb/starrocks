@@ -36,7 +36,6 @@ import com.starrocks.scheduler.Constants;
 import com.starrocks.scheduler.Task;
 import com.starrocks.scheduler.TaskManager;
 import com.starrocks.server.GlobalStateMgr;
-import com.starrocks.server.WarehouseManager;
 import com.starrocks.sql.analyzer.SemanticException;
 import com.starrocks.sql.ast.AdminCancelRepairTableStmt;
 import com.starrocks.sql.ast.AdminCheckTabletsStmt;
@@ -137,10 +136,6 @@ import com.starrocks.sql.ast.UninstallPluginStmt;
 import com.starrocks.sql.ast.pipe.AlterPipeStmt;
 import com.starrocks.sql.ast.pipe.CreatePipeStmt;
 import com.starrocks.sql.ast.pipe.DropPipeStmt;
-import com.starrocks.sql.ast.warehouse.CreateWarehouseStmt;
-import com.starrocks.sql.ast.warehouse.DropWarehouseStmt;
-import com.starrocks.sql.ast.warehouse.ResumeWarehouseStmt;
-import com.starrocks.sql.ast.warehouse.SuspendWarehouseStmt;
 import com.starrocks.statistic.AnalyzeJob;
 import com.starrocks.statistic.ExternalAnalyzeJob;
 import com.starrocks.statistic.NativeAnalyzeJob;
@@ -244,15 +239,13 @@ public class DDLStmtExecutor {
             ErrorReport.wrapWithRuntimeException(() -> {
                 FunctionName name = stmt.getFunctionName();
                 if (name.isGlobalFunction()) {
-                    context.getGlobalStateMgr()
-                            .getGlobalFunctionMgr()
-                            .userAddFunction(stmt.getFunction(), stmt.shouldReplaceIfExists(), stmt.createIfNotExists());
+                    context.getGlobalStateMgr().getGlobalFunctionMgr().userAddFunction(stmt.getFunction());
                 } else {
-                    Database db = context.getGlobalStateMgr().getLocalMetastore().getDb(name.getDb());
+                    Database db = context.getGlobalStateMgr().getDb(name.getDb());
                     if (db == null) {
                         ErrorReport.reportDdlException(ErrorCode.ERR_BAD_DB_ERROR, name.getDb());
                     }
-                    db.addFunction(stmt.getFunction(), stmt.shouldReplaceIfExists(), stmt.createIfNotExists());
+                    db.addFunction(stmt.getFunction());
                 }
             });
             return null;
@@ -263,14 +256,13 @@ public class DDLStmtExecutor {
             ErrorReport.wrapWithRuntimeException(() -> {
                 FunctionName name = stmt.getFunctionName();
                 if (name.isGlobalFunction()) {
-                    context.getGlobalStateMgr().getGlobalFunctionMgr()
-                            .userDropFunction(stmt.getFunctionSearchDesc(), stmt.dropIfExists());
+                    context.getGlobalStateMgr().getGlobalFunctionMgr().userDropFunction(stmt.getFunctionSearchDesc());
                 } else {
-                    Database db = context.getGlobalStateMgr().getLocalMetastore().getDb(name.getDb());
+                    Database db = context.getGlobalStateMgr().getDb(name.getDb());
                     if (db == null) {
                         ErrorReport.reportDdlException(ErrorCode.ERR_BAD_DB_ERROR, name.getDb());
                     }
-                    db.dropFunction(stmt.getFunctionSearchDesc(), stmt.dropIfExists());
+                    db.dropFunction(stmt.getFunctionSearchDesc());
                 }
             });
             return null;
@@ -851,7 +843,7 @@ public class DDLStmtExecutor {
                             stmt.getTableId(),
                             stmt.getColumnNames(),
                             stmt.getColumnTypes(),
-                            stmt.getAnalyzeType(),
+                            stmt.isSample() ? StatsConstants.AnalyzeType.SAMPLE : StatsConstants.AnalyzeType.FULL,
                             StatsConstants.ScheduleType.SCHEDULE,
                             stmt.getProperties(), StatsConstants.ScheduleStatus.PENDING,
                             LocalDateTime.MIN);
@@ -859,7 +851,7 @@ public class DDLStmtExecutor {
                     analyzeJob = new ExternalAnalyzeJob(stmt.getTableName().getCatalog(), stmt.getTableName().getDb(),
                             stmt.getTableName().getTbl(), stmt.getColumnNames(),
                             stmt.getColumnTypes(),
-                            stmt.getAnalyzeType(),
+                            stmt.isSample() ? StatsConstants.AnalyzeType.SAMPLE : StatsConstants.AnalyzeType.FULL,
                             StatsConstants.ScheduleType.SCHEDULE,
                             stmt.getProperties(), StatsConstants.ScheduleStatus.PENDING,
                             LocalDateTime.MIN);
@@ -1131,46 +1123,6 @@ public class DDLStmtExecutor {
         public ShowResultSet visitCancelRefreshDictionaryStatement(CancelRefreshDictionaryStmt stmt, ConnectContext context) {
             ErrorReport.wrapWithRuntimeException(() -> {
                 context.getGlobalStateMgr().getDictionaryMgr().cancelRefreshDictionary(stmt.getDictionaryName());
-            });
-            return null;
-        }
-
-        //=========================================== Warehouse Statement ==================================================
-
-        @Override
-        public ShowResultSet visitCreateWarehouseStatement(CreateWarehouseStmt stmt, ConnectContext context) {
-            ErrorReport.wrapWithRuntimeException(() -> {
-                WarehouseManager warehouseMgr = context.getGlobalStateMgr().getWarehouseMgr();
-                warehouseMgr.createWarehouse(stmt);
-
-            });
-            return null;
-        }
-
-        @Override
-        public ShowResultSet visitSuspendWarehouseStatement(SuspendWarehouseStmt stmt, ConnectContext context) {
-            ErrorReport.wrapWithRuntimeException(() -> {
-                WarehouseManager warehouseMgr = context.getGlobalStateMgr().getWarehouseMgr();
-                warehouseMgr.suspendWarehouse(stmt);
-
-            });
-            return null;
-        }
-
-        @Override
-        public ShowResultSet visitResumeWarehouseStatement(ResumeWarehouseStmt stmt, ConnectContext context) {
-            ErrorReport.wrapWithRuntimeException(() -> {
-                WarehouseManager warehouseMgr = context.getGlobalStateMgr().getWarehouseMgr();
-                warehouseMgr.resumeWarehouse(stmt);
-            });
-            return null;
-        }
-
-        @Override
-        public ShowResultSet visitDropWarehouseStatement(DropWarehouseStmt stmt, ConnectContext context) {
-            ErrorReport.wrapWithRuntimeException(() -> {
-                WarehouseManager warehouseMgr = context.getGlobalStateMgr().getWarehouseMgr();
-                warehouseMgr.dropWarehouse(stmt);
             });
             return null;
         }

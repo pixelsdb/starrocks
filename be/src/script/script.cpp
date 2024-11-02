@@ -21,7 +21,6 @@
 #include "common/greplog.h"
 #include "common/logging.h"
 #include "common/prof/heap_prof.h"
-#include "common/vlog_cntl.h"
 #include "exec/schema_scanner/schema_be_tablets_scanner.h"
 #include "fs/key_cache.h"
 #include "gen_cpp/olap_file.pb.h"
@@ -31,9 +30,6 @@
 #include "runtime/exec_env.h"
 #include "runtime/mem_tracker.h"
 #include "storage/del_vector.h"
-#include "storage/lake/tablet.h"
-#include "storage/lake/tablet_manager.h"
-#include "storage/lake/tablet_metadata.h"
 #include "storage/primary_key_dump.h"
 #include "storage/storage_engine.h"
 #include "storage/tablet.h"
@@ -41,7 +37,6 @@
 #include "storage/tablet_meta_manager.h"
 #include "storage/tablet_updates.h"
 #include "util/stack_util.h"
-#include "util/url_coding.h"
 #include "wrenbind17/wrenbind17.hpp"
 
 using namespace wrenbind17;
@@ -227,6 +222,7 @@ void bind_exec_env(ForeignModule& m) {
         REG_METHOD(GlobalEnv, metadata_mem_tracker);
         REG_METHOD(GlobalEnv, compaction_mem_tracker);
         REG_METHOD(GlobalEnv, schema_change_mem_tracker);
+        REG_METHOD(GlobalEnv, column_pool_mem_tracker);
         REG_METHOD(GlobalEnv, page_cache_mem_tracker);
         REG_METHOD(GlobalEnv, jit_cache_mem_tracker);
         REG_METHOD(GlobalEnv, update_mem_tracker);
@@ -261,13 +257,6 @@ void bind_exec_env(ForeignModule& m) {
         REG_METHOD(HeapProf, to_dot_format);
         REG_METHOD(HeapProf, dump_dot_snapshot);
     }
-    {
-        auto& cls = m.klass<VLogCntl>("VLogCntl");
-        REG_STATIC_METHOD(VLogCntl, getInstance);
-        REG_METHOD(VLogCntl, enable);
-        REG_METHOD(VLogCntl, disable);
-        REG_METHOD(VLogCntl, setLogLevel);
-    }
 }
 
 class StorageEngineRef {
@@ -291,22 +280,6 @@ public:
             return nullptr;
         }
         return ptr;
-    }
-
-    static std::string get_lake_tablet_metadata_json(int64_t tablet_id, int64_t version) {
-        auto tablet_manager = ExecEnv::GetInstance()->lake_tablet_manager();
-        RETURN_IF(nullptr == tablet_manager, "");
-        auto meta_st = tablet_manager->get_tablet_metadata(tablet_id, version, false);
-        RETURN_IF(!meta_st.ok(), meta_st.status().to_string());
-        return proto_to_json(*meta_st.value());
-    }
-
-    static std::string decode_encryption_meta(const std::string& meta_base64) {
-        EncryptionMetaPB pb;
-        std::string meta_bytes;
-        RETURN_IF(!base64_decode(meta_base64, &meta_bytes), "bad base64 string");
-        RETURN_IF(!pb.ParseFromString(meta_bytes), "parse encryption meta failed");
-        return proto_to_json(pb);
     }
 
     static std::shared_ptr<TabletBasicInfo> get_tablet_info(int64_t tablet_id) {
@@ -523,7 +496,6 @@ public:
             REG_VAR(EditVersionInfo, creation_time);
             REG_VAR(EditVersionInfo, rowsets);
             REG_VAR(EditVersionInfo, deltas);
-            REG_VAR(EditVersionInfo, gtid);
             REG_METHOD(EditVersionInfo, get_compaction);
         }
         {
@@ -583,8 +555,6 @@ public:
             REG_STATIC_METHOD(StorageEngineRef, get_tablet_info);
             REG_STATIC_METHOD(StorageEngineRef, get_tablet_infos);
             REG_STATIC_METHOD(StorageEngineRef, get_tablet_meta_json);
-            REG_STATIC_METHOD(StorageEngineRef, get_lake_tablet_metadata_json);
-            REG_STATIC_METHOD(StorageEngineRef, decode_encryption_meta);
             REG_STATIC_METHOD(StorageEngineRef, reset_delvec);
             REG_STATIC_METHOD(StorageEngineRef, get_tablet);
             REG_STATIC_METHOD(StorageEngineRef, drop_tablet);
@@ -609,7 +579,7 @@ Status execute_script(const std::string& script, std::string& output) {
     bind_common(m);
     bind_exec_env(m);
     StorageEngineRef::bind(m);
-    vm.runFromSource("main", R"(import "starrocks" for ExecEnv, GlobalEnv, HeapProf, StorageEngine, VLogCntl)");
+    vm.runFromSource("main", R"(import "starrocks" for ExecEnv, GlobalEnv, HeapProf, StorageEngine)");
     try {
         vm.runFromSource("main", script);
     } catch (const std::exception& e) {

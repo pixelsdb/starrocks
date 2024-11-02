@@ -62,9 +62,9 @@ public class InsertLoadJobTest {
         String tableName = "table1";
         new Expectations() {
             {
-                globalStateMgr.getLocalMetastore().getDb(anyLong);
+                globalStateMgr.getDb(anyLong);
                 result = database;
-                GlobalStateMgr.getCurrentState().getLocalMetastore().getTable(database.getId(), anyLong);
+                database.getTable(anyLong);
                 result = table;
                 table.getName();
                 result = tableName;
@@ -84,9 +84,9 @@ public class InsertLoadJobTest {
                                    @Injectable Table table) throws MetaNotFoundException {
         new Expectations() {
             {
-                globalStateMgr.getLocalMetastore().getDb(anyLong);
+                globalStateMgr.getDb(anyLong);
                 result = database;
-                GlobalStateMgr.getCurrentState().getLocalMetastore().getTable(database.getId(), anyLong);
+                database.getTable(anyLong);
                 result = table;
                 table.getName();
                 result = "some_table";

@@ -18,7 +18,6 @@
 #include "runtime/mem_pool.h"
 #include "storage/chunk_iterator.h"
 #include "storage/delete_predicates.h"
-#include "storage/lake/versioned_tablet.h"
 #include "storage/tablet_reader_params.h"
 #include "types_fwd.h"
 
@@ -81,8 +80,6 @@ public:
 
     size_t merged_rows() const override { return _collect_iter->merged_rows(); }
 
-    void set_tablet(std::shared_ptr<VersionedTablet> tablet) { _tablet = tablet; }
-
     void get_split_tasks(std::vector<pipeline::ScanSplitContextPtr>* split_tasks) { split_tasks->swap(_split_tasks); }
 
 protected:
@@ -124,6 +121,7 @@ private:
     std::vector<SegmentSharedPtr> _segments;
     std::shared_ptr<ChunkIterator> _collect_iter;
 
+    PredicateMap _pushdown_predicates;
     DeletePredicates _delete_predicates;
     PredicateList _predicate_free_list;
 
@@ -138,8 +136,6 @@ private:
     bool _is_vertical_merge = false;
     bool _is_key = false;
     RowSourceMaskBuffer* _mask_buffer = nullptr;
-
-    std::shared_ptr<VersionedTablet> _tablet;
 
     // used for table internal parallel
     bool _need_split = false;

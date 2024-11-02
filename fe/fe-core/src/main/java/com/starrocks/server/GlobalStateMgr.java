@@ -64,6 +64,7 @@ import com.starrocks.catalog.HiveMetaStoreTable;
 import com.starrocks.catalog.InternalCatalog;
 import com.starrocks.catalog.MaterializedView;
 import com.starrocks.catalog.MetaReplayState;
+import com.starrocks.catalog.MetaVersion;
 import com.starrocks.catalog.PrimitiveType;
 import com.starrocks.catalog.RefreshDictionaryCacheTaskDaemon;
 import com.starrocks.catalog.ResourceGroupMgr;
@@ -93,7 +94,6 @@ import com.starrocks.common.io.Text;
 import com.starrocks.common.io.Writable;
 import com.starrocks.common.util.Daemon;
 import com.starrocks.common.util.FrontendDaemon;
-import com.starrocks.common.util.LogUtil;
 import com.starrocks.common.util.PropertyAnalyzer;
 import com.starrocks.common.util.SmallFileMgr;
 import com.starrocks.common.util.Util;
@@ -101,13 +101,13 @@ import com.starrocks.common.util.concurrent.QueryableReentrantLock;
 import com.starrocks.common.util.concurrent.lock.LockManager;
 import com.starrocks.common.util.concurrent.lock.LockType;
 import com.starrocks.common.util.concurrent.lock.Locker;
+import com.starrocks.connector.ConnectorMetadata;
 import com.starrocks.connector.ConnectorMgr;
 import com.starrocks.connector.ConnectorTblMetaInfoMgr;
 import com.starrocks.connector.elasticsearch.EsRepository;
 import com.starrocks.connector.exception.StarRocksConnectorException;
 import com.starrocks.connector.hive.ConnectorTableMetadataProcessor;
 import com.starrocks.connector.hive.events.MetastoreEventsProcessor;
-import com.starrocks.connector.statistics.ConnectorTableTriggerAnalyzeMgr;
 import com.starrocks.consistency.ConsistencyChecker;
 import com.starrocks.consistency.LockChecker;
 import com.starrocks.consistency.MetaRecoveryDaemon;
@@ -130,7 +130,6 @@ import com.starrocks.journal.bdbje.Timestamp;
 import com.starrocks.lake.ShardManager;
 import com.starrocks.lake.StarMgrMetaSyncer;
 import com.starrocks.lake.StarOSAgent;
-import com.starrocks.lake.compaction.CompactionControlScheduler;
 import com.starrocks.lake.compaction.CompactionMgr;
 import com.starrocks.lake.vacuum.AutovacuumDaemon;
 import com.starrocks.leader.Checkpoint;
@@ -146,7 +145,6 @@ import com.starrocks.load.loadv2.LoadJobScheduler;
 import com.starrocks.load.loadv2.LoadLoadingChecker;
 import com.starrocks.load.loadv2.LoadMgr;
 import com.starrocks.load.loadv2.LoadTimeoutChecker;
-import com.starrocks.load.loadv2.LoadsHistorySyncer;
 import com.starrocks.load.pipe.PipeListener;
 import com.starrocks.load.pipe.PipeManager;
 import com.starrocks.load.pipe.PipeScheduler;
@@ -156,6 +154,7 @@ import com.starrocks.load.routineload.RoutineLoadTaskScheduler;
 import com.starrocks.load.streamload.StreamLoadMgr;
 import com.starrocks.memory.MemoryUsageTracker;
 import com.starrocks.memory.ProcProfileCollector;
+import com.starrocks.meta.MetaContext;
 import com.starrocks.metric.MetricRepo;
 import com.starrocks.persist.BackendIdsUpdateInfo;
 import com.starrocks.persist.EditLog;
@@ -249,6 +248,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
@@ -272,6 +272,7 @@ public class GlobalStateMgr {
      * Meta and Image context
      */
     private String imageDir;
+    private final MetaContext metaContext;
     private long epoch = 0;
 
     // Lock to perform atomic modification on map like 'idToDb' and 'fullNameToDb'.
@@ -388,7 +389,6 @@ public class GlobalStateMgr {
     private final LoadJobScheduler loadJobScheduler;
 
     private final LoadTimeoutChecker loadTimeoutChecker;
-    private final LoadsHistorySyncer loadsHistorySyncer;
     private final LoadEtlChecker loadEtlChecker;
     private final LoadLoadingChecker loadLoadingChecker;
     private final LockChecker lockChecker;
@@ -432,7 +432,6 @@ public class GlobalStateMgr {
     private final CatalogMgr catalogMgr;
     private final ConnectorMgr connectorMgr;
     private final ConnectorTblMetaInfoMgr connectorTblMetaInfoMgr;
-    private ConnectorTableTriggerAnalyzeMgr connectorTableTriggerAnalyzeMgr;
 
     private final TaskManager taskManager;
     private final InsertOverwriteJobMgr insertOverwriteJobMgr;
@@ -451,9 +450,6 @@ public class GlobalStateMgr {
 
     // For LakeTable
     private final CompactionMgr compactionMgr;
-
-    // For compaction forbidden policy
-    private final CompactionControlScheduler compactionControlScheduler;
 
     private final WarehouseManager warehouseMgr;
 
@@ -489,7 +485,6 @@ public class GlobalStateMgr {
     private ProcProfileCollector procProfileCollector;
 
     private final MetaRecoveryDaemon metaRecoveryDaemon = new MetaRecoveryDaemon();
-
     private TemporaryTableMgr temporaryTableMgr;
     private TemporaryTableCleaner temporaryTableCleaner;
 
@@ -574,10 +569,6 @@ public class GlobalStateMgr {
 
     public CompactionMgr getCompactionMgr() {
         return compactionMgr;
-    }
-
-    public CompactionControlScheduler getCompactionControlScheduler() {
-        return compactionControlScheduler;
     }
 
     public ConfigRefreshDaemon getConfigRefreshDaemon() {
@@ -673,6 +664,9 @@ public class GlobalStateMgr {
         this.metastoreEventsProcessor = new MetastoreEventsProcessor();
         this.connectorTableMetadataProcessor = new ConnectorTableMetadataProcessor();
 
+        this.metaContext = new MetaContext();
+        this.metaContext.setThreadLocalInfo();
+
         this.stat = new TabletSchedulerStat();
 
         this.globalFunctionMgr = new GlobalFunctionMgr();
@@ -691,7 +685,6 @@ public class GlobalStateMgr {
         this.loadJobScheduler = new LoadJobScheduler();
         this.loadMgr = new LoadMgr(loadJobScheduler);
         this.loadTimeoutChecker = new LoadTimeoutChecker(loadMgr);
-        this.loadsHistorySyncer = new LoadsHistorySyncer();
         this.loadEtlChecker = new LoadEtlChecker(loadMgr);
         this.loadLoadingChecker = new LoadLoadingChecker(loadMgr);
         this.lockChecker = new LockChecker();
@@ -716,13 +709,11 @@ public class GlobalStateMgr {
         this.connectorTblMetaInfoMgr = new ConnectorTblMetaInfoMgr();
         this.metadataMgr = new MetadataMgr(localMetastore, temporaryTableMgr, connectorMgr, connectorTblMetaInfoMgr);
         this.catalogMgr = new CatalogMgr(connectorMgr);
-        this.connectorTableTriggerAnalyzeMgr = new ConnectorTableTriggerAnalyzeMgr();
 
         this.taskManager = new TaskManager();
         this.insertOverwriteJobMgr = new InsertOverwriteJobMgr();
         this.shardManager = new ShardManager();
         this.compactionMgr = new CompactionMgr();
-        this.compactionControlScheduler = new CompactionControlScheduler();
         this.configRefreshDaemon = new ConfigRefreshDaemon();
         this.starMgrMetaSyncer = new StarMgrMetaSyncer();
         this.refreshDictionaryCacheTaskDaemon = new RefreshDictionaryCacheTaskDaemon();
@@ -891,16 +882,16 @@ public class GlobalStateMgr {
         return auditEventProcessor;
     }
 
+    public static int getCurrentStateStarRocksMetaVersion() {
+        return MetaContext.get().getStarRocksMetaVersion();
+    }
+
     public static boolean isCheckpointThread() {
         return Thread.currentThread().getId() == checkpointThreadId;
     }
 
     public StatisticStorage getStatisticStorage() {
         return statisticStorage;
-    }
-
-    public StatisticAutoCollector getStatisticAutoCollector() {
-        return statisticAutoCollector;
     }
 
     public TabletStatMgr getTabletStatMgr() {
@@ -932,8 +923,8 @@ public class GlobalStateMgr {
         return metadataMgr;
     }
 
-    public ConnectorTableTriggerAnalyzeMgr getConnectorTableTriggerAnalyzeMgr() {
-        return connectorTableTriggerAnalyzeMgr;
+    public ConnectorMetadata getMetadata() {
+        return localMetastore;
     }
 
     @VisibleForTesting
@@ -1046,7 +1037,7 @@ public class GlobalStateMgr {
                     // to see which thread held this lock for long time.
                     Thread owner = lock.getOwner();
                     if (owner != null) {
-                        LOG.warn("globalStateMgr lock is held by: {}", LogUtil.dumpThread(owner, 50));
+                        LOG.warn("globalStateMgr lock is held by: {}", Util.dumpThread(owner, 50));
                     }
 
                     if (mustLock) {
@@ -1244,6 +1235,13 @@ public class GlobalStateMgr {
         dominationStartTimeMs = System.currentTimeMillis();
 
         try {
+            // Log meta_version
+            int starrocksMetaVersion = MetaContext.get().getStarRocksMetaVersion();
+            if (starrocksMetaVersion < FeConstants.STARROCKS_META_VERSION) {
+                editLog.logMetaVersion(new MetaVersion(FeConstants.STARROCKS_META_VERSION));
+                MetaContext.get().setStarRocksMetaVersion(FeConstants.STARROCKS_META_VERSION);
+            }
+
             // Log the first frontend
             if (nodeMgr.isFirstTimeStartUp()) {
                 // if isFirstTimeStartUp is true, frontends must contain this Node.
@@ -1322,6 +1320,7 @@ public class GlobalStateMgr {
 
         // start checkpoint thread
         checkpointer = new Checkpoint(journal);
+        checkpointer.setMetaContext(metaContext);
         // set "checkpointThreadId" before the checkpoint thread start, because the thread
         // need to check the "checkpointThreadId" when running.
         checkpointThreadId = checkpointer.getId();
@@ -1340,7 +1339,6 @@ public class GlobalStateMgr {
         loadMgr.prepareJobs();
         loadJobScheduler.start();
         loadTimeoutChecker.start();
-        loadsHistorySyncer.start();
         loadEtlChecker.start();
         loadLoadingChecker.start();
         // Export checker
@@ -1404,7 +1402,6 @@ public class GlobalStateMgr {
         }
         temporaryTableCleaner.start();
 
-        connectorTableTriggerAnalyzeMgr.start();
     }
 
     // start threads that should run on all FE
@@ -1519,7 +1516,6 @@ public class GlobalStateMgr {
                     .put(SRMetaBlockID.REPLICATION_MGR, replicationMgr::load)
                     .put(SRMetaBlockID.KEY_MGR, keyMgr::load)
                     .put(SRMetaBlockID.PIPE_MGR, pipeManager.getRepo()::load)
-                    .put(SRMetaBlockID.WAREHOUSE_MGR, warehouseMgr::load)
                     .build();
 
         Set<SRMetaBlockID> metaMgrMustExists = new HashSet<>(loadImages.keySet());
@@ -1631,6 +1627,7 @@ public class GlobalStateMgr {
             System.exit(-1);
         }
 
+        MetaContext.get().setStarRocksMetaVersion(starrocksMetaVersion);
         ImageHeader header = GsonUtils.GSON.fromJson(Text.readString(dis), ImageHeader.class);
         idGenerator.setId(header.getBatchEndId());
         LOG.info("finished to replay header from image");
@@ -1718,7 +1715,6 @@ public class GlobalStateMgr {
                 replicationMgr.save(imageWriter);
                 keyMgr.save(imageWriter);
                 pipeManager.getRepo().save(imageWriter);
-                warehouseMgr.save(imageWriter);
             } catch (SRMetaBlockException e) {
                 LOG.error("Save meta block failed ", e);
                 throw new IOException("Save meta block failed ", e);
@@ -1871,6 +1867,8 @@ public class GlobalStateMgr {
                 }
             }
         };
+
+        replayer.setMetaContext(metaContext);
     }
 
     /**
@@ -1986,7 +1984,7 @@ public class GlobalStateMgr {
 
         }
         if (replayedJournalId.get() - startReplayId > 0) {
-            LOG.debug("replayed journal from {} - {}", startReplayId, replayedJournalId);
+            LOG.info("replayed journal from {} - {}", startReplayId, replayedJournalId);
             return true;
         }
         return false;
@@ -2066,6 +2064,26 @@ public class GlobalStateMgr {
         };
     }
 
+    public Database getDb(String name) {
+        return localMetastore.getDb(name);
+    }
+
+    public Optional<Table> mayGetTable(long dbId, long tableId) {
+        return mayGetDb(dbId).flatMap(db -> db.tryGetTable(tableId));
+    }
+
+    public Optional<Database> mayGetDb(String name) {
+        return Optional.ofNullable(localMetastore.getDb(name));
+    }
+
+    public Optional<Database> mayGetDb(long dbId) {
+        return Optional.ofNullable(localMetastore.getDb(dbId));
+    }
+
+    public Database getDb(long dbId) {
+        return localMetastore.getDb(dbId);
+    }
+
     public EditLog getEditLog() {
         return editLog;
     }
@@ -2088,11 +2106,11 @@ public class GlobalStateMgr {
     }
 
     public SchemaChangeHandler getSchemaChangeHandler() {
-        return this.alterJobMgr.getSchemaChangeHandler();
+        return (SchemaChangeHandler) this.alterJobMgr.getSchemaChangeHandler();
     }
 
     public MaterializedViewHandler getRollupHandler() {
-        return this.alterJobMgr.getMaterializedViewHandler();
+        return (MaterializedViewHandler) this.alterJobMgr.getMaterializedViewHandler();
     }
 
     public BackupHandler getBackupHandler() {
@@ -2454,14 +2472,14 @@ public class GlobalStateMgr {
         try {
             // sort all dbs
             for (long dbId : localMetastore.getDbIds()) {
-                Database db = localMetastore.getDb(dbId);
+                Database db = getDb(dbId);
                 Preconditions.checkNotNull(db);
                 lockedDbMap.put(dbId, db);
             }
 
             // lock all dbs
             for (Database db : lockedDbMap.values()) {
-                locker.lockDatabase(db.getId(), LockType.READ);
+                locker.lockDatabase(db, LockType.READ);
             }
             LOG.info("acquired all the dbs' read lock.");
 
@@ -2477,7 +2495,7 @@ public class GlobalStateMgr {
         } finally {
             // unlock all
             for (Database db : lockedDbMap.values()) {
-                locker.unLockDatabase(db.getId(), LockType.READ);
+                locker.unLockDatabase(db, LockType.READ);
             }
             unlock();
         }
@@ -2558,6 +2576,10 @@ public class GlobalStateMgr {
 
     public StateChangeExecution getStateChangeExecution() {
         return execution;
+    }
+
+    public MetaContext getMetaContext() {
+        return metaContext;
     }
 
     public void createBuiltinStorageVolume() {

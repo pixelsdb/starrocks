@@ -252,16 +252,8 @@ public class StatisticExecutor {
             return Pair.create(Collections.emptyList(), Status.OK);
         }
 
-        Database db = GlobalStateMgr.getCurrentState().getLocalMetastore().getDb(dbId);
-        if (db == null) {
-            throw new SemanticException("Database %s is not found", dbId);
-        }
-
-        Table table = GlobalStateMgr.getCurrentState().getLocalMetastore().getTable(db.getId(), tableId);
-        if (table == null) {
-            throw new SemanticException("Table %s is not found", tableId);
-        }
-
+        Database db = MetaUtils.getDatabase(dbId);
+        Table table = MetaUtils.getTable(dbId, tableId);
         if (!(table.isOlapOrCloudNativeTable() || table.isMaterializedView())) {
             throw new SemanticException("Table '%s' is not a OLAP table or LAKE table or Materialize View",
                     table.getName());
@@ -304,12 +296,6 @@ public class StatisticExecutor {
         return executeStatisticDQL(context, sql);
     }
 
-    public List<TStatisticData> queryPartitionLevelColumnNDV(ConnectContext context, long tableId,
-                                                             List<Long> partitions, List<String> columns) {
-        String sql = StatisticSQLBuilder.buildQueryPartitionStatisticsSQL(tableId, partitions, columns);
-        return executeStatisticDQL(context, sql);
-    }
-
     private static List<TStatisticData> deserializerStatisticData(List<TResultBatch> sqlResult) throws TException {
         List<TStatisticData> statistics = Lists.newArrayList();
 
@@ -322,7 +308,14 @@ public class StatisticExecutor {
             return statistics;
         }
 
-        if (StatsConstants.STATISTIC_SUPPORTED_VERSION.contains(version)) {
+        if (version == StatsConstants.STATISTIC_DATA_VERSION
+                || version == StatsConstants.STATISTIC_DICT_VERSION
+                || version == StatsConstants.STATISTIC_HISTOGRAM_VERSION
+                || version == StatsConstants.STATISTIC_TABLE_VERSION
+                || version == StatsConstants.STATISTIC_BATCH_VERSION
+                || version == StatsConstants.STATISTIC_EXTERNAL_VERSION
+                || version == StatsConstants.STATISTIC_EXTERNAL_QUERY_VERSION
+                || version == StatsConstants.STATISTIC_EXTERNAL_HISTOGRAM_VERSION) {
             TDeserializer deserializer = new TDeserializer(new TCompactProtocol.Factory());
             for (TResultBatch resultBatch : sqlResult) {
                 for (ByteBuffer bb : resultBatch.rows) {
@@ -425,23 +418,9 @@ public class StatisticExecutor {
                         refreshAsync);
             } else {
                 // for external table
-                ExternalBasicStatsMeta externalBasicStatsMeta = analyzeMgr.getExternalTableBasicStatsMeta(
-                        statsJob.getCatalogName(), db.getFullName(), table.getName());
-                if (externalBasicStatsMeta == null) {
-                    externalBasicStatsMeta = new ExternalBasicStatsMeta(statsJob.getCatalogName(), db.getFullName(),
-                            table.getName(), Lists.newArrayList(statsJob.getColumnNames()), statsJob.getType(),
-                            analyzeStatus.getEndTime(), statsJob.getProperties());
-                } else {
-                    externalBasicStatsMeta = externalBasicStatsMeta.clone();
-                    externalBasicStatsMeta.setUpdateTime(analyzeStatus.getEndTime());
-                    externalBasicStatsMeta.setProperties(statsJob.getProperties());
-                    externalBasicStatsMeta.setAnalyzeType(statsJob.getType());
-                }
-                for (String column : ListUtils.emptyIfNull(statsJob.getColumnNames())) {
-                    ColumnStatsMeta meta =
-                            new ColumnStatsMeta(column, statsJob.getType(), analyzeStatus.getEndTime());
-                    externalBasicStatsMeta.addColumnStatsMeta(meta);
-                }
+                ExternalBasicStatsMeta externalBasicStatsMeta = new ExternalBasicStatsMeta(statsJob.getCatalogName(),
+                        db.getFullName(), table.getName(), statsJob.getColumnNames(), statsJob.getType(),
+                        analyzeStatus.getStartTime(), statsJob.getProperties());
                 GlobalStateMgr.getCurrentState().getAnalyzeMgr().addExternalBasicStatsMeta(externalBasicStatsMeta);
                 GlobalStateMgr.getCurrentState().getAnalyzeMgr()
                         .refreshConnectorTableBasicStatisticsCache(statsJob.getCatalogName(),

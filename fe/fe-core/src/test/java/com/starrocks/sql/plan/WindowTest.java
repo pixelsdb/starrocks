@@ -991,7 +991,7 @@ public class WindowTest extends PlanTestBase {
                 "(select v1 from t0 where v1 = 1) b " +
                 "where a.v1 = b.v1";
         String plan = getVerboseExplain(sql);
-        assertContains(plan, "1:SORT\n" +
+        assertContains(plan, "  1:SORT\n" +
                 "  |  order by: [1, BIGINT, true] ASC, [2, BIGINT, true] DESC\n" +
                 "  |  analytic partition by: [1: v1, BIGINT, true]\n" +
                 "  |  offset: 0\n" +
@@ -1000,7 +1000,7 @@ public class WindowTest extends PlanTestBase {
                 "  0:OlapScanNode\n" +
                 "     table: t0, rollup: t0\n" +
                 "     preAggregation: on\n" +
-                "     Predicates: [1: v1, BIGINT, true] = 1, 1: v1 IS NOT NULL\n" +
+                "     Predicates: 1: v1 IS NOT NULL\n" +
                 "     partitionsRatio=0/1, tabletsRatio=0/0\n" +
                 "     tabletList=\n" +
                 "     actualRows=0, avgRowSize=2.0\n" +
@@ -1372,15 +1372,10 @@ public class WindowTest extends PlanTestBase {
         String sql = "select array_length(v3) from (select v3, row_number() over (order by v2) row_num from tarray) t " +
                 "where row_num = 1";
         String plan = getFragmentPlan(sql);
-        assertContains(plan, "  4:ANALYTIC\n" +
+        assertContains(plan, "4:ANALYTIC\n" +
                 "  |  functions: [, row_number(), ]\n" +
                 "  |  order by: 2: v2 ASC\n" +
-                "  |  window: ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW\n" +
-                "  |  \n" +
-                "  3:MERGING-EXCHANGE");
-        assertContains(plan, "  1:Project\n" +
-                "  |  <slot 2> : 2: v2\n" +
-                "  |  <slot 6> : array_length(3: v3)");
+                "  |  window: ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW\n");
     }
 
     @Test

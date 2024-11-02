@@ -23,11 +23,9 @@ import com.starrocks.thrift.TSchemaTableType;
 import static com.starrocks.catalog.system.SystemTable.builder;
 
 public class BeCloudNativeCompactionsSystemTable {
-    private static final String NAME = "be_cloud_native_compactions";
-
     public static SystemTable create() {
         return new SystemTable(SystemId.BE_CLOUD_NATIVE_COMPACTIONS,
-                NAME,
+                "be_cloud_native_compactions",
                 Table.TableType.SCHEMA,
                 builder()
                         .column("BE_ID", ScalarType.createType(PrimitiveType.BIGINT))

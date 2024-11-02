@@ -34,8 +34,10 @@
 
 package com.starrocks.http.rest;
 
+import com.google.gson.ExclusionStrategy;
+import com.google.gson.FieldAttributes;
 import com.google.gson.Gson;
-import com.google.gson.annotations.SerializedName;
+import com.google.gson.GsonBuilder;
 
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
@@ -44,42 +46,31 @@ import java.lang.annotation.Target;
 
 // Base restful result
 public class RestBaseResult {
-
-    private static final Gson GSON = new Gson();
-
     @Retention(RetentionPolicy.RUNTIME)
     @Target({ElementType.FIELD, ElementType.METHOD})
     public @interface Legacy {
     }
 
     private static final RestBaseResult OK = new RestBaseResult();
-
     // For compatibility, status still exists in /api/v1, removed in /api/v2 and later version.
     @Legacy
-    @SerializedName("status")
     public ActionStatus status;
-
-    @SerializedName("code")
     public String code;
-
     // For compatibility, msg still exists in /api/v1, removed in /api/v2 and later version.
     @Legacy
-    @SerializedName("msg")
     public String msg;
-
-    @SerializedName("message")
     public String message;
 
     public RestBaseResult() {
         status = ActionStatus.OK;
-        code = Integer.toString(ActionStatus.OK.ordinal());
+        code = "" + ActionStatus.OK.ordinal();
         msg = "Success";
         message = "OK";
     }
 
     public RestBaseResult(String msg) {
         status = ActionStatus.FAILED;
-        code = Integer.toString(ActionStatus.FAILED.ordinal());
+        code = "" + ActionStatus.FAILED.ordinal();
         this.msg = msg;
         this.message = msg;
     }
@@ -90,14 +81,22 @@ public class RestBaseResult {
 
     @Legacy
     public String toJson() {
-        return GSON.toJson(this);
+        Gson gson = new Gson();
+        return gson.toJson(this);
     }
 
-    public String getCode() {
-        return code;
-    }
+    public String toJsonString() {
+        Gson gson = new GsonBuilder().setExclusionStrategies(new ExclusionStrategy() {
+            @Override
+            public boolean shouldSkipField(FieldAttributes f) {
+                return f.getAnnotation(Legacy.class) != null;
+            }
 
-    public String getMessage() {
-        return message;
+            @Override
+            public boolean shouldSkipClass(Class<?> clazz) {
+                return false;
+            }
+        }).create();
+        return gson.toJson(this);
     }
 }

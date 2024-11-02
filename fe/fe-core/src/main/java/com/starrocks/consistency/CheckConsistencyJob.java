@@ -128,13 +128,13 @@ public class CheckConsistencyJob {
             return false;
         }
 
-        Database db = GlobalStateMgr.getCurrentState().getLocalMetastore().getDb(tabletMeta.getDbId());
+        Database db = GlobalStateMgr.getCurrentState().getDb(tabletMeta.getDbId());
         if (db == null) {
             LOG.debug("db[{}] does not exist", tabletMeta.getDbId());
             return false;
         }
 
-        Table table = GlobalStateMgr.getCurrentState().getLocalMetastore().getTable(db.getId(), tabletMeta.getTableId());
+        Table table = db.getTable(tabletMeta.getTableId());
         if (table == null) {
             LOG.debug("table[{}] does not exist", tabletMeta.getTableId());
             return false;
@@ -143,7 +143,7 @@ public class CheckConsistencyJob {
         LocalTablet tablet = null;
 
         AgentBatchTask batchTask = new AgentBatchTask();
-        try (AutoCloseableLock ignore = new AutoCloseableLock(new Locker(), db.getId(), Lists.newArrayList(table.getId()),
+        try (AutoCloseableLock ignore = new AutoCloseableLock(new Locker(), db, Lists.newArrayList(table.getId()),
                     LockType.READ)) {
             OlapTable olapTable = (OlapTable) table;
 
@@ -218,7 +218,7 @@ public class CheckConsistencyJob {
 
         if (state != JobState.RUNNING) {
             // failed to send task. set tablet's checked version to avoid choosing it again
-            try (AutoCloseableLock ignore = new AutoCloseableLock(new Locker(), db.getId(), Lists.newArrayList(table.getId()),
+            try (AutoCloseableLock ignore = new AutoCloseableLock(new Locker(), db, Lists.newArrayList(table.getId()),
                         LockType.WRITE)) {
                 tablet.setCheckedVersion(checkedVersion);
             }
@@ -254,13 +254,13 @@ public class CheckConsistencyJob {
             return -1;
         }
 
-        Database db = GlobalStateMgr.getCurrentState().getLocalMetastore().getDb(tabletMeta.getDbId());
+        Database db = GlobalStateMgr.getCurrentState().getDb(tabletMeta.getDbId());
         if (db == null) {
             LOG.warn("db[{}] does not exist", tabletMeta.getDbId());
             return -1;
         }
 
-        Table table = GlobalStateMgr.getCurrentState().getLocalMetastore().getTable(db.getId(), tabletMeta.getTableId());
+        Table table = db.getTable(tabletMeta.getTableId());
         if (table == null) {
             LOG.warn("table[{}] does not exist", tabletMeta.getTableId());
             return -1;
@@ -269,7 +269,7 @@ public class CheckConsistencyJob {
         boolean isConsistent = true;
         JournalTask journalTask;
         try (AutoCloseableLock ignore =
-                    new AutoCloseableLock(new Locker(), db.getId(), Lists.newArrayList(table.getId()), LockType.WRITE)) {
+                    new AutoCloseableLock(new Locker(), db, Lists.newArrayList(table.getId()), LockType.WRITE)) {
             OlapTable olapTable = (OlapTable) table;
 
             Partition partition = olapTable.getPartition(tabletMeta.getPartitionId());

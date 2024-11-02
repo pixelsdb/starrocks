@@ -4,7 +4,7 @@ displayed_sidebar: docs
 
 # positive
 
-
+## 功能
 
 返回表达式 `x` 的结果。
 

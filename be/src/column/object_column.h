@@ -20,7 +20,6 @@
 #include "column/datum.h"
 #include "column/vectorized_fwd.h"
 #include "common/object_pool.h"
-#include "gutil/strings/substitute.h"
 #include "types/bitmap_value.h"
 #include "types/hll.h"
 #include "util/json.h"
@@ -101,7 +100,7 @@ public:
 
     bool append_nulls(size_t count) override { return false; }
 
-    bool append_strings(const Slice* data, size_t size) override;
+    bool append_strings(const Buffer<Slice>& strs) override;
 
     size_t append_numbers(const void* buff, size_t length) override { return -1; }
 
@@ -214,12 +213,15 @@ public:
         return ss.str();
     }
 
-    Status capacity_limit_reached() const override {
+    bool capacity_limit_reached(std::string* msg = nullptr) const override {
         if (_pool.size() > Column::MAX_CAPACITY_LIMIT) {
-            return Status::CapacityLimitExceed(strings::Substitute("row count of object column exceed the limit: $0",
-                                                                   std::to_string(Column::MAX_CAPACITY_LIMIT)));
+            if (msg != nullptr) {
+                msg->append("row count of object column exceed the limit: " +
+                            std::to_string(Column::MAX_CAPACITY_LIMIT));
+            }
+            return true;
         }
-        return Status::OK();
+        return false;
     }
 
     StatusOr<ColumnPtr> upgrade_if_overflow() override;
@@ -228,7 +230,7 @@ public:
 
     bool has_large_column() const override { return false; }
 
-    void check_or_die() const override {}
+    void check_or_die() const {}
 
 private:
     // add this to avoid warning clang-diagnostic-overloaded-virtual

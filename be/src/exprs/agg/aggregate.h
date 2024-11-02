@@ -117,7 +117,7 @@ public:
     virtual void destroy(FunctionContext* ctx, AggDataPtr __restrict ptr) const = 0;
 
     virtual void batch_create_with_selection(FunctionContext* ctx, size_t chunk_size, Buffer<AggDataPtr>& states,
-                                             size_t state_offset, const Filter& selection) const {
+                                             size_t state_offset, const std::vector<uint8_t>& selection) const {
         for (size_t i = 0; i < chunk_size; i++) {
             if (selection[i] == 0) {
                 create(ctx, states[i] + state_offset);
@@ -126,7 +126,7 @@ public:
     }
 
     virtual void batch_destroy_with_selection(FunctionContext* ctx, size_t chunk_size, Buffer<AggDataPtr>& states,
-                                              size_t state_offset, const Filter& selection) const {
+                                              size_t state_offset, const std::vector<uint8_t>& selection) const {
         for (size_t i = 0; i < chunk_size; i++) {
             if (selection[i] == 0) {
                 destroy(ctx, states[i] + state_offset);
@@ -136,7 +136,7 @@ public:
 
     virtual void batch_finalize_with_selection(FunctionContext* ctx, size_t chunk_size,
                                                const Buffer<AggDataPtr>& agg_states, size_t state_offset, Column* to,
-                                               const Filter& selection) const {
+                                               const std::vector<uint8_t>& selection) const {
         for (size_t i = 0; i < chunk_size; i++) {
             if (selection[i] == 0) {
                 this->finalize_to_column(ctx, agg_states[i] + state_offset, to);
@@ -146,7 +146,7 @@ public:
 
     virtual void batch_serialize_with_selection(FunctionContext* ctx, size_t chunk_size,
                                                 const Buffer<AggDataPtr>& agg_states, size_t state_offset, Column* to,
-                                                const Filter& selection) const {
+                                                const std::vector<uint8_t>& selection) const {
         for (size_t i = 0; i < chunk_size; i++) {
             if (selection[i] == 0) {
                 this->serialize_to_column(ctx, agg_states[i] + state_offset, to);
@@ -162,7 +162,8 @@ public:
 
     // filter[i] = 0, will be update
     virtual void update_batch_selectively(FunctionContext* ctx, size_t chunk_size, size_t state_offset,
-                                          const Column** columns, AggDataPtr* states, const Filter& filter) const = 0;
+                                          const Column** columns, AggDataPtr* states,
+                                          const std::vector<uint8_t>& filter) const = 0;
 
     // update result to single state
     virtual void update_batch_single_state(FunctionContext* ctx, size_t chunk_size, const Column** columns,
@@ -203,7 +204,8 @@ public:
 
     // filter[i] = 0, will be merged
     virtual void merge_batch_selectively(FunctionContext* ctx, size_t chunk_size, size_t state_offset,
-                                         const Column* column, AggDataPtr* states, const Filter& filter) const = 0;
+                                         const Column* column, AggDataPtr* states,
+                                         const std::vector<uint8_t>& filter) const = 0;
 
     // Merge some continuous portion of a chunk to a given state.
     // This will be useful for sorted streaming aggregation.
@@ -300,11 +302,11 @@ public:
 
     void create(FunctionContext* ctx, AggDataPtr __restrict ptr) const override { new (ptr) State; }
 
-    void destroy(FunctionContext* ctx, AggDataPtr __restrict ptr) const override { data(ptr).~State(); }
+    void destroy(FunctionContext* ctx, AggDataPtr __restrict ptr) const final { data(ptr).~State(); }
 
-    size_t size() const override { return sizeof(State); }
+    size_t size() const final { return sizeof(State); }
 
-    size_t alignof_size() const override { return alignof(State); }
+    size_t alignof_size() const final { return alignof(State); }
 
     bool is_pod_state() const override { return pod_state(); }
 };
@@ -313,7 +315,7 @@ template <typename State, typename Derived>
 class AggregateFunctionBatchHelper : public AggregateFunctionStateHelper<State> {
 public:
     void batch_create_with_selection(FunctionContext* ctx, size_t chunk_size, Buffer<AggDataPtr>& states,
-                                     size_t state_offset, const Filter& selection) const override {
+                                     size_t state_offset, const std::vector<uint8_t>& selection) const override {
         for (size_t i = 0; i < chunk_size; i++) {
             if (selection[i] == 0) {
                 static_cast<const Derived*>(this)->create(ctx, states[i] + state_offset);
@@ -322,7 +324,7 @@ public:
     }
 
     void batch_destroy_with_selection(FunctionContext* ctx, size_t chunk_size, Buffer<AggDataPtr>& states,
-                                      size_t state_offset, const Filter& selection) const override {
+                                      size_t state_offset, const std::vector<uint8_t>& selection) const override {
         if constexpr (AggregateFunctionStateHelper<State>::pod_state()) {
             // nothing TODO
         } else {
@@ -335,7 +337,8 @@ public:
     }
 
     void batch_finalize_with_selection(FunctionContext* ctx, size_t chunk_size, const Buffer<AggDataPtr>& agg_states,
-                                       size_t state_offset, Column* to, const Filter& selection) const override {
+                                       size_t state_offset, Column* to,
+                                       const std::vector<uint8_t>& selection) const override {
         for (size_t i = 0; i < chunk_size; i++) {
             if (selection[i] == 0) {
                 static_cast<const Derived*>(this)->finalize_to_column(ctx, agg_states[i] + state_offset, to);
@@ -344,7 +347,8 @@ public:
     }
 
     void batch_serialize_with_selection(FunctionContext* ctx, size_t chunk_size, const Buffer<AggDataPtr>& agg_states,
-                                        size_t state_offset, Column* to, const Filter& selection) const override {
+                                        size_t state_offset, Column* to,
+                                        const std::vector<uint8_t>& selection) const override {
         for (size_t i = 0; i < chunk_size; i++) {
             if (selection[i] == 0) {
                 static_cast<const Derived*>(this)->serialize_to_column(ctx, agg_states[i] + state_offset, to);
@@ -360,7 +364,7 @@ public:
     }
 
     void update_batch_selectively(FunctionContext* ctx, size_t chunk_size, size_t state_offset, const Column** columns,
-                                  AggDataPtr* states, const Filter& filter) const override {
+                                  AggDataPtr* states, const std::vector<uint8_t>& filter) const override {
         for (size_t i = 0; i < chunk_size; i++) {
             // TODO: optimize with simd ?
             if (filter[i] == 0) {
@@ -384,7 +388,7 @@ public:
     }
 
     void merge_batch_selectively(FunctionContext* ctx, size_t chunk_size, size_t state_offset, const Column* column,
-                                 AggDataPtr* states, const Filter& filter) const override {
+                                 AggDataPtr* states, const std::vector<uint8_t>& filter) const override {
         for (size_t i = 0; i < chunk_size; i++) {
             // TODO: optimize with simd ?
             if (filter[i] == 0) {

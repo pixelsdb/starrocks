@@ -213,14 +213,13 @@ public class MVRestoreUpdater {
 
         String remoteDbName = baseTableInfo.getDbName();
         String remoteTableName = baseTableInfo.getTableName();
-        Database baseTableDb = GlobalStateMgr.getCurrentState().getLocalMetastore().getDb(remoteDbName);
+        Database baseTableDb = GlobalStateMgr.getCurrentState().getDb(remoteDbName);
         if (baseTableDb == null) {
             LOG.warn(String.format("Materialized view %s can not find old base table's db name:%s.%s",
                     mv.getName(), remoteDbName, remoteTableName));
             return false;
         }
-        Table baseTable = GlobalStateMgr.getCurrentState().getLocalMetastore()
-                    .getTable(baseTableDb.getFullName(), remoteTableName);
+        Table baseTable = baseTableDb.getTable(remoteTableName);
         if (baseTable == null) {
             LOG.warn(String.format("Materialized view %s can not find old base table:%s.%s",
                     mv.getName(), remoteDbName, remoteTableName));
@@ -250,14 +249,14 @@ public class MVRestoreUpdater {
         }
 
         String localDbName = mvBaseTableBackupInfo.getLocalDbName();
-        Database db = GlobalStateMgr.getCurrentState().getLocalMetastore().getDb(localDbName);
+        Database db = GlobalStateMgr.getCurrentState().getDb(localDbName);
         String localTableName = mvBaseTableBackupInfo.getLocalTableName();
         if (db == null) {
             LOG.warn("BaseTable(local) {}'s db {} is not found, remote db/table: {}/{}",
                     localTableName, localDbName, remoteDbName, remoteTableName);
             return Pair.create(false, Optional.empty());
         }
-        Table localTable = GlobalStateMgr.getCurrentState().getLocalMetastore().getTable(db.getFullName(), localTableName);
+        Table localTable = db.getTable(localTableName);
         remoteToLocalTableName.put(remoteDbTblName, new TableName(db.getFullName(), localTableName));
         if (localTable == null) {
             LOG.warn("Materialized view {} can not find the base table {}, old base table name:{}",

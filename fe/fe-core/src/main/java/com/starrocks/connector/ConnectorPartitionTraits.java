@@ -179,12 +179,6 @@ public abstract class ConnectorPartitionTraits {
 
     public abstract Map<String, PartitionInfo> getPartitionNameWithPartitionInfo();
 
-    public abstract Map<String, PartitionInfo> getPartitionNameWithPartitionInfo(List<String> partitionNames);
-
-    public List<PartitionInfo> getPartitions(List<String> names) {
-        throw new NotImplementedException("getPartitions is not implemented for this table type: " + table.getType());
-    }
-
     /**
      * The max of refresh ts for all partitions
      */
@@ -195,6 +189,11 @@ public abstract class ConnectorPartitionTraits {
      */
     public abstract Set<String> getUpdatedPartitionNames(List<BaseTableInfo> baseTables,
                                                          MaterializedView.AsyncRefreshContext context);
+
+
+    public List<PartitionInfo> getPartitions(List<String> names) {
+        throw new NotImplementedException("getPartitions is not implemented for this table type: " + table.getType());
+    }
 
     /**
      * Get updated partitions based on updated time, return partition names if the partition is updated after the checkTime.

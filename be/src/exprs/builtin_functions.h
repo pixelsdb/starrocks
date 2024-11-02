@@ -23,9 +23,11 @@
 
 namespace starrocks {
 
-using PrepareFunction = std::function<Status(FunctionContext* context, FunctionContext::FunctionStateScope scope)>;
-using CloseFunction = std::function<Status(FunctionContext* context, FunctionContext::FunctionStateScope scope)>;
-using ScalarFunction = std::function<StatusOr<ColumnPtr>(FunctionContext* context, const Columns& columns)>;
+using PrepareFunction = Status (*)(FunctionContext* context, FunctionContext::FunctionStateScope scope);
+
+using CloseFunction = Status (*)(FunctionContext* context, FunctionContext::FunctionStateScope scope);
+
+using ScalarFunction = StatusOr<ColumnPtr> (*)(FunctionContext* context, const Columns& columns);
 
 struct FunctionDescriptor {
     std::string name;

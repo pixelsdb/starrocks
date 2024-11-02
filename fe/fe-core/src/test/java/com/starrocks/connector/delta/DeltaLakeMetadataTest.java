@@ -18,11 +18,8 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.starrocks.catalog.DeltaLakeTable;
 import com.starrocks.catalog.Table;
-import com.starrocks.connector.ConnectorProperties;
-import com.starrocks.connector.ConnectorType;
 import com.starrocks.connector.HdfsEnvironment;
 import com.starrocks.connector.MetastoreType;
-import com.starrocks.connector.TableVersionRange;
 import com.starrocks.connector.hive.HiveMetaClient;
 import com.starrocks.connector.hive.HiveMetastore;
 import com.starrocks.connector.hive.HiveMetastoreTest;
@@ -74,8 +71,7 @@ public class DeltaLakeMetadataTest {
                 CachingDeltaLakeMetastore.createQueryLevelInstance(hmsBackedDeltaMetastore, 10000), false,
                 MetastoreType.HMS);
 
-        deltaLakeMetadata = new DeltaLakeMetadata(hdfsEnvironment, "delta0", deltaOps, null,
-                new ConnectorProperties(ConnectorType.DELTALAKE));
+        deltaLakeMetadata = new DeltaLakeMetadata(hdfsEnvironment, "delta0", deltaOps, null);
     }
 
     @Test
@@ -171,7 +167,7 @@ public class DeltaLakeMetadataTest {
             }
         };
         List<String> partitionNames = deltaLakeMetadata.listPartitionNames("db1", "table1",
-                TableVersionRange.empty());
+                -1);
         Assert.assertEquals(3, partitionNames.size());
         Assert.assertEquals("ts=1999", partitionNames.get(0));
         Assert.assertEquals("ts=2000", partitionNames.get(1));

@@ -45,7 +45,6 @@ public:
     Status set_finished(RuntimeState* state) override;
 
     Status reset_state(RuntimeState* state, const std::vector<ChunkPtr>& refill_chunks) override;
-    void update_exec_stats(RuntimeState* state) override {}
 
 private:
     ChunkPipelineAccumulator _acc;

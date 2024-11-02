@@ -101,7 +101,7 @@ public class AnalyzeInsertTest {
     @Test
     public void testInsertOverwriteWhenSchemaChange() throws Exception {
         OlapTable table = (OlapTable) GlobalStateMgr.getCurrentState()
-                .getLocalMetastore().getDb("test").getTable("t0");
+                .getDb("test").getTable("t0");
         table.setState(OlapTable.OlapTableState.SCHEMA_CHANGE);
         analyzeFail("insert overwrite t0 select * from t0;",
                 "table state is SCHEMA_CHANGE, please wait to insert overwrite until table state is normal");
@@ -114,15 +114,11 @@ public class AnalyzeInsertTest {
                 "Unknown catalog 'err_catalog'");
 
         MetadataMgr metadata = AnalyzeTestUtil.getConnectContext().getGlobalStateMgr().getMetadataMgr();
-
-        new MockUp<MetadataMgr>() {
+        new MockUp<MetaUtils>() {
             @Mock
-            public Database getDb(String catalogName, String dbName) {
+            public Database getDatabase(String catalogName, String tableName) {
                 return new Database();
             }
-        };
-
-        new MockUp<MetaUtils>() {
             @Mock
             public Table getSessionAwareTable(ConnectContext context, Database database, TableName tableName) {
                 return null;
@@ -139,10 +135,6 @@ public class AnalyzeInsertTest {
         };
         new Expectations(metadata) {
             {
-                metadata.getDb(anyString, anyString);
-                minTimes = 0;
-                result = new Database();
-
                 icebergTable.supportInsert();
                 result = true;
                 minTimes = 0;
@@ -153,10 +145,6 @@ public class AnalyzeInsertTest {
 
         new Expectations(metadata) {
             {
-                metadata.getDb(anyString, anyString);
-                minTimes = 0;
-                result = new Database();
-
                 icebergTable.getBaseSchema();
                 result = ImmutableList.of(new Column("c1", Type.INT));
                 minTimes = 0;
@@ -169,14 +157,12 @@ public class AnalyzeInsertTest {
     public void testPartitionedIcebergTable(@Mocked IcebergTable icebergTable) {
         MetadataMgr metadata = AnalyzeTestUtil.getConnectContext().getGlobalStateMgr().getMetadataMgr();
 
-        new MockUp<MetadataMgr>() {
+        new MockUp<MetaUtils>() {
             @Mock
-            public Database getDb(String catalogName, String dbName) {
+            public Database getDatabase(String catalogName, String databaseName) {
                 return new Database();
             }
-        };
 
-        new MockUp<MetaUtils>() {
             @Mock
             public Table getSessionAwareTable(ConnectContext context, Database database, TableName tableName) {
                 return icebergTable;
@@ -185,10 +171,6 @@ public class AnalyzeInsertTest {
 
         new Expectations(metadata) {
             {
-                metadata.getDb(anyString, anyString);
-                minTimes = 0;
-                result = new Database();
-
                 icebergTable.supportInsert();
                 result = true;
                 minTimes = 0;
@@ -259,14 +241,11 @@ public class AnalyzeInsertTest {
 
     @Test
     public void testInsertHiveNonManagedTable(@Mocked HiveTable hiveTable) {
-        new MockUp<MetadataMgr>() {
-            @Mock
-            public Database getDb(String catalogName, String dbName) {
-                return new Database();
-            }
-        };
-
         new MockUp<MetaUtils>() {
+            @Mock
+            public Database getDatabase(String catalogName, String databaseName) {
+                return null;
+            }
             @Mock
             public Table getSessionAwareTable(ConnectContext conntext, Database database, TableName tableName) {
                 return hiveTable;

@@ -5,7 +5,7 @@ displayed_sidebar: docs
 
 # count
 
-
+## 功能
 
 计算总行数。
 

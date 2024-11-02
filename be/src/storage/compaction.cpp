@@ -59,14 +59,10 @@ Status Compaction::do_compaction_impl() {
     OlapStopWatch watch;
 
     int64_t segments_num = 0;
-    int64_t max_gtid = 0;
     for (auto& rowset : _input_rowsets) {
         _input_rowsets_size += rowset->data_disk_size();
         _input_row_num += rowset->num_rows();
         segments_num += rowset->num_segments();
-        if (rowset->rowset_meta()->gtid() > max_gtid) {
-            max_gtid = rowset->rowset_meta()->gtid();
-        }
     }
 
     TRACE_COUNTER_INCREMENT("input_rowsets_data_size", _input_rowsets_size);
@@ -102,9 +98,8 @@ Status Compaction::do_compaction_impl() {
               << ", column group size=" << _column_groups.size()
               << ", columns per group=" << config::vertical_compaction_max_columns_per_group;
 
-    RETURN_IF_ERROR(CompactionUtils::construct_output_rowset_writer(_tablet.get(), max_rows_per_segment, algorithm,
-                                                                    _output_version, max_gtid, &_output_rs_writer,
-                                                                    cur_tablet_schema));
+    RETURN_IF_ERROR(CompactionUtils::construct_output_rowset_writer(
+            _tablet.get(), max_rows_per_segment, algorithm, _output_version, &_output_rs_writer, cur_tablet_schema));
     TRACE("prepare finished");
 
     Statistics stats;
@@ -178,7 +173,7 @@ Status Compaction::_merge_rowsets_horizontally(size_t segment_iterator_num, Stat
     int32_t chunk_size =
             CompactionUtils::get_read_chunk_size(config::compaction_memory_limit_per_worker, config::vector_chunk_size,
                                                  total_num_rows, total_mem_footprint, segment_iterator_num);
-    VLOG(2) << "tablet=" << _tablet->tablet_id() << ", reader chunk size=" << chunk_size;
+    VLOG(1) << "tablet=" << _tablet->tablet_id() << ", reader chunk size=" << chunk_size;
     reader_params.chunk_size = chunk_size;
     RETURN_IF_ERROR(reader.prepare());
     RETURN_IF_ERROR(reader.open(reader_params));
@@ -274,7 +269,7 @@ Status Compaction::_merge_rowsets_vertically(size_t segment_iterator_num, Statis
         int32_t chunk_size = CompactionUtils::get_read_chunk_size(config::compaction_memory_limit_per_worker,
                                                                   config::vector_chunk_size, total_num_rows,
                                                                   total_mem_footprint, segment_iterator_num);
-        VLOG(2) << "tablet=" << _tablet->tablet_id() << ", column group=" << i << ", reader chunk size=" << chunk_size;
+        VLOG(1) << "tablet=" << _tablet->tablet_id() << ", column group=" << i << ", reader chunk size=" << chunk_size;
         reader_params.chunk_size = chunk_size;
         RETURN_IF_ERROR(reader.open(reader_params));
 

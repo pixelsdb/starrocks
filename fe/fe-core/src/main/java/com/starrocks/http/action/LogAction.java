@@ -30,7 +30,6 @@ import io.netty.handler.codec.http.HttpMethod;
 import org.apache.commons.lang.StringUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.owasp.encoder.Encode;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -56,9 +55,9 @@ public class LogAction extends WebBaseAction {
     public void executeGet(BaseRequest request, BaseResponse response) {
         getPageHeader(request, response.getContent());
 
-        // HTML encode the add_verbose and del_verbose to prevent XSS
-        addVerboseName = Encode.forHtml(request.getSingleParameter("add_verbose"));
-        delVerboseName = Encode.forHtml(request.getSingleParameter("del_verbose"));
+        // get parameters
+        addVerboseName = request.getSingleParameter("add_verbose");
+        delVerboseName = request.getSingleParameter("del_verbose");
         LOG.info("add verbose name: {}, del verbose name: {}", addVerboseName, delVerboseName);
 
         appendLogConf(response.getContent());
@@ -142,10 +141,9 @@ public class LogAction extends WebBaseAction {
             raf.seek(startPos);
             buffer.append("<p>Showing last " + webContentLength + " bytes of log</p>");
             buffer.append("<pre>");
-            String fileBuffer;
+            String fileBuffer = null;
             while ((fileBuffer = raf.readLine()) != null) {
-                // HTML encode to prevent XSS
-                buffer.append(Encode.forHtml(fileBuffer)).append("\n");
+                buffer.append(fileBuffer).append("\n");
             }
             buffer.append("</pre>");
         } catch (FileNotFoundException e) {

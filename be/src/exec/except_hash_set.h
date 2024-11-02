@@ -54,7 +54,7 @@ template <typename HashSet>
 class ExceptHashSet {
 public:
     using Iterator = typename HashSet::iterator;
-    using KeyVector = Buffer<Slice>;
+    using KeyVector = std::vector<Slice>;
 
     /// Used to allocate memory for serializing columns to the key.
     struct BufferState {

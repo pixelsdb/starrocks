@@ -32,8 +32,8 @@ public:
 
     using Offset = T;
     using Offsets = Buffer<T>;
-    using Byte = uint8_t;
-    using Bytes = starrocks::raw::RawVectorPad16<uint8_t, ColumnAllocator<uint8_t>>;
+
+    using Bytes = starrocks::raw::RawVectorPad16<uint8_t>;
 
     struct BinaryDataProxyContainer {
         BinaryDataProxyContainer(const BinaryColumnBase& column) : _column(column) {}
@@ -172,7 +172,11 @@ public:
     // No complain about the overloaded-virtual for this function
     DIAGNOSTIC_PUSH
     DIAGNOSTIC_IGNORE("-Woverloaded-virtual")
-    void append(const Slice& str);
+    void append(const Slice& str) {
+        _bytes.insert(_bytes.end(), str.data, str.data + str.size);
+        _offsets.emplace_back(_bytes.size());
+        _slices_cache = false;
+    }
     DIAGNOSTIC_POP
 
     void append_datum(const Datum& datum) override {
@@ -194,11 +198,11 @@ public:
         _slices_cache = false;
     }
 
-    bool append_strings(const Slice* data, size_t size) override;
+    bool append_strings(const Buffer<Slice>& strs) override;
 
-    bool append_strings_overflow(const Slice* data, size_t size, size_t max_length) override;
+    bool append_strings_overflow(const Buffer<Slice>& strs, size_t max_length) override;
 
-    bool append_continuous_strings(const Slice* data, size_t size) override;
+    bool append_continuous_strings(const Buffer<Slice>& strs) override;
 
     bool append_continuous_fixed_length_strings(const char* data, size_t size, int fixed_length) override;
 
@@ -216,7 +220,7 @@ public:
         _slices_cache = false;
     }
 
-    ColumnPtr replicate(const Buffer<uint32_t>& offsets) override;
+    ColumnPtr replicate(const std::vector<uint32_t>& offsets) override;
 
     void fill_default(const Filter& filter) override;
 
@@ -335,7 +339,7 @@ public:
         return ss.str();
     }
 
-    Status capacity_limit_reached() const override;
+    bool capacity_limit_reached(std::string* msg = nullptr) const override;
 
 private:
     void _build_slices() const;

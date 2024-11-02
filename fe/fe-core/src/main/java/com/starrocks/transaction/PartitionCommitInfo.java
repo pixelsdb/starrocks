@@ -151,20 +151,20 @@ public class PartitionCommitInfo implements Writable {
         this.dataVersion = dataVersion;
     }
 
-    public long getVersionEpoch() {
-        return versionEpoch;
-    }
-
-    public void setVersionEpoch(long versionEpoch) {
-        this.versionEpoch = versionEpoch;
-    }
-
     public void setIsDoubleWrite(boolean isDoubleWrite) {
         this.isDoubleWrite = isDoubleWrite;
     }
 
     public boolean isDoubleWrite() {
         return isDoubleWrite;
+    }
+
+    public long getVersionEpoch() {
+        return versionEpoch;
+    }
+
+    public void setVersionEpoch(long versionEpoch) {
+        this.versionEpoch = versionEpoch;
     }
 
     public List<ColumnId> getInvalidDictCacheColumns() {

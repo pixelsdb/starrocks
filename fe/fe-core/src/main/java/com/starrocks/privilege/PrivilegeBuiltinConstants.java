@@ -61,5 +61,4 @@ public class  PrivilegeBuiltinConstants {
 
     public static final long ALL_PIPES_ID = -5;
 
-    public static final long ALL_WAREHOUSES_ID = -1; // -1 represent all warehouses
 }

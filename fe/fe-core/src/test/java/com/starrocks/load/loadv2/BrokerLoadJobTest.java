@@ -108,17 +108,21 @@ public class BrokerLoadJobTest {
                 loadStmt.getLabel();
                 minTimes = 0;
                 result = labelName;
-
                 labelName.getDbName();
                 minTimes = 0;
                 result = databaseName;
-
+                globalStateMgr.getDb(databaseName);
+                minTimes = 0;
+                result = database;
                 loadStmt.getDataDescriptions();
                 minTimes = 0;
                 result = dataDescriptionList;
                 dataDescription.getTableName();
                 minTimes = 0;
                 result = tableName;
+                database.getTable(tableName);
+                minTimes = 0;
+                result = null;
             }
         };
 
@@ -158,7 +162,7 @@ public class BrokerLoadJobTest {
                 labelName.getLabelName();
                 minTimes = 0;
                 result = label;
-                globalStateMgr.getLocalMetastore().getDb(databaseName);
+                globalStateMgr.getDb(databaseName);
                 minTimes = 0;
                 result = database;
                 loadStmt.getDataDescriptions();
@@ -167,7 +171,7 @@ public class BrokerLoadJobTest {
                 dataDescription.getTableName();
                 minTimes = 0;
                 result = tableName;
-                GlobalStateMgr.getCurrentState().getLocalMetastore().getTable(database.getFullName(), tableName);
+                database.getTable(tableName);
                 minTimes = 0;
                 result = olapTable;
                 dataDescription.getPartitionNames();
@@ -227,7 +231,7 @@ public class BrokerLoadJobTest {
                 labelName.getLabelName();
                 minTimes = 0;
                 result = label;
-                globalStateMgr.getLocalMetastore().getDb(databaseName);
+                globalStateMgr.getDb(databaseName);
                 minTimes = 0;
                 result = database;
                 loadStmt.getDataDescriptions();
@@ -236,7 +240,7 @@ public class BrokerLoadJobTest {
                 dataDescription.getTableName();
                 minTimes = 0;
                 result = tableName;
-                GlobalStateMgr.getCurrentState().getLocalMetastore().getTable(database.getFullName(), tableName);
+                database.getTable(tableName);
                 minTimes = 0;
                 result = olapTable;
                 dataDescription.getPartitionNames();
@@ -292,10 +296,10 @@ public class BrokerLoadJobTest {
                 fileGroupAggInfo.getAllTableIds();
                 minTimes = 0;
                 result = Sets.newHashSet(1L);
-                globalStateMgr.getLocalMetastore().getDb(anyLong);
+                globalStateMgr.getDb(anyLong);
                 minTimes = 0;
                 result = database;
-                GlobalStateMgr.getCurrentState().getLocalMetastore().getTable(database.getId(), 1L);
+                database.getTable(1L);
                 minTimes = 0;
                 result = table;
                 table.getName();
@@ -410,22 +414,6 @@ public class BrokerLoadJobTest {
         brokerLoadJob4.afterAborted(txnState, txnOperated, txnStatusChangeReason);
         idToTasks = Deencapsulation.getField(brokerLoadJob4, "idToTasks");
         Assert.assertEquals(1, idToTasks.size());
-
-        // test that timeout happens in loadin task before the job timeout
-        BrokerLoadJob brokerLoadJob5 = new BrokerLoadJob();
-        new Expectations() {
-            {
-                brokerLoadJob5.isTimeout();
-                result = false;
-            }
-        };
-        brokerLoadJob5.retryTime = 1;
-        brokerLoadJob5.unprotectedExecuteJob();
-        txnOperated = true;
-        txnStatusChangeReason = LoadErrorUtils.BACKEND_BRPC_TIMEOUT.keywords;
-        brokerLoadJob5.afterAborted(txnState, txnOperated, txnStatusChangeReason);
-        idToTasks = Deencapsulation.getField(brokerLoadJob5, "idToTasks");
-        Assert.assertEquals(1, idToTasks.size());
     }
 
     @Test
@@ -462,37 +450,6 @@ public class BrokerLoadJobTest {
 
         Map<Long, LoadTask> idToTasks = Deencapsulation.getField(brokerLoadJob, "idToTasks");
         Assert.assertEquals(0, idToTasks.size());
-    }
-
-    @Test
-    public void testTaskAbortTransactionOnTimeoutFailure(@Mocked GlobalTransactionMgr globalTransactionMgr,
-            @Injectable long taskId, @Injectable FailMsg failMsg) throws UserException {
-        new Expectations() {
-            {
-                globalTransactionMgr.abortTransaction(anyLong, anyLong, anyString);
-                times = 1;
-            }
-        };
-
-        BrokerLoadJob brokerLoadJob = new BrokerLoadJob();
-        failMsg = new FailMsg(FailMsg.CancelType.UNKNOWN, "[E1008]Reached timeout=7200000ms @127.0.0.1:8060");
-        brokerLoadJob.onTaskFailed(taskId, failMsg);
-
-        new Expectations() {
-            {
-                globalTransactionMgr.abortTransaction(anyLong, anyLong, anyString);
-                times = 1;
-                result = new UserException("Artificial exception");
-            }
-        };
-
-        try {
-            BrokerLoadJob brokerLoadJob1 = new BrokerLoadJob();
-            failMsg = new FailMsg(FailMsg.CancelType.UNKNOWN, "[E1008]Reached timeout=7200000ms @127.0.0.1:8060");
-            brokerLoadJob1.onTaskFailed(taskId, failMsg);
-        } catch (Exception e) {
-            Assert.fail("should not throw exception");
-        }
     }
 
     @Test
@@ -628,7 +585,7 @@ public class BrokerLoadJobTest {
                 attachment1.getTaskId();
                 minTimes = 0;
                 result = 1L;
-                globalStateMgr.getLocalMetastore().getDb(anyLong);
+                globalStateMgr.getDb(anyLong);
                 minTimes = 0;
                 result = database;
             }
@@ -780,7 +737,7 @@ public class BrokerLoadJobTest {
                 attachment1.getTaskId();
                 minTimes = 0;
                 result = 1L;
-                globalStateMgr.getLocalMetastore().getDb(anyLong);
+                globalStateMgr.getDb(anyLong);
                 minTimes = 0;
                 result = database;
                 globalStateMgr.getCurrentState().getGlobalTransactionMgr();

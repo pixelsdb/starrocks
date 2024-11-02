@@ -40,13 +40,12 @@ import static com.starrocks.catalog.system.SystemTable.MAX_FIELD_VARCHAR_LENGTH;
 import static com.starrocks.catalog.system.SystemTable.builder;
 
 public class TasksSystemTable {
-    private static final Logger LOG = LogManager.getLogger(TasksSystemTable.class);
 
-    public static final String NAME = "tasks";
+    private static final Logger LOG = LogManager.getLogger(TasksSystemTable.class);
 
     public static SystemTable create() {
         return new SystemTable(SystemId.TASKS_ID,
-                NAME,
+                "tasks",
                 Table.TableType.SCHEMA,
                 builder()
                         .column("TASK_NAME", ScalarType.createVarchar(64))

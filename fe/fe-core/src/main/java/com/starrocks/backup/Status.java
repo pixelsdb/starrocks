@@ -31,8 +31,7 @@ public class Status {
         BAD_CONNECTION,
         COMMON_ERROR,
         OLAP_VERSION_ALREADY_MERGED,
-        UNSUPPORTED,
-        BAD_REPLACE
+        UNSUPPORTED
     }
 
     @SerializedName("ec")

@@ -69,6 +69,8 @@ import com.starrocks.alter.OnlineOptimizeJobV2;
 import com.starrocks.alter.OptimizeJobV2;
 import com.starrocks.alter.RollupJobV2;
 import com.starrocks.alter.SchemaChangeJobV2;
+import com.starrocks.authentication.LDAPSecurityIntegration;
+import com.starrocks.authentication.SecurityIntegration;
 import com.starrocks.backup.AbstractJob;
 import com.starrocks.backup.BackupJob;
 import com.starrocks.backup.RestoreJob;
@@ -165,7 +167,7 @@ import com.starrocks.privilege.StorageVolumePEntryObject;
 import com.starrocks.privilege.TablePEntryObject;
 import com.starrocks.privilege.UserPEntryObject;
 import com.starrocks.privilege.ViewPEntryObject;
-import com.starrocks.privilege.WarehousePEntryObject;
+import com.starrocks.privilege.WarehouseFCPEntryObject;
 import com.starrocks.proto.EncryptionKeyPB;
 import com.starrocks.replication.ReplicationTxnCommitAttachment;
 import com.starrocks.server.SharedDataStorageVolumeMgr;
@@ -336,9 +338,13 @@ public class GsonUtils {
                     .registerSubtype(CatalogPEntryObject.class, "CatalogPEntryObject")
                     .registerSubtype(ResourceGroupPEntryObject.class, "ResourceGroupPEntryObject")
                     .registerSubtype(StorageVolumePEntryObject.class, "StorageVolumePEntryObject")
-                    .registerSubtype(WarehousePEntryObject.class, "WarehousePEntryObject")
+                    .registerSubtype(WarehouseFCPEntryObject.class, "WarehousePEntryObject")
                     .registerSubtype(PipePEntryObject.class, "PipePEntryObject")
                     .registerSubtype(PolicyFCEntryObject.class, "PolicyPEntryObject");
+
+    private static final RuntimeTypeAdapterFactory<SecurityIntegration> SEC_INTEGRATION_RUNTIME_TYPE_ADAPTER_FACTORY =
+            RuntimeTypeAdapterFactory.of(SecurityIntegration.class, "clazz")
+                    .registerSubtype(LDAPSecurityIntegration.class, "LDAPSecurityIntegration");
 
     private static final RuntimeTypeAdapterFactory<Warehouse> WAREHOUSE_TYPE_ADAPTER_FACTORY = RuntimeTypeAdapterFactory
             .of(Warehouse.class, "clazz")
@@ -448,6 +454,7 @@ public class GsonUtils {
             .registerTypeAdapterFactory(TABLE_TYPE_ADAPTER_FACTORY)
             .registerTypeAdapterFactory(SNAPSHOT_INFO_TYPE_ADAPTER_FACTORY)
             .registerTypeAdapterFactory(P_ENTRY_OBJECT_RUNTIME_TYPE_ADAPTER_FACTORY)
+            .registerTypeAdapterFactory(SEC_INTEGRATION_RUNTIME_TYPE_ADAPTER_FACTORY)
             .registerTypeAdapterFactory(WAREHOUSE_TYPE_ADAPTER_FACTORY)
             .registerTypeAdapterFactory(LOAD_JOB_TYPE_RUNTIME_ADAPTER_FACTORY)
             .registerTypeAdapterFactory(TXN_COMMIT_ATTACHMENT_TYPE_RUNTIME_ADAPTER_FACTORY)

@@ -35,7 +35,6 @@
 package com.starrocks.http.rest;
 
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.base.Strings;
 import com.google.gson.Gson;
 import com.starrocks.catalog.Database;
 import com.starrocks.catalog.MaterializedIndex;
@@ -52,7 +51,6 @@ import com.starrocks.http.IllegalArgException;
 import com.starrocks.persist.Storage;
 import com.starrocks.server.GlobalStateMgr;
 import io.netty.handler.codec.http.HttpMethod;
-import io.netty.handler.codec.http.HttpResponseStatus;
 import org.apache.commons.lang.StringUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -95,12 +93,6 @@ public class ShowMetaInfoAction extends RestBaseAction {
     @Override
     public void execute(BaseRequest request, BaseResponse response) {
         String action = request.getSingleParameter("action");
-        // check param empty
-        if (Strings.isNullOrEmpty(action)) {
-            response.appendContent("Missing parameter");
-            writeResponse(request, response, HttpResponseStatus.BAD_REQUEST);
-            return;
-        }
         Gson gson = new Gson();
         response.setContentType("application/json");
 
@@ -115,11 +107,7 @@ public class ShowMetaInfoAction extends RestBaseAction {
                 response.getContent().append(gson.toJson(getHaInfo()));
                 break;
             default:
-                // clear content type set above
-                response.setContentType(null);
-                response.appendContent("Invalid parameter");
-                writeResponse(request, response, HttpResponseStatus.BAD_REQUEST);
-                return;
+                break;
         }
         sendResult(request, response);
     }
@@ -189,10 +177,10 @@ public class ShowMetaInfoAction extends RestBaseAction {
 
         for (int i = 0; i < dbNames.size(); i++) {
             String dbName = dbNames.get(i);
-            Database db = GlobalStateMgr.getCurrentState().getLocalMetastore().getDb(dbName);
+            Database db = GlobalStateMgr.getCurrentState().getDb(dbName);
 
             long totalSize = 0;
-            List<Table> tables = GlobalStateMgr.getCurrentState().getLocalMetastore().getTables(db.getId());
+            List<Table> tables = db.getTables();
             for (int j = 0; j < tables.size(); j++) {
                 Table table = tables.get(j);
                 if (table.isNativeTableOrMaterializedView()) {

@@ -120,10 +120,10 @@ public class Table extends MetaObject implements Writable, GsonPostProcessable, 
         ODPS,
         @SerializedName("BLACKHOLE")
         BLACKHOLE,
-        @SerializedName("METADATA")
-        METADATA,
         @SerializedName("KUDU")
         KUDU,
+        @SerializedName("METADATA")
+        METADATA,
         @SerializedName("HIVE_VIEW")
         HIVE_VIEW,
         @SerializedName("ICEBERG_VIEW")
@@ -300,16 +300,12 @@ public class Table extends MetaObject implements Writable, GsonPostProcessable, 
         return type == TableType.HIVE_VIEW;
     }
 
-    public boolean isIcebergView() {
-        return type == TableType.ICEBERG_VIEW;
-    }
-
-    public boolean isMetadataTable() {
-        return type == TableType.METADATA;
-    }
-
     public boolean isAnalyzableExternalTable() {
         return IS_ANALYZABLE_EXTERNAL_TABLE.contains(type);
+    }
+
+    public boolean isIcebergView() {
+        return type == TableType.ICEBERG_VIEW;
     }
 
     public boolean isView() {
@@ -455,11 +451,6 @@ public class Table extends MetaObject implements Writable, GsonPostProcessable, 
 
     public List<Column> getColumns() {
         return new ArrayList<>(nameToColumn.values());
-    }
-
-    public void addColumn(Column column) {
-        fullSchema.add(column);
-        nameToColumn.put(column.getName(), column);
     }
 
     public long getCreateTime() {
@@ -751,10 +742,6 @@ public class Table extends MetaObject implements Writable, GsonPostProcessable, 
         return false;
     }
 
-    public boolean isTemporal() {
-        return false;
-    }
-
     public boolean hasUniqueConstraints() {
         List<UniqueConstraint> uniqueConstraint = getUniqueConstraints();
         return uniqueConstraint != null;
@@ -788,9 +775,5 @@ public class Table extends MetaObject implements Writable, GsonPostProcessable, 
                 !type.equals(TableType.CLOUD_NATIVE_MATERIALIZED_VIEW) &&
                 !type.equals(TableType.VIEW) &&
                 !isConnectorView();
-    }
-
-    public boolean isSupportBackupRestore() {
-        return isOlapTableOrMaterializedView() || isOlapView();
     }
 }

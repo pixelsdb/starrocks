@@ -55,14 +55,7 @@ public class AndRangePredicate extends RangePredicate {
     public ScalarOperator toScalarOperator() {
         List<ScalarOperator> children = Lists.newArrayList();
         for (RangePredicate rangePredicate : childPredicates) {
-            ScalarOperator predicate = rangePredicate.toScalarOperator();
-            if (predicate == null || predicate.equals(ConstantOperator.TRUE)) {
-                continue;
-            }
-            if (predicate.equals(ConstantOperator.FALSE)) {
-                return ConstantOperator.FALSE;
-            }
-            children.add(predicate);
+            children.add(rangePredicate.toScalarOperator());
         }
         return Utils.compoundAnd(children);
     }

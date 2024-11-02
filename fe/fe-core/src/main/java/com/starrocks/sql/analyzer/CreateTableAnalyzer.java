@@ -34,7 +34,6 @@ import com.starrocks.catalog.PrimitiveType;
 import com.starrocks.catalog.Table;
 import com.starrocks.catalog.Type;
 import com.starrocks.common.AnalysisException;
-import com.starrocks.common.Config;
 import com.starrocks.common.ErrorCode;
 import com.starrocks.common.ErrorReport;
 import com.starrocks.common.FeConstants;
@@ -78,7 +77,7 @@ public class CreateTableAnalyzer {
 
     public static void analyze(CreateTableStmt statement, ConnectContext context) {
         final TableName tableNameObject = statement.getDbTbl();
-        tableNameObject.normalization(context);
+        MetaUtils.normalizationTableName(context, tableNameObject);
 
         final String catalogName = tableNameObject.getCatalog();
         MetaUtils.checkCatalogExistAndReport(catalogName);
@@ -86,15 +85,11 @@ public class CreateTableAnalyzer {
         final String tableName = tableNameObject.getTbl();
         FeNameFormat.checkTableName(tableName);
 
-        Database db = GlobalStateMgr.getCurrentState().getMetadataMgr().getDb(catalogName, tableNameObject.getDb());
-        if (db == null) {
-            ErrorReport.reportSemanticException(ErrorCode.ERR_BAD_DB_ERROR, tableNameObject.getDb());
-        }
+        Database db = MetaUtils.getDatabase(catalogName, tableNameObject.getDb());
         if (statement instanceof CreateTemporaryTableStmt) {
             analyzeTemporaryTable(statement, context, catalogName, db, tableName);
         } else {
-            if (GlobalStateMgr.getCurrentState().getMetadataMgr()
-                        .tableExists(catalogName, tableNameObject.getDb(), tableName) && !statement.isSetIfNotExists()) {
+            if (db.getTable(tableName) != null && !statement.isSetIfNotExists()) {
                 ErrorReport.reportSemanticException(ErrorCode.ERR_TABLE_EXISTS_ERROR, tableName);
             }
         }
@@ -135,7 +130,7 @@ public class CreateTableAnalyzer {
         }
     }
 
-    protected static void analyzeEngineName(CreateTableStmt stmt, String catalogName) {
+    private static void analyzeEngineName(CreateTableStmt stmt, String catalogName) {
         String engineName = stmt.getEngineName();
 
         if (CatalogMgr.isInternalCatalog(catalogName)) {
@@ -190,10 +185,6 @@ public class CreateTableAnalyzer {
         List<ColumnDef> columnDefs = statement.getColumnDefs();
         if (columnDefs == null || columnDefs.isEmpty()) {
             ErrorReport.reportSemanticException(ErrorCode.ERR_TABLE_MUST_HAVE_COLUMNS);
-        }
-
-        if (columnDefs.size() > Config.max_column_number_per_table) {
-            ErrorReport.reportSemanticException(ErrorCode.ERR_TOO_MANY_COLUMNS, Config.max_column_number_per_table);
         }
 
         Set<String> columnSet = Sets.newTreeSet(String.CASE_INSENSITIVE_ORDER);
@@ -536,10 +527,6 @@ public class CreateTableAnalyzer {
                     && !(keysDesc.getKeysType() == KeysType.AGG_KEYS && !stmt.isHasReplace())) {
                 throw new SemanticException(keysDesc.getKeysType().toSql() + (stmt.isHasReplace() ? " with replace " : "")
                         + " must use hash distribution", distributionDesc.getPos());
-            }
-            if (distributionDesc.getBuckets() > Config.max_bucket_number_per_partition && stmt.isOlapEngine()
-                    && stmt.getPartitionDesc() != null && stmt.getPartitionDesc().getType() != PartitionType.UNPARTITIONED) {
-                ErrorReport.reportSemanticException(ErrorCode.ERR_TOO_MANY_BUCKETS, Config.max_bucket_number_per_partition);
             }
             Set<String> columnSet = Sets.newTreeSet(String.CASE_INSENSITIVE_ORDER);
             columnSet.addAll(columnDefs.stream().map(ColumnDef::getName).collect(Collectors.toSet()));
