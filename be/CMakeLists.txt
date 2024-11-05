@@ -99,6 +99,7 @@ option(USE_AVX512 "Build with AVX512f/AVX512BW instruction" OFF)
 
 option(WITH_RELATIVE_SRC_PATH "Build source file with relative path" ON)
 
+
 # Check gcc
 if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
     if (CMAKE_CXX_COMPILER_VERSION VERSION_LESS "4.8.2")
