@@ -42,6 +42,7 @@ under the License.
         <paimon.version>0.8.2</paimon.version>
         <delta-kernel.version>4.0.0rc1</delta-kernel.version>
         <staros.version>3.3-rc5</staros.version>
+        <pixels.version>0.2.0-SNAPSHOT</pixels.version>
         <python>python</python>
     </properties>
 
@@ -97,6 +98,74 @@ under the License.
     </profiles>
 
     <dependencies>
+
+        <dependency>
+            <groupId>io.pixelsdb</groupId>
+            <artifactId>pixels-common</artifactId>
+            <version>${pixels.version}</version>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>io.pixelsdb</groupId>
+            <artifactId>pixels-cache</artifactId>
+            <version>${pixels.version}</version>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>io.pixelsdb</groupId>
+            <artifactId>pixels-core</artifactId>
+            <version>${pixels.version}</version>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>io.pixelsdb</groupId>
+            <artifactId>pixels-storage-localfs</artifactId>
+            <version>${pixels.version}</version>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>io.pixelsdb</groupId>
+            <artifactId>pixels-storage-hdfs</artifactId>
+            <version>${pixels.version}</version>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>io.pixelsdb</groupId>
+            <artifactId>pixels-storage-s3</artifactId>
+            <version>${pixels.version}</version>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>io.pixelsdb</groupId>
+            <artifactId>pixels-storage-redis</artifactId>
+            <version>${pixels.version}</version>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>io.pixelsdb</groupId>
+            <artifactId>pixels-planner</artifactId>
+            <version>${pixels.version}</version>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>io.pixelsdb</groupId>
+            <artifactId>pixels-executor</artifactId>
+            <version>${pixels.version}</version>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>io.pixelsdb</groupId>
+            <artifactId>pixels-invoker-lambda</artifactId>
+            <version>${pixels.version}</version>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>io.pixelsdb</groupId>
+            <artifactId>pixels-scaling-ec2</artifactId>
+            <version>${pixels.version}</version>
+            <optional>true</optional>
+        </dependency>
+
         <dependency>
             <groupId>com.starrocks</groupId>
             <artifactId>spark-dpp</artifactId>
