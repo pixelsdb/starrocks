@@ -26,6 +26,9 @@ import com.starrocks.catalog.StructType;
 import com.starrocks.catalog.Type;
 import com.starrocks.common.ExceptionChecker;
 import com.starrocks.connector.exception.StarRocksConnectorException;
+import io.pixelsdb.pixels.common.exception.MetadataException;
+import io.pixelsdb.pixels.common.metadata.MetadataService;
+import io.pixelsdb.pixels.common.metadata.domain.Table;
 import org.apache.avro.Schema;
 import org.apache.hadoop.hive.common.type.HiveVarchar;
 import org.junit.Assert;
@@ -452,5 +455,23 @@ public class ColumnTypeConverterTest {
         StructField b = new StructField("b", ScalarType.createType(PrimitiveType.INT));
         StructType outerStruct = new StructType(Lists.newArrayList(a, b));
         Assert.assertEquals(typeStr, toHiveType(outerStruct));
+    }
+
+    @Test
+    public void testPixelsConvert ()
+    {
+        MetadataService metadataService = MetadataService.Instance();
+        try {
+            Table table = metadataService.getTable("tpch", "lineitem", true);
+            table.getLayouts();
+            List<io.pixelsdb.pixels.common.metadata.domain.Column> columns = metadataService.getColumns("tpch", "lineitem",false);
+            for (io.pixelsdb.pixels.common.metadata.domain.Column column : columns)
+            {
+                System.out.println(column.getName() + ", " + column.getType());
+                System.out.println(ColumnTypeConverter.fromPixelsType(column.getType()));
+            }
+        } catch (MetadataException e) {
+            throw new RuntimeException(e);
+        }
     }
 }

@@ -18,13 +18,19 @@ import com.starrocks.connector.Connector;
 import com.starrocks.connector.ConnectorContext;
 import com.starrocks.connector.ConnectorMetadata;
 
-public class PixelsConnector implements Connector {
+import java.util.Map;
 
-    public PixelsConnector(ConnectorContext context){
+public class PixelsConnector implements Connector {
+    private final Map<String, String> properties;
+    private final String catalogName;
+
+    public PixelsConnector(ConnectorContext context) {
+        this.properties = context.getProperties();
+        this.catalogName = context.getCatalogName();
 
     }
     @Override
     public ConnectorMetadata getMetadata() {
-        return null;
+        return new PixelsMetadata(this.catalogName);
     }
 }

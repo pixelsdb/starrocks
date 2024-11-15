@@ -96,6 +96,8 @@ public class Table extends MetaObject implements Writable, GsonPostProcessable, 
         ELASTICSEARCH,
         @SerializedName("HIVE")
         HIVE,
+        @SerializedName("PIXELS")
+        PIXELS,
         @SerializedName("ICEBERG")
         ICEBERG,
         @SerializedName("HUDI")
@@ -387,6 +389,8 @@ public class Table extends MetaObject implements Writable, GsonPostProcessable, 
     public boolean isKuduTable() {
         return type == TableType.KUDU;
     }
+
+    public boolean isPixelsTable() { return type == TableType.PIXELS; }
 
     // for create table
     public boolean isOlapOrCloudNativeTable() {

@@ -706,6 +706,85 @@ public class ColumnTypeConverter {
         return ScalarType.createType(primitiveType);
     }
 
+    public static Type fromPixelsType(String pixelsType){
+        String typeUpperCase = getTypeKeyword(pixelsType).toUpperCase();
+        PrimitiveType primitiveType;
+        switch (typeUpperCase) {
+            case "TINYINT":
+                primitiveType = PrimitiveType.TINYINT;
+                break;
+            case "SMALLINT":
+                primitiveType = PrimitiveType.SMALLINT;
+                break;
+            case "INT":
+            case "INTEGER":
+                primitiveType = PrimitiveType.INT;
+                break;
+            case "BIGINT":
+                primitiveType = PrimitiveType.BIGINT;
+                break;
+            case "FLOAT":
+                primitiveType = PrimitiveType.FLOAT;
+                break;
+            case "DOUBLE":
+            case "DOUBLE PRECISION":
+                primitiveType = PrimitiveType.DOUBLE;
+                break;
+            case "DECIMAL":
+            case "NUMERIC":
+                primitiveType = PrimitiveType.DECIMAL32;
+                break;
+            case "TIMESTAMP":
+                primitiveType = PrimitiveType.DATETIME;
+                break;
+            case "DATE":
+                primitiveType = PrimitiveType.DATE;
+                break;
+            case "STRING":
+                return ScalarType.createDefaultCatalogString();
+            case "VARCHAR":
+                return ScalarType.createVarcharType(getVarcharLength(pixelsType));
+            case "CHAR":
+                return ScalarType.createCharType(getCharLength(pixelsType));
+            case "BINARY":
+                return Type.VARBINARY;
+            case "BOOLEAN":
+                primitiveType = PrimitiveType.BOOLEAN;
+                break;
+            case "ARRAY":
+                Type type = fromHiveTypeToArrayType(pixelsType);
+                if (type.isArrayType()) {
+                    return type;
+                } else {
+                    return Type.UNKNOWN_TYPE;
+                }
+            case "MAP":
+                Type mapType = fromHiveTypeToMapType(pixelsType);
+                if (mapType.isMapType()) {
+                    return mapType;
+                } else {
+                    return Type.UNKNOWN_TYPE;
+                }
+            case  "STRUCT":
+                Type structType = fromHiveTypeToStructType(pixelsType);
+                if (structType.isStructType()) {
+                    return structType;
+                } else {
+                    return Type.UNKNOWN_TYPE;
+                }
+            default:
+                primitiveType = PrimitiveType.UNKNOWN_TYPE;
+                break;
+        }
+
+        if (primitiveType != PrimitiveType.DECIMAL32) {
+            return ScalarType.createType(primitiveType);
+        } else {
+            int[] parts = getPrecisionAndScale(pixelsType);
+            return ScalarType.createUnifiedDecimalType(parts[0], parts[1]);
+        }
+    }
+
     private static ArrayType convertToArrayTypeForIceberg(org.apache.iceberg.types.Type icebergType) {
         return new ArrayType(fromIcebergType(icebergType.asNestedType().asListType().elementType()));
     }
