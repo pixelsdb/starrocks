@@ -47,6 +47,7 @@ public class PruneScanColumnRule extends TransformationRule {
     public static final PruneScanColumnRule JDBC_SCAN = new PruneScanColumnRule(OperatorType.LOGICAL_JDBC_SCAN);
     public static final PruneScanColumnRule BINLOG_SCAN = new PruneScanColumnRule(OperatorType.LOGICAL_BINLOG_SCAN);
     public static final PruneScanColumnRule KUDU_SCAN = new PruneScanColumnRule(OperatorType.LOGICAL_KUDU_SCAN);
+    public static final PruneScanColumnRule PIXELS_SCAN = new PruneScanColumnRule(OperatorType.LOGICAL_PIXELS_SCAN);
 
     public PruneScanColumnRule(OperatorType logicalOperatorType) {
         super(RuleType.TF_PRUNE_OLAP_SCAN_COLUMNS, Pattern.create(logicalOperatorType));

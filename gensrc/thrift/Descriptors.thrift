@@ -357,6 +357,14 @@ struct TMySQLTable {
 struct TEsTable {
 }
 
+struct TPixelsTable {
+
+    1: optional list<string> pixels_column_names
+
+    2: optional list<string> pixels_column_types
+
+}
+
 struct TSchemaTable {
   1: required TSchemaTableType tableType
 }
@@ -609,6 +617,7 @@ struct TTableDescriptor {
   14: optional TBrokerTable BrokerTable
   15: optional TEsTable esTable
   16: optional TJDBCTable jdbcTable
+  17: optional TPixelsTable pixelsTable
 
   // Hdfs Table schema
   30: optional THdfsTable hdfsTable

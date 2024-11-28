@@ -49,11 +49,13 @@ public class UDFHelper {
     public static final int TYPE_BIGINT = 7;
     public static final int TYPE_FLOAT = 10;
     public static final int TYPE_DOUBLE = 11;
+    public static final int TYPE_CHAR = 13;
     public static final int TYPE_VARCHAR = 17;
     public static final int TYPE_ARRAY = 19;
     public static final int TYPE_BOOLEAN = 24;
     public static final int TYPE_TIME = 44;
     public static final int TYPE_VARBINARY = 46;
+    public static final int TYPE_DECIMAL64 = 48;
     public static final int TYPE_DATE = 50;
     public static final int TYPE_DATETIME = 51;
 
@@ -391,6 +393,13 @@ public class UDFHelper {
                 getDoubleTimeResult(numRows, (Time[]) boxedResult, columnAddr);
                 break;
             }
+            case TYPE_DATE: {
+                getStringDateResult(numRows, (Date[]) boxedResult, columnAddr);
+                break;
+            }
+            case TYPE_DECIMAL64: {
+                getStringDecimalResult(numRows, (BigDecimal[]) boxedResult, columnAddr);
+            }
             case TYPE_VARCHAR: {
                 if (boxedResult instanceof Date[]) {
                     getStringDateResult(numRows, (Date[]) boxedResult, columnAddr);
@@ -405,6 +414,14 @@ public class UDFHelper {
                 } else if (boxedResult instanceof BigInteger[]) {
                     getStringLargeIntResult(numRows, (BigInteger[]) boxedResult, columnAddr);
                 } else if (boxedResult instanceof String[]) {
+                    getStringBoxedResult(numRows, (String[]) boxedResult, columnAddr);
+                } else {
+                    throw new UnsupportedOperationException("unsupported type:" + boxedResult);
+                }
+                break;
+            }
+            case TYPE_CHAR: {
+                if (boxedResult instanceof String[]) {
                     getStringBoxedResult(numRows, (String[]) boxedResult, columnAddr);
                 } else {
                     throw new UnsupportedOperationException("unsupported type:" + boxedResult);

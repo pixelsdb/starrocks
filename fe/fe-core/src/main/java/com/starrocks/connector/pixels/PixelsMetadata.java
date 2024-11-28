@@ -14,9 +14,12 @@
 
 package com.starrocks.connector.pixels;
 
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.Lists;
 import com.starrocks.catalog.Database;
 import com.starrocks.catalog.HiveMetaStoreTable;
 import com.starrocks.catalog.HiveTable;
+import com.starrocks.catalog.PartitionKey;
 import com.starrocks.catalog.PixelsTable;
 import com.starrocks.catalog.Table;
 import com.starrocks.catalog.Type;
@@ -25,13 +28,21 @@ import com.starrocks.common.DdlException;
 import com.starrocks.common.MetaNotFoundException;
 import com.starrocks.connector.ColumnTypeConverter;
 import com.starrocks.connector.ConnectorMetadata;
+import com.starrocks.connector.RemoteFileDesc;
+import com.starrocks.connector.RemoteFileInfo;
 import com.starrocks.connector.exception.StarRocksConnectorException;
+import com.starrocks.connector.paimon.PaimonRemoteFileDesc;
 import com.starrocks.server.GlobalStateMgr;
 import com.starrocks.sql.ast.CreateTableStmt;
 import com.starrocks.sql.ast.DropTableStmt;
+import com.starrocks.sql.optimizer.OptimizerContext;
+import com.starrocks.sql.optimizer.operator.scalar.ColumnRefOperator;
+import com.starrocks.sql.optimizer.operator.scalar.ScalarOperator;
+import com.starrocks.sql.optimizer.statistics.Statistics;
 import com.starrocks.statistic.StatisticUtils;
 import io.pixelsdb.pixels.common.exception.MetadataException;
 import io.pixelsdb.pixels.common.metadata.domain.Column;
+import io.pixelsdb.pixels.common.metadata.domain.Layout;
 import io.pixelsdb.pixels.common.metadata.domain.Schema;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -51,7 +62,9 @@ public class PixelsMetadata implements ConnectorMetadata {
     private static final Logger LOG = LogManager.getLogger(PixelsMetadata.class);
     private final String catalogName;
     private final MetadataService metadataService;
+    private final Map<String, Table> tables = new ConcurrentHashMap<>();
     private final Map<String, Database> databases = new ConcurrentHashMap<>();
+    private static final String DATABASE_TABLE_JOINER = ".";
 
     public PixelsMetadata(String catalogName){
         this.catalogName = catalogName;
@@ -108,8 +121,6 @@ public class PixelsMetadata implements ConnectorMetadata {
     @Override
     // could add cache
     public Database getDb(String dbName) {
-
-        Database database;
 
         if (databases.containsKey(dbName)) {
             return databases.get(dbName);
@@ -181,6 +192,12 @@ public class PixelsMetadata implements ConnectorMetadata {
     @Override
     public Table getTable(String dbName, String tblName) {
 
+        String fullTableName = getPixelsFullTableName(dbName, tblName);
+
+        if(tables.containsKey(fullTableName)){
+            return tables.get(fullTableName);
+        }
+
         io.pixelsdb.pixels.common.metadata.domain.Table pixelsTable = null;
         List<Column> columns = null;
         try {
@@ -199,7 +216,8 @@ public class PixelsMetadata implements ConnectorMetadata {
             com.starrocks.catalog.Column starrocksColumn = new com.starrocks.catalog.Column(name, starrocksType);
             fullSchema.add(starrocksColumn);
         }
-        PixelsTable table = new PixelsTable(this.catalogName, dbName, tblName, fullSchema, pixelsTable);
+        PixelsTable table = new PixelsTable(this.catalogName, dbName, tblName, fullSchema, pixelsTable, columns);
+        tables.put(fullTableName, table);
         return table;
 
     }
@@ -213,6 +231,35 @@ public class PixelsMetadata implements ConnectorMetadata {
         }
     }
 
+    // to be complete
+    @Override
+    public List<RemoteFileInfo> getRemoteFileInfos(Table table, List<PartitionKey> partitionKeys, long snapshotId,
+                                                   ScalarOperator predicate, List<String> fieldNames, long limit) {
+        RemoteFileInfo remoteFileInfo = new RemoteFileInfo();
+        PixelsTable pixelsTable = (PixelsTable) table;
+        List<Layout> pixelsLayouts;
+        try {
+            pixelsLayouts = metadataService.getLayouts(pixelsTable.getDbName(), pixelsTable.getTableName());
+        } catch (MetadataException e) {
+            throw new RuntimeException(e);
+        }
+        List<RemoteFileDesc> remoteFileDescs = ImmutableList.of(
+                PixelsRemoteFileDesc.createPamonRemoteFileDesc(pixelsLayouts));
+        remoteFileInfo.setFiles(remoteFileDescs);
+        return Lists.newArrayList(remoteFileInfo);
+    }
+
+    // to be complemented for optimizer
+    @Override
+    public Statistics getTableStatistics(OptimizerContext session, Table table,
+                                         Map<ColumnRefOperator, com.starrocks.catalog.Column> columns,
+                                         List<PartitionKey> partitionKeys, ScalarOperator predicate, long limit) {
+        return ConnectorMetadata.super.getTableStatistics(session, table, columns, partitionKeys, predicate, limit);
+    }
+
+    private String getPixelsFullTableName(String dbName, String tblName) {
+        return dbName + DATABASE_TABLE_JOINER + tblName;
+    }
 
 
 }

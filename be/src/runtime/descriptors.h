@@ -389,6 +389,15 @@ public:
 private:
 };
 
+class PixelsTableDescriptor : public TableDescriptor {
+public:
+    PixelsTableDescriptor(const TTableDescriptor& tdesc);
+    ~PixelsTableDescriptor() override;
+    std::string debug_string() const override;
+
+private:
+};
+
 class MySQLTableDescriptor : public TableDescriptor {
 public:
     MySQLTableDescriptor(const TTableDescriptor& tdesc);

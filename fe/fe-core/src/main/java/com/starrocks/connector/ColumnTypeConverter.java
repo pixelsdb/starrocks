@@ -706,6 +706,7 @@ public class ColumnTypeConverter {
         return ScalarType.createType(primitiveType);
     }
 
+    // copy from hive, may modify
     public static Type fromPixelsType(String pixelsType){
         String typeUpperCase = getTypeKeyword(pixelsType).toUpperCase();
         PrimitiveType primitiveType;
@@ -718,7 +719,8 @@ public class ColumnTypeConverter {
                 break;
             case "INT":
             case "INTEGER":
-                primitiveType = PrimitiveType.INT;
+            //    primitiveType = PrimitiveType.INT;
+                primitiveType = PrimitiveType.BIGINT; // Pixels only support LongColumnVector
                 break;
             case "BIGINT":
                 primitiveType = PrimitiveType.BIGINT;
@@ -732,13 +734,15 @@ public class ColumnTypeConverter {
                 break;
             case "DECIMAL":
             case "NUMERIC":
-                primitiveType = PrimitiveType.DECIMAL32;
+//                primitiveType = PrimitiveType.DECIMAL64;
+                primitiveType = PrimitiveType.VARCHAR; // TODO: temporarily fits java_extension/udf_helper
                 break;
             case "TIMESTAMP":
                 primitiveType = PrimitiveType.DATETIME;
                 break;
             case "DATE":
-                primitiveType = PrimitiveType.DATE;
+//                primitiveType = PrimitiveType.DATE;
+                primitiveType = PrimitiveType.VARCHAR; // TODO: temporarily fits java_extension/udf_helper
                 break;
             case "STRING":
                 return ScalarType.createDefaultCatalogString();

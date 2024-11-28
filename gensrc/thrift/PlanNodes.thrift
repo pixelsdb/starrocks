@@ -85,6 +85,7 @@ enum TPlanNodeType {
   STREAM_AGG_NODE,
   LAKE_META_SCAN_NODE,
   CAPTURE_VERSION_NODE,
+  PIXELS_SCAN_NODE,
 }
 
 // phases of an execution node
@@ -291,6 +292,26 @@ struct TEsScanRange {
   4: required i32 shard_id
 }
 
+// Pixels scan range
+struct TPixelsScanRange {
+  1: optional i64 trans_id
+  2: optional i64 split_id
+  3: optional string connector_id
+  4: optional string schema_name
+  5: optional string table_name
+  6: optional string storage_schema
+  7: optional list<string> paths
+  8: optional list<i32> rg_starts
+  9: optional list<i32> rg_lengths
+  10: optional i32 path_index
+  11: optional bool cached
+  12: optional bool ensure_locality
+  13: optional list<Types.TNetworkAddress> addresses
+  14: optional list<string> column_order
+  15: optional list<string> cache_order
+  16: optional list<string> column_type_order
+}
+
 enum TIcebergFileContent {
     DATA,
     POSITION_DELETES,
@@ -408,6 +429,7 @@ struct TScanRange {
   5: optional binary kudu_scan_token // Decrepated
   6: optional TBrokerScanRange broker_scan_range
   7: optional TEsScanRange es_scan_range
+  8: optional TPixelsScanRange pixels_scan_range
 
   // scan range for hdfs
   20: optional THdfsScanRange hdfs_scan_range
@@ -466,6 +488,14 @@ struct TEsScanNode {
     // }
     // k1 > 'abc' -> k1.keyword > 'abc'
     4: optional map<string, string> fields_context
+}
+
+struct TPixelsScanNode {
+    1: optional Types.TTupleId tuple_id
+    2: optional string table_name
+    3: optional list<string> columns
+    4: optional list<string> filters
+    5: optional i64 limit
 }
 
 struct TFrontend {
@@ -1242,6 +1272,7 @@ struct TPlanNode {
   33: optional TIntersectNode intersect_node
   34: optional TExceptNode except_node
   35: optional TMergeJoinNode merge_join_node
+  36: optional TPixelsScanNode pixels_scan_node
 
   // For vector query engine
   // 50 is reserved, please don't use

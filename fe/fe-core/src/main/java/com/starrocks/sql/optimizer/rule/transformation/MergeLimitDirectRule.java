@@ -37,6 +37,7 @@ public class MergeLimitDirectRule extends TransformationRule {
     public static final MergeLimitDirectRule DELTALAKE_SCAN = new MergeLimitDirectRule(OperatorType.LOGICAL_DELTALAKE_SCAN);
     public static final MergeLimitDirectRule FILE_SCAN = new MergeLimitDirectRule(OperatorType.LOGICAL_FILE_SCAN);
     public static final MergeLimitDirectRule PAIMON_SCAN = new MergeLimitDirectRule(OperatorType.LOGICAL_PAIMON_SCAN);
+    public static final MergeLimitDirectRule PIXELS_SCAN = new MergeLimitDirectRule(OperatorType.LOGICAL_PIXELS_SCAN);
     public static final MergeLimitDirectRule ODPS_SCAN = new MergeLimitDirectRule(OperatorType.LOGICAL_ODPS_SCAN);
     public static final MergeLimitDirectRule KUDU_SCAN = new MergeLimitDirectRule(OperatorType.LOGICAL_KUDU_SCAN);
     public static final MergeLimitDirectRule SCHEMA_SCAN = new MergeLimitDirectRule(OperatorType.LOGICAL_SCHEMA_SCAN);
