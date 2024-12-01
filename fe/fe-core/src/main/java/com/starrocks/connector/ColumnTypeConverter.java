@@ -735,14 +735,13 @@ public class ColumnTypeConverter {
             case "DECIMAL":
             case "NUMERIC":
 //                primitiveType = PrimitiveType.DECIMAL64;
-                primitiveType = PrimitiveType.VARCHAR; // TODO: temporarily fits java_extension/udf_helper
+                primitiveType = PrimitiveType.VARCHAR;
                 break;
             case "TIMESTAMP":
                 primitiveType = PrimitiveType.DATETIME;
                 break;
             case "DATE":
-//                primitiveType = PrimitiveType.DATE;
-                primitiveType = PrimitiveType.VARCHAR; // TODO: temporarily fits java_extension/udf_helper
+                primitiveType = PrimitiveType.DATE;
                 break;
             case "STRING":
                 return ScalarType.createDefaultCatalogString();

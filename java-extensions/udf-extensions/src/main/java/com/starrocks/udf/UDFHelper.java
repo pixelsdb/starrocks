@@ -359,6 +359,29 @@ public class UDFHelper {
         copyDataToBinaryColumn(numRows, byteRes, offsets, nulls, columnAddr);
     }
 
+    private static void getDateResult(int numRows, Integer[] column, long columnAddr) {
+        getIntBoxedResult(numRows, column, columnAddr);
+    }
+
+    public static void getDecimalResult(int numRows, BigDecimal[] column, long columnAddr) {
+        byte[] nulls = new byte[numRows];
+        long[] dataArr = new long[numRows];
+        for (int i = 0; i < numRows; i++) {
+            if (column[i] == null) {
+                nulls[i] = 1;
+            } else {
+                dataArr[i] = column[i].unscaledValue().longValue();
+            }
+        }
+
+        final long[] addrs = getAddrs(columnAddr);
+        // memcpy to uint8_t array
+        Platform.copyMemory(nulls, Platform.BYTE_ARRAY_OFFSET, null, addrs[0], numRows);
+        // memcpy to int array
+        Platform.copyMemory(dataArr, Platform.INT_ARRAY_OFFSET, null, addrs[1], numRows * 4L);
+    }
+
+
     public static void getResultFromBoxedArray(int type, int numRows, Object boxedResult, long columnAddr) {
         switch (type) {
             case TYPE_BOOLEAN: {
@@ -394,11 +417,14 @@ public class UDFHelper {
                 break;
             }
             case TYPE_DATE: {
-                getStringDateResult(numRows, (Date[]) boxedResult, columnAddr);
+                // getDateBoxedResult
+                getDateResult(numRows, (Integer[]) boxedResult, columnAddr);
                 break;
             }
             case TYPE_DECIMAL64: {
+                // getDecimalBoxedResult
                 getStringDecimalResult(numRows, (BigDecimal[]) boxedResult, columnAddr);
+                break;
             }
             case TYPE_VARCHAR: {
                 if (boxedResult instanceof Date[]) {

@@ -13,6 +13,7 @@ import io.pixelsdb.pixels.core.vector.LongColumnVector;
 
 import java.math.BigDecimal;
 import java.sql.Date;
+import java.time.LocalDate;
 
 public class PixelsScannerUtils {
 
@@ -25,6 +26,25 @@ public class PixelsScannerUtils {
             keyword = keyword.substring(0, parenthesesIndex).trim();
         }
         return keyword;
+    }
+
+    private static int convertToDate(int year, int month, int day) {
+        int century;
+        int julianDate;
+
+        if (month > 2) {
+            month += 1;
+            year += 4800;
+        } else {
+            month += 13;
+            year += 4799;
+        }
+        century = year / 100;
+        julianDate = year * 365 - 32167;
+        julianDate += year / 4 - century + century / 4;
+        julianDate += 7834 * month / 256 + day;
+
+        return julianDate;
     }
 
     public static Object[] getObjectArrayFromPixelsVector(ColumnVector columnVector, String type, int rowBatchSize) {
@@ -72,11 +92,10 @@ public class PixelsScannerUtils {
         }
         else if (columnVector instanceof DateColumnVector) {
             DateColumnVector dateVector = (DateColumnVector) columnVector;
-            dataColumn = new String[rowBatchSize];
+            dataColumn = new Integer[rowBatchSize];
             for(int i = 0; i< rowBatchSize; ++i) {
-                StringBuilder buffer = new StringBuilder();
-                dateVector.stringifyValue(buffer, i);
-                dataColumn[i] = buffer.toString();
+                LocalDate date = LocalDate.ofEpochDay(dateVector.getDate(i));
+                dataColumn[i] = convertToDate(date.getYear(), date.getMonthValue(), date.getDayOfMonth());
             }
             return dataColumn;
         }

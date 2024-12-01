@@ -217,12 +217,20 @@ Status PixelsScanner::get_next(RuntimeState* state, ChunkPtr* chunk, bool* eos) 
     jobject jchunk = nullptr;
     size_t jchunk_rows = 0;
     LOCAL_REF_GUARD(jchunk);
+    auto start = std::chrono::high_resolution_clock::now();
     RETURN_IF_ERROR(_get_next_chunk(&jchunk, &jchunk_rows));
+    auto end = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double> elapsed = end - start;
+    std::cout << "get_next_chunk Elapsed time: " << elapsed.count() << "s\n";
     if(jchunk == NULL) {
         *eos = true;
         return Status::OK();
     }
+    start = std::chrono::high_resolution_clock::now();
     RETURN_IF_ERROR(_fill_chunk(jchunk, jchunk_rows, chunk));
+    end = std::chrono::high_resolution_clock::now();
+    elapsed = end - start;
+    std::cout << "get_next_chunk Elapsed time: " << elapsed.count() << "s\n";
     return Status::OK();
 }
 
