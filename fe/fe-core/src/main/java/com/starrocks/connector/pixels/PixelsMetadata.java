@@ -38,6 +38,7 @@ import com.starrocks.sql.ast.DropTableStmt;
 import com.starrocks.sql.optimizer.OptimizerContext;
 import com.starrocks.sql.optimizer.operator.scalar.ColumnRefOperator;
 import com.starrocks.sql.optimizer.operator.scalar.ScalarOperator;
+import com.starrocks.sql.optimizer.statistics.ColumnStatistic;
 import com.starrocks.sql.optimizer.statistics.Statistics;
 import com.starrocks.statistic.StatisticUtils;
 import io.pixelsdb.pixels.common.exception.MetadataException;
@@ -47,12 +48,14 @@ import io.pixelsdb.pixels.common.metadata.domain.Schema;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import io.pixelsdb.pixels.common.metadata.MetadataService;
+import org.apache.paimon.table.source.Split;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
 
 import static com.starrocks.catalog.Table.TableType.PIXELS;
 import static com.starrocks.connector.ConnectorTableId.CONNECTOR_ID_GENERATOR;
@@ -254,7 +257,19 @@ public class PixelsMetadata implements ConnectorMetadata {
     public Statistics getTableStatistics(OptimizerContext session, Table table,
                                          Map<ColumnRefOperator, com.starrocks.catalog.Column> columns,
                                          List<PartitionKey> partitionKeys, ScalarOperator predicate, long limit) {
-        return ConnectorMetadata.super.getTableStatistics(session, table, columns, partitionKeys, predicate, limit);
+        Statistics.Builder builder = Statistics.builder();
+        for (ColumnRefOperator columnRefOperator : columns.keySet()) {
+            builder.addColumnStatistic(columnRefOperator, ColumnStatistic.unknown());
+        }
+
+        long rowCount = ((PixelsTable) table).getPixelsTable().getRowCount();
+        if (rowCount == 0) {
+            builder.setOutputRowCount(1);
+        } else {
+            builder.setOutputRowCount(rowCount);
+        }
+
+        return builder.build();
     }
 
     private String getPixelsFullTableName(String dbName, String tblName) {
