@@ -1,5 +1,6 @@
 package com.starrocks.pixels.reader;
 
+import com.starrocks.utils.Platform;
 import io.pixelsdb.pixels.core.encoding.Dictionary;
 import io.pixelsdb.pixels.core.vector.BinaryColumnVector;
 import io.pixelsdb.pixels.core.vector.ByteColumnVector;
@@ -12,8 +13,11 @@ import io.pixelsdb.pixels.core.vector.FloatColumnVector;
 import io.pixelsdb.pixels.core.vector.LongColumnVector;
 
 import java.math.BigDecimal;
+import java.math.BigInteger;
+import java.math.RoundingMode;
 import java.sql.Date;
 import java.time.LocalDate;
+import java.util.Arrays;
 
 public class PixelsScannerUtils {
 
@@ -101,12 +105,15 @@ public class PixelsScannerUtils {
         }
         // 相应格式转换，注意各种enum type
         else if (columnVector instanceof DecimalColumnVector) {
+//            DecimalColumnVector decimalVector = (DecimalColumnVector) columnVector;
+//            dataColumn = new BigDecimal[rowBatchSize];
+//            for(int i = 0; i< rowBatchSize; ++i) {
+//                dataColumn[i] = BigDecimal.valueOf(decimalVector.vector[i], decimalVector.getScale());
+//            }
             DecimalColumnVector decimalVector = (DecimalColumnVector) columnVector;
-            dataColumn = new String[rowBatchSize];
+            dataColumn = new Long[rowBatchSize];
             for(int i = 0; i< rowBatchSize; ++i) {
-                StringBuilder buffer = new StringBuilder();
-                decimalVector.stringifyValue(buffer, i);
-                dataColumn[i] = buffer.toString();
+                dataColumn[i] = decimalVector.vector[i];
             }
             return dataColumn;
         }

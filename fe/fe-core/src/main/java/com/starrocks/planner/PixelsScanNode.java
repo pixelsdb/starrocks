@@ -270,7 +270,10 @@ public class PixelsScanNode extends ScanNode {
 
                         List<String> columnTypeOrder = new ArrayList<>();
                         for (String columnName : desiredColumns) {
-                            columnTypeOrder.add(pixelsTable.getPixelsColumnType(columnName));
+                            columnName = pixelsTable.getPixelsColumnType(columnName);
+                            if (columnName != null) {
+                                columnTypeOrder.add(columnName);
+                            }
                         }
                         pixelsScanRange.setColumn_type_order(columnTypeOrder);
 

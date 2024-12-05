@@ -48,6 +48,11 @@ public:
         return Status::OK();
     }
 
+    Status do_visit(const Decimal64Column& column) {
+        _jarr[_idx++] = reinterpret_cast<int64_t>(column.get_data().data());
+        return Status::OK();
+    }
+
     template <typename T>
     Status do_visit(const T& column) {
         return Status::NotSupported("UDF Not Support Type");

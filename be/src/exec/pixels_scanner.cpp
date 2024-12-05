@@ -48,9 +48,17 @@ Status PixelsScanner::_init_column_name(RuntimeState* state) {
 
     for(int i = 0; i < len; ++i) {
         LogicalType ret_type = _slot_descs[i]->type().type;
-        std::cout << _slot_descs[i]->col_name() << ", " << ret_type << std::endl;
         _result_column_types.emplace_back(ret_type);
-        auto intermediate = TypeDescriptor(ret_type);
+        TypeDescriptor intermediate;
+        if(ret_type == TYPE_DECIMAL64) {
+            int precision = _slot_descs[i]->type().precision;
+            int scale = _slot_descs[i]->type().scale;
+            std::cout << "PRECISION: " << precision << ", SCALE: " << scale << std::endl;
+            intermediate = TypeDescriptor::create_decimalv3_type(ret_type, precision, scale);
+        }
+        else {
+            intermediate = TypeDescriptor(ret_type);
+        }
         auto result_column = ColumnHelper::create_column(intermediate, true);
         _result_chunk->append_column(std::move(result_column), i);
         auto column_ref = _pool.add(new ColumnRef(intermediate, i));
@@ -230,7 +238,7 @@ Status PixelsScanner::get_next(RuntimeState* state, ChunkPtr* chunk, bool* eos) 
     RETURN_IF_ERROR(_fill_chunk(jchunk, jchunk_rows, chunk));
     end = std::chrono::high_resolution_clock::now();
     elapsed = end - start;
-    std::cout << "get_next_chunk Elapsed time: " << elapsed.count() << "s\n";
+    std::cout << "_fill_chunk Elapsed time: " << elapsed.count() << "s\n";
     return Status::OK();
 }
 
@@ -255,6 +263,8 @@ Status PixelsScanner::_fill_chunk(jobject jchunk, size_t num_rows, ChunkPtr* chu
             jobject jcolumn = helper.list_get(jchunk, i);
             LOCAL_REF_GUARD_ENV(env, jcolumn);
             auto& result_column = _result_chunk->columns()[i];
+            std::cout << "TYPE: " << _result_column_types[i] << std::endl;
+            std::cout << "RES_COL_ADDRESS: " << result_column.get() << std::endl;
             auto st =
                     helper.get_result_from_boxed_array(_result_column_types[i], result_column.get(), jcolumn, num_rows);
             RETURN_IF_ERROR(st);

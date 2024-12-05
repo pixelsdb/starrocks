@@ -22,6 +22,7 @@ import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.math.BigDecimal;
 import java.math.BigInteger;
+import java.math.RoundingMode;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.IntBuffer;
@@ -50,8 +51,10 @@ public class UDFHelper {
     public static final int TYPE_FLOAT = 10;
     public static final int TYPE_DOUBLE = 11;
     public static final int TYPE_CHAR = 13;
+    public static final int TYPE_DECIMAL = 16;
     public static final int TYPE_VARCHAR = 17;
     public static final int TYPE_ARRAY = 19;
+//    public static final int FE_DECIMAL32 = 21;
     public static final int TYPE_BOOLEAN = 24;
     public static final int TYPE_TIME = 44;
     public static final int TYPE_VARBINARY = 46;
@@ -363,22 +366,25 @@ public class UDFHelper {
         getIntBoxedResult(numRows, column, columnAddr);
     }
 
-    public static void getDecimalResult(int numRows, BigDecimal[] column, long columnAddr) {
+    public static void getDecimalResult(int numRows, Long[] column, long columnAddr) {
+//        for(int i = 0; i < numRows; ++i) {
+//            putDecimal64(i, column[i].scale(), column[i], columnAddr);
+//        }
         byte[] nulls = new byte[numRows];
         long[] dataArr = new long[numRows];
         for (int i = 0; i < numRows; i++) {
             if (column[i] == null) {
                 nulls[i] = 1;
             } else {
-                dataArr[i] = column[i].unscaledValue().longValue();
+                dataArr[i] = column[i];
             }
         }
 
         final long[] addrs = getAddrs(columnAddr);
         // memcpy to uint8_t array
         Platform.copyMemory(nulls, Platform.BYTE_ARRAY_OFFSET, null, addrs[0], numRows);
-        // memcpy to int array
-        Platform.copyMemory(dataArr, Platform.INT_ARRAY_OFFSET, null, addrs[1], numRows * 4L);
+        // memcpy to long array
+        Platform.copyMemory(dataArr, Platform.INT_ARRAY_OFFSET, null, addrs[1], numRows * 8L);
     }
 
 
@@ -417,13 +423,14 @@ public class UDFHelper {
                 break;
             }
             case TYPE_DATE: {
-                // getDateBoxedResult
                 getDateResult(numRows, (Integer[]) boxedResult, columnAddr);
                 break;
             }
+            case TYPE_DECIMAL:
             case TYPE_DECIMAL64: {
                 // getDecimalBoxedResult
-                getStringDecimalResult(numRows, (BigDecimal[]) boxedResult, columnAddr);
+//                getDecimalResult(numRows, (BigDecimal[]) boxedResult, columnAddr);
+                getDecimalResult(numRows, (Long[]) boxedResult, columnAddr);
                 break;
             }
             case TYPE_VARCHAR: {

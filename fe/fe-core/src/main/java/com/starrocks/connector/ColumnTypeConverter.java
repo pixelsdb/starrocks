@@ -734,8 +734,7 @@ public class ColumnTypeConverter {
                 break;
             case "DECIMAL":
             case "NUMERIC":
-//                primitiveType = PrimitiveType.DECIMAL64;
-                primitiveType = PrimitiveType.VARCHAR;
+                primitiveType = PrimitiveType.DECIMAL32;
                 break;
             case "TIMESTAMP":
                 primitiveType = PrimitiveType.DATETIME;
