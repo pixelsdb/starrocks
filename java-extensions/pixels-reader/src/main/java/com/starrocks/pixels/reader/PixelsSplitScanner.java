@@ -50,8 +50,8 @@ public class PixelsSplitScanner {
 
     public PixelsSplitScanner(int fetchSize, Map<String, String> params) {
         this.BatchSize = fetchSize;
-        System.out.println("batchsize");
-        System.out.println(this.BatchSize);
+//        System.out.println("batchsize");
+//        System.out.println(this.BatchSize);
         this.classLoader = this.getClass().getClassLoader();
 
         try {
@@ -252,7 +252,7 @@ public class PixelsSplitScanner {
     }
 
     public List<Object[]> getNextChunk() throws Exception {
-        System.out.println("invoke getNextChunk");
+//        System.out.println("invoke getNextChunk");
         if (!this.blocked.isDone())
         {
             return null;
@@ -305,10 +305,10 @@ public class PixelsSplitScanner {
                 for (int fieldId = 0; fieldId < numColumnToRead; ++fieldId)
                 {
 
-                    String type = this.colTypes[fieldId];
+//                    String type = this.colTypes[fieldId];
                     ColumnVector vector = rowBatch.cols[fieldId];
 
-                    Object[] dataColumn = PixelsScannerUtils.getObjectArrayFromPixelsVector(vector, type, rowBatchSize);
+                    Object[] dataColumn = PixelsScannerUtils.getObjectArrayFromPixelsVector(vector, rowBatchSize);
 //                    if(dataColumn == null) {
 //                        dataColumn = new Object[rowBatchSize];
 //                        System.out.println("col: " + includeCols[fieldId] + ", type: " + type + " is null");

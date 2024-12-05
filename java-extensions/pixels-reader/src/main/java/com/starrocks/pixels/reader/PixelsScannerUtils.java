@@ -51,7 +51,7 @@ public class PixelsScannerUtils {
         return julianDate;
     }
 
-    public static Object[] getObjectArrayFromPixelsVector(ColumnVector columnVector, String type, int rowBatchSize) {
+    public static Object[] getObjectArrayFromPixelsVector(ColumnVector columnVector, int rowBatchSize) {
         Object[] dataColumn = null;
 
         if (columnVector instanceof LongColumnVector) {

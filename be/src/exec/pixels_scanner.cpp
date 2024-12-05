@@ -53,7 +53,7 @@ Status PixelsScanner::_init_column_name(RuntimeState* state) {
         if(ret_type == TYPE_DECIMAL64) {
             int precision = _slot_descs[i]->type().precision;
             int scale = _slot_descs[i]->type().scale;
-            std::cout << "PRECISION: " << precision << ", SCALE: " << scale << std::endl;
+            // std::cout << "PRECISION: " << precision << ", SCALE: " << scale << std::endl;
             intermediate = TypeDescriptor::create_decimalv3_type(ret_type, precision, scale);
         }
         else {
@@ -87,8 +87,8 @@ Status PixelsScanner::update_jni_scanner_params(const TPixelsScanRange& scan_ran
     _jni_scanner_params["storage_schema"] = scan_range.storage_schema;
 
     std::string required_fields;
-    for (const auto& column : scan_range.column_order) {
-        required_fields.append(column);
+    for (const auto& slot_desc : _slot_descs) {
+        required_fields.append(slot_desc->col_name());
         required_fields.append(",");
     }
     if (!required_fields.empty()) {
@@ -225,20 +225,20 @@ Status PixelsScanner::get_next(RuntimeState* state, ChunkPtr* chunk, bool* eos) 
     jobject jchunk = nullptr;
     size_t jchunk_rows = 0;
     LOCAL_REF_GUARD(jchunk);
-    auto start = std::chrono::high_resolution_clock::now();
+    // auto start = std::chrono::high_resolution_clock::now();
     RETURN_IF_ERROR(_get_next_chunk(&jchunk, &jchunk_rows));
-    auto end = std::chrono::high_resolution_clock::now();
-    std::chrono::duration<double> elapsed = end - start;
-    std::cout << "get_next_chunk Elapsed time: " << elapsed.count() << "s\n";
+    // auto end = std::chrono::high_resolution_clock::now();
+    // std::chrono::duration<double> elapsed = end - start;
+    // std::cout << "get_next_chunk Elapsed time: " << elapsed.count() << "s\n";
     if(jchunk == NULL) {
         *eos = true;
         return Status::OK();
     }
-    start = std::chrono::high_resolution_clock::now();
+    // start = std::chrono::high_resolution_clock::now();
     RETURN_IF_ERROR(_fill_chunk(jchunk, jchunk_rows, chunk));
-    end = std::chrono::high_resolution_clock::now();
-    elapsed = end - start;
-    std::cout << "_fill_chunk Elapsed time: " << elapsed.count() << "s\n";
+    // end = std::chrono::high_resolution_clock::now();
+    // elapsed = end - start;
+    // std::cout << "_fill_chunk Elapsed time: " << elapsed.count() << "s\n";
     return Status::OK();
 }
 
@@ -263,8 +263,8 @@ Status PixelsScanner::_fill_chunk(jobject jchunk, size_t num_rows, ChunkPtr* chu
             jobject jcolumn = helper.list_get(jchunk, i);
             LOCAL_REF_GUARD_ENV(env, jcolumn);
             auto& result_column = _result_chunk->columns()[i];
-            std::cout << "TYPE: " << _result_column_types[i] << std::endl;
-            std::cout << "RES_COL_ADDRESS: " << result_column.get() << std::endl;
+            // std::cout << "TYPE: " << _result_column_types[i] << std::endl;
+            // std::cout << "RES_COL_ADDRESS: " << result_column.get() << std::endl;
             auto st =
                     helper.get_result_from_boxed_array(_result_column_types[i], result_column.get(), jcolumn, num_rows);
             RETURN_IF_ERROR(st);
