@@ -167,7 +167,7 @@ public class PixelsSplitScanner {
         {
             if (this.storage != null)
             {
-                System.out.println(this.getPath());
+//                System.out.println(this.getPath());
                 // TODO: add cache
                 this.pixelsReader = PixelsReaderImpl
                         .newBuilder()
@@ -313,10 +313,10 @@ public class PixelsSplitScanner {
 //                        dataColumn = new Object[rowBatchSize];
 //                        System.out.println("col: " + includeCols[fieldId] + ", type: " + type + " is null");
 //                    }
-                    System.out.println("col: " + includeCols[fieldId] + ", type: " + type + ", length: " + dataColumn.length);
-                    for (Object o : dataColumn) {
-                        System.out.println(o);
-                    }
+//                    System.out.println("col: " + includeCols[fieldId] + ", type: " + type + ", length: " + dataColumn.length);
+//                    for (Object o : dataColumn) {
+//                        System.out.println(o);
+//                    }
 
                     this.resultNumRows = rowBatchSize;
                     resultChunk.add(dataColumn);
