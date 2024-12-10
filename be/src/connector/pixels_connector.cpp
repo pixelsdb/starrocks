@@ -49,9 +49,9 @@ Status PixelsDataSource::open(RuntimeState* state) {
 }
 
 Status PixelsDataSource::_create_scanner() {
-    const TPixelsScanRange& pixels_scan_range = _scan_range;
-    _pixels_scanner = _pool->add(new PixelsScanner(_tuple_desc, _scan_range));
-    RETURN_IF_ERROR(_pixels_scanner->open(_runtime_state, pixels_scan_range));
+    const TPixelsScanNode& pixels_scan_node = _provider->_pixels_scan_node; // add filters from pixels_scan_node.filters
+    _pixels_scanner = _pool->add(new PixelsScanner(_tuple_desc, _scan_range, pixels_scan_node));
+    RETURN_IF_ERROR(_pixels_scanner->open(_runtime_state));
     return Status::OK();
 }
 

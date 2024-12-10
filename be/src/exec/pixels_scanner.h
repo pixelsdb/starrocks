@@ -38,14 +38,14 @@ class PixelsScanner {
 
 public:
     // add consturction as pixelsReader
-    PixelsScanner(const TupleDescriptor* tuple_desc, const TPixelsScanRange& pixels_scan_range)
-        :_slot_descs(tuple_desc->slots()), _scan_range(pixels_scan_range) {}
+    PixelsScanner(const TupleDescriptor* tuple_desc, const TPixelsScanRange& pixels_scan_range, const TPixelsScanNode& pixels_scan_node)
+        :_tuple_desc(tuple_desc), _slot_descs(tuple_desc->slots()), _scan_range(pixels_scan_range), _scan_node(pixels_scan_node) {}
 
     static Status _check_jni_exception(JNIEnv* env, const std::string& message);
 
-    Status update_jni_scanner_params(const TPixelsScanRange& scan_range);
+    Status update_jni_scanner_params();
 
-    Status open(RuntimeState* state, const TPixelsScanRange& scan_range);
+    Status open(RuntimeState* state);
 
     Status close();
 
@@ -66,7 +66,11 @@ private:
     jclass _jni_scanner_cls = nullptr;
     jobject _jni_scanner_obj = nullptr;
 
-    const TPixelsScanRange _scan_range;
+    const TPixelsScanRange& _scan_range;
+
+    const TPixelsScanNode& _scan_node;
+
+    const TupleDescriptor* _tuple_desc;
 
     std::vector<SlotDescriptor*> _slot_descs;
 

@@ -394,8 +394,11 @@ public:
     PixelsTableDescriptor(const TTableDescriptor& tdesc);
     ~PixelsTableDescriptor() override;
     std::string debug_string() const override;
-
+    const std::vector<std::string> column_names() const { return _column_names; }
+    const std::vector<std::string> column_types() const { return _column_types; }
 private:
+    std::vector<std::string> _column_names;
+    std::vector<std::string> _column_types;
 };
 
 class MySQLTableDescriptor : public TableDescriptor {

@@ -6,6 +6,9 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Multimap;
 import com.starrocks.analysis.Analyzer;
 import com.starrocks.analysis.DescriptorTable;
+import com.starrocks.analysis.Expr;
+import com.starrocks.analysis.ExprSubstitutionMap;
+import com.starrocks.analysis.SlotRef;
 import com.starrocks.analysis.TupleDescriptor;
 import com.starrocks.catalog.PixelsTable;
 import com.starrocks.common.UserException;
@@ -16,6 +19,7 @@ import com.starrocks.qe.ConnectContext;
 import com.starrocks.server.GlobalStateMgr;
 import com.starrocks.server.RunMode;
 import com.starrocks.server.WarehouseManager;
+import com.starrocks.sql.analyzer.AstToStringBuilder;
 import com.starrocks.sql.plan.ExecPlan;
 import com.starrocks.system.ComputeNode;
 import com.starrocks.system.SystemInfoService;
@@ -64,6 +68,7 @@ public class PixelsScanNode extends ScanNode {
     private final PixelsTable pixelsTable;
     private final List<TScanRangeLocations> scanRangeLocationsList = new ArrayList<>();
     private final ConfigFactory configFactory = ConfigFactory.Instance();
+    private final List<String> filters = new ArrayList<>();
 
     public PixelsScanNode(PlanNodeId id, TupleDescriptor desc, String planNodeName) {
         super(id, desc, planNodeName);
@@ -312,6 +317,33 @@ public class PixelsScanNode extends ScanNode {
     }
 
     @Override
+    public void finalizeStats(Analyzer analyzer) throws UserException {
+        createPixelsTableFilters();
+        computeStats(analyzer);
+    }
+
+    public void createPixelsTableFilters() {
+        if (conjuncts.isEmpty()) {
+            return;
+        }
+        // debug 看一下slotRefs里有什么，看一下be怎么处理filters（包括jdbc里）
+        List<SlotRef> slotRefs = Lists.newArrayList();
+        Expr.collectList(conjuncts, SlotRef.class, slotRefs);
+        ExprSubstitutionMap sMap = new ExprSubstitutionMap();
+        for (SlotRef slotRef : slotRefs) {
+            SlotRef tmpRef = (SlotRef) slotRef.clone();
+            tmpRef.setTblName(null);
+            tmpRef.setLabel(tmpRef.getLabel());
+            sMap.put(slotRef, tmpRef);
+        }
+
+        ArrayList<Expr> pixelsConjuncts = Expr.cloneList(conjuncts, sMap);
+        for (Expr p : pixelsConjuncts) {
+            filters.add(AstToStringBuilder.toString(p));
+        }
+    }
+
+    @Override
     public List<TScanRangeLocations> getScanRangeLocations(long maxScanRangeLength) {
         return scanRangeLocationsList;
     }
@@ -322,6 +354,8 @@ public class PixelsScanNode extends ScanNode {
         msg.pixels_scan_node = new TPixelsScanNode();
         msg.pixels_scan_node.setTuple_id(desc.getId().asInt());
         msg.pixels_scan_node.setTable_name(pixelsTable.getTableName());
+        msg.pixels_scan_node.setFilters(filters);
+
     }
 
     @Override

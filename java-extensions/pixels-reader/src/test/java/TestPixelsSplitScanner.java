@@ -13,10 +13,12 @@
 // limitations under the License.
 
 import com.starrocks.jni.connector.OffHeapTable;
+import com.starrocks.pixels.reader.PixelsPredicateParser;
 import io.pixelsdb.pixels.common.physical.Storage;
 import io.pixelsdb.pixels.common.physical.StorageFactory;
 import io.pixelsdb.pixels.core.PixelsFooterCache;
 import io.pixelsdb.pixels.core.PixelsReaderImpl;
+import io.pixelsdb.pixels.core.predicate.PixelsPredicate;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
@@ -25,6 +27,28 @@ import java.net.URL;
 import java.util.HashMap;
 
 public class TestPixelsSplitScanner {
+
+    @Test
+    public void testPredicateParser() {
+        String[] testQueries = {
+                "age = 25",                    // 整数
+                "price <= 199.99",              // 小数
+                "weight > 1E3",                 // 科学计数法
+                "birthdate = '2024-12-09'",     // 日期
+                "name like 'John%'",            // LIKE 操作符
+                "temperature != 35.5",           // 小数不等于,
+                "n_name = 'CHINA'",
+                "col IN ('A', 'B')",
+                "col IN (\"A\",\"B\")",
+                "n_name in (\"CHINA\", \"JAN\")"
+        };
+        for (String testQuery : testQueries) {
+            System.out.println(PixelsPredicateParser.parsePredicate(testQuery));
+        }
+        String predicate = "7: l_discount <= 0.07";
+        PixelsPredicateParser.ParsedPredicate result = PixelsPredicateParser.parsePredicate(predicate);
+        System.out.println(result);
+    }
 
     @Test
     public void testArray() {

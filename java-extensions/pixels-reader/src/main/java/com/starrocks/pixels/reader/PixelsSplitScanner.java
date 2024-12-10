@@ -4,9 +4,13 @@ import com.starrocks.jni.connector.ScannerHelper;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
 import io.pixelsdb.pixels.common.physical.Storage;
@@ -62,7 +66,6 @@ public class PixelsSplitScanner {
             throw new RuntimeException(e);
         }
 
-        this.includeCols = ScannerHelper.splitAndOmitEmptyStrings(params.get("required_fields"), ",");
         String[] paths = ScannerHelper.splitAndOmitEmptyStrings(params.get("paths"), ",");
         this.paths = paths;
 //        this.paths = new String[paths.length];
@@ -72,9 +75,23 @@ public class PixelsSplitScanner {
 //                this.paths[pathCount++] = path.substring(7);
 //            }
 //        }
-        this.colTypes = ScannerHelper.splitAndOmitEmptyStrings(params.get("column_types"), ",");
-        this.numColumnToRead = includeCols.length;
+        this.colTypes = ScannerHelper.splitAndOmitEmptyStrings(params.get("required_column_types"), ",");
 
+        String[] scanColumns = ScannerHelper.splitAndOmitEmptyStrings(params.get("required_fields"), ",");
+        String schemaName = params.get("schema_name");
+        String tableName = params.get("table_name");
+        String[] filters = ScannerHelper.splitAndOmitEmptyStrings(params.get("filters"), "&");
+        String[] filterColumns = PixelsPredicateParser.getFilterColumnNames(filters).toArray(new String[0]);
+
+        List<String> mergeList = Arrays.asList(scanColumns);
+        for (String filterColumn : filterColumns) {
+            if(!mergeList.contains(filterColumn)) {
+                mergeList.add(filterColumn);
+            }
+        }
+
+        this.includeCols = mergeList.toArray(new String[0]);
+        this.numColumnToRead = includeCols.length;
         // TODO: add filter/predicate(constraint)
 //        if (split.getConstraint().getDomains().isPresent())
 //        {
@@ -83,9 +100,27 @@ public class PixelsSplitScanner {
 //                    includeCols, split.getConstraint());
 //            this.filter = Optional.of(scanFilter);
 //        } else
+//        System.out.println(params.get("column_types"));
+        String[] columnNames = ScannerHelper.splitAndOmitEmptyStrings(params.get("column_names"), ",");
+        String[] columnTypes = ScannerHelper.splitAndOmitEmptyStrings(params.get("column_types"), "&");
 
-        this.filter = Optional.empty();
 
+        Map<String, String> colNameToType = new HashMap<>();
+        for (int i = 0; i < columnNames.length; ++i) {
+            colNameToType.put(columnNames[i], columnTypes[i]);
+//            System.out.println(columnNames[i]);
+//            System.out.println(columnTypes[i]);
+        }
+
+        if(filters.length > 0) {
+            TableScanFilter scanFilter = PixelsPredicateUtils.createTableScanFilter(
+                                        schemaName, tableName,
+                                        filters, colNameToType, this.includeCols);
+                                this.filter = Optional.of(scanFilter);
+        }
+        else {
+            this.filter = Optional.empty();
+        }
         this.filtered = new Bitmap(this.BatchSize, true);
         this.tmp = new Bitmap(this.BatchSize, false);
 

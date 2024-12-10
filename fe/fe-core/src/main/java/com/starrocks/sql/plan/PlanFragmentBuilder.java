@@ -1303,6 +1303,7 @@ public class PlanFragmentBuilder {
 
             pixelsScanNode.setLimit(node.getLimit());
             pixelsScanNode.setDataCacheOptions(node.getDataCacheOptions());
+            pixelsScanNode.createPixelsTableFilters();
 
             tupleDescriptor.computeMemLayout();
             context.getScanNodes().add(pixelsScanNode);

@@ -479,7 +479,10 @@ std::string EsTableDescriptor::debug_string() const {
     return out.str();
 }
 
-PixelsTableDescriptor::PixelsTableDescriptor(const TTableDescriptor& tdesc) : TableDescriptor(tdesc) {}
+PixelsTableDescriptor::PixelsTableDescriptor(const TTableDescriptor& tdesc)
+        : TableDescriptor(tdesc),
+        _column_names(tdesc.pixelsTable.pixels_column_names),
+        _column_types(tdesc.pixelsTable.pixels_column_types) {}
 
 PixelsTableDescriptor::~PixelsTableDescriptor() = default;
 

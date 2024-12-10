@@ -81,10 +81,50 @@ Status PixelsScanner::_init_column_name(RuntimeState* state) {
 }
 
 // TODO: complete
-Status PixelsScanner::update_jni_scanner_params(const TPixelsScanRange& scan_range) {
+Status PixelsScanner::update_jni_scanner_params() {
     // update materialized columns.
 
-    _jni_scanner_params["storage_schema"] = scan_range.storage_schema;
+    const auto* pixels_table = dynamic_cast<const PixelsTableDescriptor*>(_tuple_desc->table_desc());
+
+    std::string column_names;
+
+    for (const auto& column_name : pixels_table->column_names()) {
+        column_names.append(column_name);
+        column_names.append(",");
+    }
+    if (!column_names.empty()) {
+        column_names = column_names.substr(0, column_names.size() - 1);
+    }
+
+    _jni_scanner_params["column_names"] = column_names;
+
+    std::string column_types;
+
+    for (const auto& column_type : pixels_table->column_types()) {
+        column_types.append(column_type);
+        column_types.append("&");
+    }
+    if (!column_types.empty()) {
+        column_types = column_types.substr(0, column_types.size() - 1);
+    }
+
+    _jni_scanner_params["column_types"] = column_types;
+
+    _jni_scanner_params["storage_schema"] = _scan_range.storage_schema;
+    _jni_scanner_params["schema_name"] = _scan_range.schema_name;
+    _jni_scanner_params["table_name"] = _scan_range.table_name;
+
+    std::string filters;
+
+    for (const auto& filter : _scan_node.filters) {
+        filters.append(filter);
+        filters.append("&");
+    }
+    if (!filters.empty()) {
+        filters = filters.substr(0, filters.size() - 1);
+    }
+
+    _jni_scanner_params["filters"] = filters;
 
     std::string required_fields;
     for (const auto& slot_desc : _slot_descs) {
@@ -95,11 +135,10 @@ Status PixelsScanner::update_jni_scanner_params(const TPixelsScanRange& scan_ran
         required_fields = required_fields.substr(0, required_fields.size() - 1);
     }
 
-
     _jni_scanner_params["required_fields"] = required_fields;
 
     std::string paths;
-    for (const auto& path : scan_range.paths) {
+    for (const auto& path : _scan_range.paths) {
         paths.append(path);
         paths.append(",");
     }
@@ -109,24 +148,24 @@ Status PixelsScanner::update_jni_scanner_params(const TPixelsScanRange& scan_ran
 
     _jni_scanner_params["paths"] = paths;
 
-    std::string column_types;
-    for (const auto& type : scan_range.column_type_order) {
-        column_types.append(type);
-        column_types.append(",");
+    std::string required_column_types;
+    for (const auto& type : _scan_range.column_type_order) {
+        required_column_types.append(type);
+        required_column_types.append(",");
     }
-    if (!column_types.empty()) {
-        column_types = column_types.substr(0, column_types.size() - 1);
+    if (!required_column_types.empty()) {
+        required_column_types = required_column_types.substr(0, required_column_types.size() - 1);
     }
 
-    _jni_scanner_params["column_types"] = column_types;
+    _jni_scanner_params["required_column_types"] = required_column_types;
 
     return Status::OK();
 }
 
 
-Status PixelsScanner::open(RuntimeState* state, const TPixelsScanRange& scan_range) {
+Status PixelsScanner::open(RuntimeState* state) {
     RETURN_IF_ERROR(detect_java_runtime());
-    RETURN_IF_ERROR(update_jni_scanner_params(scan_range));
+    RETURN_IF_ERROR(update_jni_scanner_params());
 
     auto& h = JVMFunctionHelper::getInstance();
     auto* env = h.getEnv();
