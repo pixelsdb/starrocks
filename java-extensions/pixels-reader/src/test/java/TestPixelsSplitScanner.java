@@ -31,6 +31,7 @@ public class TestPixelsSplitScanner {
     @Test
     public void testPredicateParser() {
         String[] testQueries = {
+                "5: o_orderdate >= '1993-07-01'",
                 "age = 25",                    // 整数
                 "price <= 199.99",              // 小数
                 "weight > 1E3",                 // 科学计数法

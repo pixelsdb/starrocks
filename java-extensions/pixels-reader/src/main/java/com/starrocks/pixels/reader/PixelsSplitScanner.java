@@ -112,15 +112,16 @@ public class PixelsSplitScanner {
 //            System.out.println(columnTypes[i]);
         }
 
-        if(filters.length > 0) {
-            TableScanFilter scanFilter = PixelsPredicateUtils.createTableScanFilter(
-                                        schemaName, tableName,
-                                        filters, colNameToType, this.includeCols);
-                                this.filter = Optional.of(scanFilter);
-        }
-        else {
-            this.filter = Optional.empty();
-        }
+//        if(filters.length > 0) {
+//            TableScanFilter scanFilter = PixelsPredicateUtils.createTableScanFilter(
+//                                        schemaName, tableName,
+//                                        filters, colNameToType, this.includeCols);
+//                                this.filter = Optional.of(scanFilter);
+//        }
+//        else {
+//            this.filter = Optional.empty();
+//        }
+        this.filter = Optional.empty();
         this.filtered = new Bitmap(this.BatchSize, true);
         this.tmp = new Bitmap(this.BatchSize, false);
 

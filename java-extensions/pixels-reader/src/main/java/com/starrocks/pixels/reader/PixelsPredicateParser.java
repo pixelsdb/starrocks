@@ -8,7 +8,7 @@ public class PixelsPredicateParser {
     // 定义正则表达式，匹配列名、比较符和数字
 //    private static final String PREDICATE_REGEX = "(\\w+)\\s*(<=|>=|=|!=|<|>)\\s*([0-9]*\\.?[0-9]+)";
 //    private static final String PREDICATE_REGEX =  "(\\w+)\\s*(=|!=|>|<|>=|<=|LIKE|IN)\\s*(\\S+)";
-    private static final String PREDICATE_REGEX = "(\\w+)\\s*(=|!=|>|<|>=|<=|LIKE|IN|like|in)\\s*(\\(.*?\\)|'[^']*'|\"[^\"]*\"|\\S+)";
+    private static final String PREDICATE_REGEX = "(\\w+)\\s*(=|!=|<>|>|<|>=|<=|LIKE|IN|like|in)\\s*(\\(.*?\\)|'[^']*'|\"[^\"]*\"|\\S+)";
 
     public static enum BinaryType {
         EQ("=", "eq", false),
@@ -56,6 +56,7 @@ public class PixelsPredicateParser {
                 case "=":
                     this.operator = BinaryType.EQ;
                     break;
+                case "<>":
                 case "!=":
                     this.operator = BinaryType.NE;
                     break;
@@ -85,6 +86,7 @@ public class PixelsPredicateParser {
             if(value.length() > 0 && (value.startsWith("'") || value.startsWith("\""))) {
                     this.value = value.replaceFirst("^['\"]", "").replaceFirst("['\"]$", "");
             }
+            System.out.println(value);
         }
 
         @Override
@@ -117,18 +119,23 @@ public class PixelsPredicateParser {
         Pattern pattern = Pattern.compile(PREDICATE_REGEX);
         Matcher matcher = pattern.matcher(predicate.trim());
 
+//        System.out.println("PREDICATE" + predicate);
+
         if (matcher.matches()) {
             String column = matcher.group(1);   // 列名
             String operator = matcher.group(2); // 比较符
-            String number = matcher.group(3);   //
+            String value = matcher.group(3);   //
+//            System.out.println("col, " + column);
+//            System.out.println("op, " + operator);
+//            System.out.println("val, " + value);
 
-            System.out.println(column);
+//            System.out.println(column);
 
             if(column.endsWith(")")) {
                 column = column.substring(0, column.length() - 1);
             }
 
-            return new ParsedPredicate(column, operator, number);
+            return new ParsedPredicate(column, operator, value);
         } else {
             throw new IllegalArgumentException("Invalid predicate format: " + predicate);
         }

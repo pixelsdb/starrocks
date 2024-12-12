@@ -319,7 +319,7 @@ public class RuleSet {
                 PushDownPredicateScanRule.DELTALAKE_SCAN,
                 PushDownPredicateScanRule.FILE_SCAN,
                 PushDownPredicateScanRule.PAIMON_SCAN,
-                PushDownPredicateScanRule.PIXELS_SCAN,
+//                PushDownPredicateScanRule.PIXELS_SCAN,
                 PushDownPredicateScanRule.ICEBERG_METADATA_SCAN,
                 PushDownPredicateScanRule.KUDU_SCAN,
                 PushDownPredicateScanRule.SCHEMA_SCAN,
