@@ -241,11 +241,6 @@ Status PixelsScanner::_init_pixels_table_scanner(JNIEnv* env, RuntimeState* runt
     DCHECK(_jni_scanner_obj != nullptr);
     RETURN_IF_ERROR(_check_jni_exception(env, "Failed to initialize a scanner instance."));
 
-    // jmethodID get_string = env->GetMethodID(_jni_scanner_cls, "getString", "()Ljava/lang/String;");
-    // jstring jstr = (jstring) env->CallObjectMethod(_jni_scanner_obj, get_string);
-    // const char *cstr = env->GetStringUTFChars(jstr, nullptr);
-    // std::cout << "Returned string: " << cstr << std::endl;
-
     // init jmethod
     _scanner_has_next = env->GetMethodID(_jni_scanner_cls, "hasNext", "()Z");
     _scanner_get_next_chunk = env->GetMethodID(_jni_scanner_cls, "getNextChunk", "()Ljava/util/List;");
@@ -257,9 +252,6 @@ Status PixelsScanner::_init_pixels_table_scanner(JNIEnv* env, RuntimeState* runt
 Status PixelsScanner::close() {
     JNIEnv* env = JVMFunctionHelper::getInstance().getEnv();
     if (_jni_scanner_obj != nullptr) {
-        // if (_jni_scanner_close != nullptr) {
-        //     env->CallVoidMethod(_jni_scanner_obj, _jni_scanner_close);
-        // }
         env->DeleteLocalRef(_jni_scanner_obj);
         _jni_scanner_obj = nullptr;
     }
@@ -283,11 +275,7 @@ Status PixelsScanner::get_next(RuntimeState* state, ChunkPtr* chunk, bool* eos) 
         *eos = true;
         return Status::OK();
     }
-    // start = std::chrono::high_resolution_clock::now();
     RETURN_IF_ERROR(_fill_chunk(jchunk, jchunk_rows, chunk));
-    // end = std::chrono::high_resolution_clock::now();
-    // elapsed = end - start;
-    // std::cout << "_fill_chunk Elapsed time: " << elapsed.count() << "s\n";
     return Status::OK();
 }
 
@@ -312,8 +300,6 @@ Status PixelsScanner::_fill_chunk(jobject jchunk, size_t num_rows, ChunkPtr* chu
             jobject jcolumn = helper.list_get(jchunk, i);
             LOCAL_REF_GUARD_ENV(env, jcolumn);
             auto& result_column = _result_chunk->columns()[i];
-            // std::cout << "TYPE: " << _result_column_types[i] << std::endl;
-            // std::cout << "RES_COL_ADDRESS: " << result_column.get() << std::endl;
             auto st =
                     helper.get_result_from_boxed_array(_result_column_types[i], result_column.get(), jcolumn, num_rows);
             RETURN_IF_ERROR(st);
@@ -343,8 +329,5 @@ Status PixelsScanner::_fill_chunk(jobject jchunk, size_t num_rows, ChunkPtr* chu
     }
     return Status::OK();
 }
-
-
-
 
 } // starrocks
