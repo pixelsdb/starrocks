@@ -367,9 +367,6 @@ public class UDFHelper {
     }
 
     public static void getDecimalResult(int numRows, Long[] column, long columnAddr) {
-//        for(int i = 0; i < numRows; ++i) {
-//            putDecimal64(i, column[i].scale(), column[i], columnAddr);
-//        }
         byte[] nulls = new byte[numRows];
         long[] dataArr = new long[numRows];
         for (int i = 0; i < numRows; i++) {
@@ -428,8 +425,6 @@ public class UDFHelper {
             }
             case TYPE_DECIMAL:
             case TYPE_DECIMAL64: {
-                // getDecimalBoxedResult
-//                getDecimalResult(numRows, (BigDecimal[]) boxedResult, columnAddr);
                 getDecimalResult(numRows, (Long[]) boxedResult, columnAddr);
                 break;
             }

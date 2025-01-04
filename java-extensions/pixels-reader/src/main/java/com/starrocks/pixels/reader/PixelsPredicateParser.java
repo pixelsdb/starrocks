@@ -1,4 +1,19 @@
+// Copyright 2024 PixelsDB. All rights reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     https://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package com.starrocks.pixels.reader;
+
 import java.util.HashSet;
 import java.util.Set;
 import java.util.regex.*;
@@ -6,8 +21,6 @@ import java.util.regex.*;
 public class PixelsPredicateParser {
 
     // 定义正则表达式，匹配列名、比较符和数字
-//    private static final String PREDICATE_REGEX = "(\\w+)\\s*(<=|>=|=|!=|<|>)\\s*([0-9]*\\.?[0-9]+)";
-//    private static final String PREDICATE_REGEX =  "(\\w+)\\s*(=|!=|>|<|>=|<=|LIKE|IN)\\s*(\\S+)";
     private static final String PREDICATE_REGEX = "(\\w+)\\s*(=|!=|<>|>|<|>=|<=|LIKE|IN|like|in)\\s*(\\(.*?\\)|'[^']*'|\"[^\"]*\"|\\S+)";
 
     public static enum BinaryType {
@@ -51,7 +64,6 @@ public class PixelsPredicateParser {
 
         public ParsedPredicate(String column, String operator, String value) {
             this.column = column;
-//            System.out.println(operator);
             switch (operator.toUpperCase()) {
                 case "=":
                     this.operator = BinaryType.EQ;
@@ -110,26 +122,17 @@ public class PixelsPredicateParser {
 
     // 解析单个谓词的方法
     public static ParsedPredicate parsePredicate(String predicate) {
-//        System.out.println(predicate);
         if(predicate.contains((":"))) {
             predicate = predicate.split(":")[1];
         }
-//        System.out.println(predicate);
 
         Pattern pattern = Pattern.compile(PREDICATE_REGEX);
         Matcher matcher = pattern.matcher(predicate.trim());
 
-//        System.out.println("PREDICATE" + predicate);
-
         if (matcher.matches()) {
             String column = matcher.group(1);   // 列名
             String operator = matcher.group(2); // 比较符
-            String value = matcher.group(3);   //
-//            System.out.println("col, " + column);
-//            System.out.println("op, " + operator);
-//            System.out.println("val, " + value);
-
-//            System.out.println(column);
+            String value = matcher.group(3);
 
             if(column.endsWith(")")) {
                 column = column.substring(0, column.length() - 1);

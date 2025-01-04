@@ -1,3 +1,17 @@
+// Copyright 2024 PixelsDB. All rights reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     https://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package com.starrocks.pixels.reader;
 
 import com.starrocks.jni.connector.ScannerHelper;
@@ -6,20 +20,16 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
 import io.pixelsdb.pixels.common.physical.Storage;
 import io.pixelsdb.pixels.common.physical.StorageFactory;
-import io.pixelsdb.pixels.common.utils.ConfigFactory;
 import io.pixelsdb.pixels.core.PixelsFooterCache;
 import io.pixelsdb.pixels.core.PixelsReader;
 import io.pixelsdb.pixels.core.PixelsReaderImpl;
-import io.pixelsdb.pixels.core.TypeDescription;
 import io.pixelsdb.pixels.core.reader.PixelsReaderOption;
 import io.pixelsdb.pixels.core.reader.PixelsRecordReader;
 import io.pixelsdb.pixels.core.utils.Bitmap;
@@ -54,8 +64,6 @@ public class PixelsSplitScanner {
 
     public PixelsSplitScanner(int fetchSize, Map<String, String> params) {
         this.BatchSize = fetchSize;
-//        System.out.println("batchsize");
-//        System.out.println(this.BatchSize);
         this.classLoader = this.getClass().getClassLoader();
 
         try {
@@ -68,13 +76,6 @@ public class PixelsSplitScanner {
 
         String[] paths = ScannerHelper.splitAndOmitEmptyStrings(params.get("paths"), ",");
         this.paths = paths;
-//        this.paths = new String[paths.length];
-//        int pathCount = 0;
-//        for (String path: paths) {
-//            if(path.startsWith("file://")) {
-//                this.paths[pathCount++] = path.substring(7);
-//            }
-//        }
         this.colTypes = ScannerHelper.splitAndOmitEmptyStrings(params.get("required_column_types"), ",");
 
         String[] scanColumns = ScannerHelper.splitAndOmitEmptyStrings(params.get("required_fields"), ",");
@@ -93,23 +94,13 @@ public class PixelsSplitScanner {
         this.includeCols = mergeList.toArray(new String[0]);
         this.numColumnToRead = includeCols.length;
         // TODO: add filter/predicate(constraint)
-//        if (split.getConstraint().getDomains().isPresent())
-//        {
-//            TableScanFilter scanFilter = PixelsSplitManager.createTableScanFilter(
-//                    split.getSchemaName(), split.getTableName(),
-//                    includeCols, split.getConstraint());
-//            this.filter = Optional.of(scanFilter);
-//        } else
-//        System.out.println(params.get("column_types"));
+
         String[] columnNames = ScannerHelper.splitAndOmitEmptyStrings(params.get("column_names"), ",");
         String[] columnTypes = ScannerHelper.splitAndOmitEmptyStrings(params.get("column_types"), "&");
-
 
         Map<String, String> colNameToType = new HashMap<>();
         for (int i = 0; i < columnNames.length; ++i) {
             colNameToType.put(columnNames[i], columnTypes[i]);
-//            System.out.println(columnNames[i]);
-//            System.out.println(columnTypes[i]);
         }
 
 //        if(filters.length > 0) {
@@ -203,7 +194,6 @@ public class PixelsSplitScanner {
         {
             if (this.storage != null)
             {
-//                System.out.println(this.getPath());
                 // TODO: add cache
                 this.pixelsReader = PixelsReaderImpl
                         .newBuilder()
@@ -288,7 +278,6 @@ public class PixelsSplitScanner {
     }
 
     public List<Object[]> getNextChunk() throws Exception {
-//        System.out.println("invoke getNextChunk");
         if (!this.blocked.isDone())
         {
             return null;
@@ -308,8 +297,6 @@ public class PixelsSplitScanner {
         int rowBatchSize = 0;
 
         List<Object[]> resultChunk = new ArrayList<>(this.numColumnToRead);
-//        System.out.println("NUMCOL");
-//        System.out.println(this.numColumnToRead);
 
         if (this.numColumnToRead > 0)
         {
@@ -341,18 +328,9 @@ public class PixelsSplitScanner {
                 for (int fieldId = 0; fieldId < numColumnToRead; ++fieldId)
                 {
 
-//                    String type = this.colTypes[fieldId];
                     ColumnVector vector = rowBatch.cols[fieldId];
 
                     Object[] dataColumn = PixelsScannerUtils.getObjectArrayFromPixelsVector(vector, rowBatchSize);
-//                    if(dataColumn == null) {
-//                        dataColumn = new Object[rowBatchSize];
-//                        System.out.println("col: " + includeCols[fieldId] + ", type: " + type + " is null");
-//                    }
-//                    System.out.println("col: " + includeCols[fieldId] + ", type: " + type + ", length: " + dataColumn.length);
-//                    for (Object o : dataColumn) {
-//                        System.out.println(o);
-//                    }
 
                     this.resultNumRows = rowBatchSize;
                     resultChunk.add(dataColumn);

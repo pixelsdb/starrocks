@@ -1,8 +1,5 @@
 package com.starrocks.pixels.reader;
 
-import io.pixelsdb.pixels.common.exception.MetadataException;
-import io.pixelsdb.pixels.common.metadata.MetadataService;
-import io.pixelsdb.pixels.common.metadata.domain.Column;
 import io.pixelsdb.pixels.core.TypeDescription;
 import io.pixelsdb.pixels.core.utils.Decimal;
 import io.pixelsdb.pixels.executor.predicate.Bound;
@@ -10,14 +7,11 @@ import io.pixelsdb.pixels.executor.predicate.ColumnFilter;
 import io.pixelsdb.pixels.executor.predicate.Filter;
 import io.pixelsdb.pixels.executor.predicate.TableScanFilter;
 
-import java.math.BigDecimal;
-import java.nio.charset.StandardCharsets;
 import java.sql.Date;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.SortedMap;
 import java.util.TreeMap;
 
