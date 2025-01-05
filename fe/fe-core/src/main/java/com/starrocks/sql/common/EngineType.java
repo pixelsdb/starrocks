@@ -27,6 +27,7 @@ public enum EngineType {
     ICEBERG,
     HUDI,
     JDBC,
+    PIXELS,
     ODPS,
     FILE;
 

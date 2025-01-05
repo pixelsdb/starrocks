@@ -22,6 +22,7 @@ import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.math.BigDecimal;
 import java.math.BigInteger;
+import java.math.RoundingMode;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.IntBuffer;
@@ -49,11 +50,15 @@ public class UDFHelper {
     public static final int TYPE_BIGINT = 7;
     public static final int TYPE_FLOAT = 10;
     public static final int TYPE_DOUBLE = 11;
+    public static final int TYPE_CHAR = 13;
+    public static final int TYPE_DECIMAL = 16;
     public static final int TYPE_VARCHAR = 17;
     public static final int TYPE_ARRAY = 19;
+//    public static final int FE_DECIMAL32 = 21;
     public static final int TYPE_BOOLEAN = 24;
     public static final int TYPE_TIME = 44;
     public static final int TYPE_VARBINARY = 46;
+    public static final int TYPE_DECIMAL64 = 48;
     public static final int TYPE_DATE = 50;
     public static final int TYPE_DATETIME = 51;
 
@@ -357,6 +362,29 @@ public class UDFHelper {
         copyDataToBinaryColumn(numRows, byteRes, offsets, nulls, columnAddr);
     }
 
+    private static void getDateResult(int numRows, Integer[] column, long columnAddr) {
+        getIntBoxedResult(numRows, column, columnAddr);
+    }
+
+    public static void getDecimalResult(int numRows, Long[] column, long columnAddr) {
+        byte[] nulls = new byte[numRows];
+        long[] dataArr = new long[numRows];
+        for (int i = 0; i < numRows; i++) {
+            if (column[i] == null) {
+                nulls[i] = 1;
+            } else {
+                dataArr[i] = column[i];
+            }
+        }
+
+        final long[] addrs = getAddrs(columnAddr);
+        // memcpy to uint8_t array
+        Platform.copyMemory(nulls, Platform.BYTE_ARRAY_OFFSET, null, addrs[0], numRows);
+        // memcpy to long array
+        Platform.copyMemory(dataArr, Platform.INT_ARRAY_OFFSET, null, addrs[1], numRows * 8L);
+    }
+
+
     public static void getResultFromBoxedArray(int type, int numRows, Object boxedResult, long columnAddr) {
         switch (type) {
             case TYPE_BOOLEAN: {
@@ -391,6 +419,15 @@ public class UDFHelper {
                 getDoubleTimeResult(numRows, (Time[]) boxedResult, columnAddr);
                 break;
             }
+            case TYPE_DATE: {
+                getDateResult(numRows, (Integer[]) boxedResult, columnAddr);
+                break;
+            }
+            case TYPE_DECIMAL:
+            case TYPE_DECIMAL64: {
+                getDecimalResult(numRows, (Long[]) boxedResult, columnAddr);
+                break;
+            }
             case TYPE_VARCHAR: {
                 if (boxedResult instanceof Date[]) {
                     getStringDateResult(numRows, (Date[]) boxedResult, columnAddr);
@@ -405,6 +442,14 @@ public class UDFHelper {
                 } else if (boxedResult instanceof BigInteger[]) {
                     getStringLargeIntResult(numRows, (BigInteger[]) boxedResult, columnAddr);
                 } else if (boxedResult instanceof String[]) {
+                    getStringBoxedResult(numRows, (String[]) boxedResult, columnAddr);
+                } else {
+                    throw new UnsupportedOperationException("unsupported type:" + boxedResult);
+                }
+                break;
+            }
+            case TYPE_CHAR: {
+                if (boxedResult instanceof String[]) {
                     getStringBoxedResult(numRows, (String[]) boxedResult, columnAddr);
                 } else {
                     throw new UnsupportedOperationException("unsupported type:" + boxedResult);

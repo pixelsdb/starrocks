@@ -479,6 +479,19 @@ std::string EsTableDescriptor::debug_string() const {
     return out.str();
 }
 
+PixelsTableDescriptor::PixelsTableDescriptor(const TTableDescriptor& tdesc)
+        : TableDescriptor(tdesc),
+        _column_names(tdesc.pixelsTable.pixels_column_names),
+        _column_types(tdesc.pixelsTable.pixels_column_types) {}
+
+PixelsTableDescriptor::~PixelsTableDescriptor() = default;
+
+std::string PixelsTableDescriptor::debug_string() const {
+    std::stringstream out;
+    out << "PixelsTable(" << TableDescriptor::debug_string() << ")";
+    return out.str();
+}
+
 MySQLTableDescriptor::MySQLTableDescriptor(const TTableDescriptor& tdesc)
         : TableDescriptor(tdesc),
           _mysql_db(tdesc.mysqlTable.db),
@@ -686,6 +699,9 @@ Status DescriptorTbl::create(RuntimeState* state, ObjectPool* pool, const TDescr
             break;
         case TTableType::ES_TABLE:
             desc = pool->add(new EsTableDescriptor(tdesc));
+            break;
+        case TTableType::PIXELS_TABLE:
+            desc = pool->add(new PixelsTableDescriptor(tdesc));
             break;
         case TTableType::HDFS_TABLE: {
             auto* hdfs_desc = pool->add(new HdfsTableDescriptor(tdesc, pool));

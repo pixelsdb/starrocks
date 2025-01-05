@@ -45,6 +45,7 @@ import com.starrocks.sql.optimizer.rule.implementation.NestLoopJoinImplementatio
 import com.starrocks.sql.optimizer.rule.implementation.OdpsScanImplementationRule;
 import com.starrocks.sql.optimizer.rule.implementation.OlapScanImplementationRule;
 import com.starrocks.sql.optimizer.rule.implementation.PaimonScanImplementationRule;
+import com.starrocks.sql.optimizer.rule.implementation.PixelsScanImplementationRule;
 import com.starrocks.sql.optimizer.rule.implementation.ProjectImplementationRule;
 import com.starrocks.sql.optimizer.rule.implementation.RepeatImplementationRule;
 import com.starrocks.sql.optimizer.rule.implementation.SchemaScanImplementationRule;
@@ -180,6 +181,7 @@ public class RuleSet {
             new HudiScanImplementationRule(),
             new DeltaLakeScanImplementationRule(),
             new PaimonScanImplementationRule(),
+            new PixelsScanImplementationRule(),
             new OdpsScanImplementationRule(),
             new IcebergMetadataScanImplementationRule(),
             new KuduScanImplementationRule(),
@@ -240,6 +242,7 @@ public class RuleSet {
                 MergeLimitDirectRule.DELTALAKE_SCAN,
                 MergeLimitDirectRule.FILE_SCAN,
                 MergeLimitDirectRule.PAIMON_SCAN,
+                MergeLimitDirectRule.PIXELS_SCAN,
                 MergeLimitDirectRule.ODPS_SCAN,
                 MergeLimitDirectRule.KUDU_SCAN,
                 MergeLimitDirectRule.SCHEMA_SCAN,
@@ -266,6 +269,7 @@ public class RuleSet {
                 ExternalScanPartitionPruneRule.FILE_SCAN,
                 ExternalScanPartitionPruneRule.ES_SCAN,
                 ExternalScanPartitionPruneRule.PAIMON_SCAN,
+                ExternalScanPartitionPruneRule.PIXELS_SCAN,
                 ExternalScanPartitionPruneRule.ODPS_SCAN,
                 ExternalScanPartitionPruneRule.KUDU_SCAN,
                 new LimitPruneTabletsRule()
@@ -285,6 +289,7 @@ public class RuleSet {
                 PruneHDFSScanColumnRule.PAIMON_SCAN,
                 PruneHDFSScanColumnRule.ODPS_SCAN,
                 PruneScanColumnRule.KUDU_SCAN,
+                PruneScanColumnRule.PIXELS_SCAN,
                 PruneScanColumnRule.JDBC_SCAN,
                 PruneScanColumnRule.BINLOG_SCAN,
                 new PruneProjectColumnsRule(),
@@ -314,6 +319,7 @@ public class RuleSet {
                 PushDownPredicateScanRule.DELTALAKE_SCAN,
                 PushDownPredicateScanRule.FILE_SCAN,
                 PushDownPredicateScanRule.PAIMON_SCAN,
+//                PushDownPredicateScanRule.PIXELS_SCAN,
                 PushDownPredicateScanRule.ICEBERG_METADATA_SCAN,
                 PushDownPredicateScanRule.KUDU_SCAN,
                 PushDownPredicateScanRule.SCHEMA_SCAN,
@@ -335,6 +341,7 @@ public class RuleSet {
 
                 PushDownPredicateToExternalTableScanRule.MYSQL_SCAN,
                 PushDownPredicateToExternalTableScanRule.JDBC_SCAN,
+//                PushDownPredicateToExternalTableScanRule.PIXELS_SCAN,
                 PushDownPredicateToExternalTableScanRule.ODPS_SCAN,
                 new MergeTwoFiltersRule(),
                 new PushDownPredicateCTEConsumeRule()
@@ -423,6 +430,7 @@ public class RuleSet {
         REWRITE_RULES.put(RuleSetType.PRUNE_EMPTY_OPERATOR, ImmutableList.of(
                 PruneEmptyScanRule.OLAP_SCAN,
                 PruneEmptyScanRule.HIVE_SCAN,
+                PruneEmptyScanRule.PIXELS_SCAN,
                 PruneEmptyScanRule.HUDI_SCAN,
                 PruneEmptyScanRule.ICEBERG_SCAN,
                 PruneEmptyScanRule.PAIMON_SCAN,

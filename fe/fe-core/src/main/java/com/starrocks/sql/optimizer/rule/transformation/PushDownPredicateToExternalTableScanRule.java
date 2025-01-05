@@ -45,6 +45,8 @@ public class PushDownPredicateToExternalTableScanRule extends TransformationRule
             new PushDownPredicateToExternalTableScanRule(OperatorType.LOGICAL_MYSQL_SCAN);
     public static final PushDownPredicateToExternalTableScanRule JDBC_SCAN =
             new PushDownPredicateToExternalTableScanRule(OperatorType.LOGICAL_JDBC_SCAN);
+//    public static final PushDownPredicateToExternalTableScanRule PIXELS_SCAN =
+//            new PushDownPredicateToExternalTableScanRule(OperatorType.LOGICAL_PIXELS_SCAN);
     public static final PushDownPredicateToExternalTableScanRule ODPS_SCAN =
             new PushDownPredicateToExternalTableScanRule(OperatorType.LOGICAL_ODPS_SCAN);
 

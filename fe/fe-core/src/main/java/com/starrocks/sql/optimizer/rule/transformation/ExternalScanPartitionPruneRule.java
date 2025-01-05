@@ -47,6 +47,8 @@ public class ExternalScanPartitionPruneRule extends TransformationRule {
             new ExternalScanPartitionPruneRule(OperatorType.LOGICAL_ES_SCAN);
     public static final ExternalScanPartitionPruneRule PAIMON_SCAN =
             new ExternalScanPartitionPruneRule(OperatorType.LOGICAL_PAIMON_SCAN);
+    public static final ExternalScanPartitionPruneRule PIXELS_SCAN =
+            new ExternalScanPartitionPruneRule(OperatorType.LOGICAL_PIXELS_SCAN);
     public static final ExternalScanPartitionPruneRule ODPS_SCAN =
             new ExternalScanPartitionPruneRule(OperatorType.LOGICAL_ODPS_SCAN);
     public static final ExternalScanPartitionPruneRule KUDU_SCAN =

@@ -42,6 +42,8 @@ public class StatisticsEstimateCoefficient {
     public static final int DEFAULT_ES_OUTPUT_ROWS = 5000;
     // default JDBC external table output rows, JDBC maybe is a distribute system
     public static final int DEFAULT_JDBC_OUTPUT_ROWS = 20000;
+    // pixels
+    public static final int DEFAULT_PIXELS_OUTPUT_ROWS = 2000;
     // if after aggregate row count * DEFAULT_AGGREGATE_EFFECT_COEFFICIENT < input row count,
     // the aggregate has good effect.
     public static final double LOW_AGGREGATE_EFFECT_COEFFICIENT = 1000;
