@@ -707,9 +707,6 @@ public class RelationTransformer implements AstVisitor<LogicalPlan, ExpressionMa
         } else if (Table.TableType.TABLE_FUNCTION.equals(node.getTable().getType())) {
             scanOperator = new LogicalTableFunctionTableScanOperator(node.getTable(), colRefToColumnMetaMapBuilder.build(),
                     columnMetaToColRefMap, Operator.DEFAULT_LIMIT, null);
-        } else if (Table.TableType.PIXELS.equals(node.getTable().getType())) {
-            scanOperator = new LogicalPixelsScanOperator(node.getTable(), colRefToColumnMetaMapBuilder.build(),
-                    columnMetaToColRefMap, Operator.DEFAULT_LIMIT, null);
         }
         else {
             throw new StarRocksPlannerException("Not support table type: " + node.getTable().getType(),
