@@ -247,7 +247,7 @@ public class PixelsMetadata implements ConnectorMetadata {
             throw new RuntimeException(e);
         }
         List<RemoteFileDesc> remoteFileDescs = ImmutableList.of(
-                PixelsRemoteFileDesc.createPamonRemoteFileDesc(pixelsLayouts));
+                PixelsRemoteFileDesc.createPixelsRemoteFileDesc(pixelsLayouts));
         remoteFileInfo.setFiles(remoteFileDescs);
         return Lists.newArrayList(remoteFileInfo);
     }

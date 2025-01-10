@@ -27,7 +27,7 @@ public class PixelsRemoteFileDesc extends RemoteFileDesc {
         this.pixelsLayouts = pixelsLayouts;
     }
 
-    public static PixelsRemoteFileDesc createPamonRemoteFileDesc(List<Layout> pixelsLayouts) {
+    public static PixelsRemoteFileDesc createPixelsRemoteFileDesc(List<Layout> pixelsLayouts) {
         return new PixelsRemoteFileDesc(pixelsLayouts);
     }
 
