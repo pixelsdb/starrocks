@@ -255,7 +255,7 @@ Status PixelsScanner::_init_pixels_table_scanner(JNIEnv* env, RuntimeState* runt
         env->DeleteLocalRef(value);
     }
     env->DeleteLocalRef(hashmap_class);
-    LOG(INFO) << message;
+    // LOG(INFO) << message;
 
     int fetch_size = runtime_state->chunk_size();
     _jni_scanner_obj = env->NewObject(_jni_scanner_cls, scanner_constructor, fetch_size, hashmap_object);

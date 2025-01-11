@@ -100,6 +100,10 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
             .setObjectToNumberStrategy(ToNumberPolicy.LONG_OR_DOUBLE) // explicit default, may be omitted
             .create();
 
+    public static final String ENABLE_PIXELS_ORDERED_PATH = "enable_pixels_ordered_path";
+    public static final String ENABLE_PIXELS_COMPACT_PATH = "enable_pixels_compact_path";
+    public static final String PIXELS_FIXED_SPLIT_SIZE = "pixels_fixed_split_size";
+
     public static final String USE_COMPUTE_NODES = "use_compute_nodes";
     public static final String PREFER_COMPUTE_NODE = "prefer_compute_node";
     // The schedule policy of backend and compute nodes.
@@ -818,6 +822,15 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
 
     @VariableMgr.VarAttr(name = ENABLE_LOCAL_SHUFFLE_AGG)
     private boolean enableLocalShuffleAgg = true;
+
+    @VariableMgr.VarAttr(name = ENABLE_PIXELS_ORDERED_PATH)
+    private boolean enablePixelsOrderedPath = false;
+
+    @VariableMgr.VarAttr(name = ENABLE_PIXELS_COMPACT_PATH)
+    private boolean enablePixelsCompactPath = true;
+
+    @VariableMgr.VarAttr(name = PIXELS_FIXED_SPLIT_SIZE)
+    private int pixelsFixedSplitSize = -1;
 
     @VariableMgr.VarAttr(name = USE_COMPUTE_NODES)
     private int useComputeNodes = -1;
@@ -2372,6 +2385,30 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
 
     public void setEnableAnalyzePhasePruneColumns(boolean enableAnalyzePhasePruneColumns) {
         this.enableAnalyzePhasePruneColumns = enableAnalyzePhasePruneColumns;
+    }
+
+    public boolean isEnablePixelsOrderedPath() {
+        return enablePixelsOrderedPath;
+    }
+
+    public void setEnablePixelsOrderedPath(boolean enablePixelsOrderedPath) {
+        this.enablePixelsOrderedPath = enablePixelsOrderedPath;
+    }
+
+    public boolean isEnablePixelsCompactPath() {
+        return enablePixelsCompactPath;
+    }
+
+    public void setEnablePixelsCompactPath(boolean enablePixelsCompactPath) {
+        this.enablePixelsCompactPath = enablePixelsCompactPath;
+    }
+
+    public int getPixelsFixedSplitSize() {
+        return pixelsFixedSplitSize;
+    }
+
+    public void setPixelsFixedSplitSize(int pixelsFixedSplitSize) {
+        this.pixelsFixedSplitSize = pixelsFixedSplitSize;
     }
 
     public int getUseComputeNodes() {

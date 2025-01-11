@@ -303,7 +303,7 @@ public class PixelsSplitScanner {
             try
             {
                 do
-                {
+                {   
                     rowBatch = recordReader.readBatch(BatchSize, false);
                     if (rowBatch.size <= 0)
                     {

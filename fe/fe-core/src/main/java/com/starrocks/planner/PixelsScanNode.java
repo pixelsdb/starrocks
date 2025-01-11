@@ -22,6 +22,7 @@ import com.starrocks.analysis.Analyzer;
 import com.starrocks.analysis.DescriptorTable;
 import com.starrocks.analysis.Expr;
 import com.starrocks.analysis.ExprSubstitutionMap;
+import com.starrocks.analysis.SlotDescriptor;
 import com.starrocks.analysis.SlotRef;
 import com.starrocks.analysis.TupleDescriptor;
 import com.starrocks.catalog.PixelsTable;
@@ -67,6 +68,7 @@ import org.apache.logging.log4j.Logger;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
@@ -84,17 +86,19 @@ public class PixelsScanNode extends ScanNode {
     private Multimap<String, ComputeNode> nodeMap;
     private List<ComputeNode> nodeList;
     private final PixelsTable pixelsTable;
+    private final List<SlotDescriptor> slots;
     private final List<TScanRangeLocations> scanRangeLocationsList = new ArrayList<>();
     private final ConfigFactory configFactory = ConfigFactory.Instance();
     private final MetadataService metadataService = MetadataService.Instance();
     private final List<String> filters = new ArrayList<>();
     private final int fixedSplitSize = Integer.parseInt(configFactory.getProperty("fixed.split.size"));
-    private final boolean orderedPathEnabled = Boolean.parseBoolean(configFactory.getProperty("executor.ordered.layout.enabled"));;
-    private final boolean compactPathEnabled = Boolean.parseBoolean(configFactory.getProperty("executor.compact.layout.enabled"));;
+    private final boolean orderedPathEnabled =  Boolean.parseBoolean(configFactory.getProperty("executor.ordered.layout.enabled"));
+    private final boolean compactPathEnabled =  Boolean.parseBoolean(configFactory.getProperty("executor.compact.layout.enabled"));
 
     public PixelsScanNode(PlanNodeId id, TupleDescriptor desc, String planNodeName) {
         super(id, desc, planNodeName);
         this.pixelsTable = (PixelsTable) desc.getTable();
+        this.slots = desc.getSlots();
         try {
             assignNodes();
         } catch (UserException e) {
@@ -241,9 +245,9 @@ public class PixelsScanNode extends ScanNode {
         }
 
         // get splits from layout, currently only implement orderedPath
-        boolean orderedPathEnabled = this.orderedPathEnabled;
+        boolean orderedPathEnabled =  context.getConnectContext().getSessionVariable().isEnablePixelsOrderedPath();
         // TODO: add compactPath split
-        boolean compactPathEnabled = this.compactPathEnabled;
+        boolean compactPathEnabled =  context.getConnectContext().getSessionVariable().isEnablePixelsCompactPath();
 
         // one layout correspond to one scanRange
         for (Layout layout : layouts)
@@ -253,17 +257,21 @@ public class PixelsScanNode extends ScanNode {
             SchemaTableName schemaTableName = new SchemaTableName(schemaName, tableName);
             Ordered ordered = layout.getOrdered();
             ColumnSet columnSet = new ColumnSet();
-            for(String columnName: context.getColNames()) {
+            for(SlotDescriptor slot: this.slots) {
+                String columnName = slot.getColumn().getName();
                 columnSet.addColumn(columnName);
             }
 
             // get split size, currently fixed
             // TODO: add dynamic split schema
-            int splitSize = 1;
+            int splitSize;
             Splits splits = layout.getSplits();
-            if (this.fixedSplitSize > 0)
+
+            int fixedSplitSize = context.getConnectContext().getSessionVariable().getPixelsFixedSplitSize();
+            if (fixedSplitSize <= 0) fixedSplitSize = this.fixedSplitSize;
+            if (fixedSplitSize > 0)
             {
-                splitSize = this.fixedSplitSize;
+                splitSize = fixedSplitSize;
             }
             else
             {
@@ -321,13 +329,13 @@ public class PixelsScanNode extends ScanNode {
                             paths.add(orderedFilePaths.get(i++));
                         }
 
-//                        List<Location> locations = null;
-//                        try {
-//                            locations = storage.getLocations(orderedFilePaths.get(firstPath));
-//                        } catch (IOException e) {
-//                            throw new RuntimeException(e);
-//                        }
-//                        List<TNetworkAddress> orderedAddresses = toTNetworkAddress(locations);
+                        List<Location> locations = null;
+                        try {
+                            locations = storage.getLocations(orderedFilePaths.get(firstPath));
+                        } catch (IOException e) {
+                            throw new RuntimeException(e);
+                        }
+                        List<TNetworkAddress> orderedAddresses = toTNetworkAddress(locations);
 
                         // addSplitScanRangeLocations
                         TScanRangeLocations scanRangeLocations = new TScanRangeLocations();
@@ -381,9 +389,77 @@ public class PixelsScanNode extends ScanNode {
                     }
 
                 }
+                // or add splits in compactPaths
                 else if(compactPathEnabled) {
                     List<String> compactFilePaths = getFilePaths(
                             layout.getCompactPaths(), metadataService);
+                    int curFileRGIdx;
+                    for (String path : compactFilePaths)
+                    {
+                        curFileRGIdx = 0;
+                        while (curFileRGIdx < rowGroupNum)
+                        {
+                            List<Location> locations = null;
+                            try {
+                                locations = storage.getLocations(path);
+                            } catch (IOException e) {
+                                throw new RuntimeException(e);
+                            }
+                            List<TNetworkAddress> compactAddresses = toTNetworkAddress(locations);
+
+                            // addSplitScanRangeLocations
+                            TScanRangeLocations scanRangeLocations = new TScanRangeLocations();
+                            TPixelsScanRange pixelsScanRange = new TPixelsScanRange();
+
+                            // pixelsScanRange.set(...)
+                            pixelsScanRange.setSplit_id(splitId++);
+                            pixelsScanRange.setSchema_name(schemaName);
+                            pixelsScanRange.setTable_name(tableName);
+                            pixelsScanRange.setStorage_schema(pixelsTable.getPixelsTable().getStorageScheme().name());
+                            pixelsScanRange.setPaths(Arrays.asList(path));
+                            pixelsScanRange.setRg_starts( Arrays.asList(curFileRGIdx));
+                            pixelsScanRange.setRg_lengths( Arrays.asList(splitSize));
+                            pixelsScanRange.setCached(false);
+                            pixelsScanRange.setEnsure_locality(storage.hasLocality());
+
+                            List<String> desiredColumns = context.getColNames();
+
+                            pixelsScanRange.setColumn_order(desiredColumns);
+                            pixelsScanRange.setCache_order(new ArrayList<>(0));
+
+                            List<String> columnTypeOrder = new ArrayList<>();
+                            for (String columnName : desiredColumns) {
+                                columnName = pixelsTable.getPixelsColumnType(columnName);
+                                if (columnName != null) {
+                                    columnTypeOrder.add(columnName);
+                                }
+                            }
+                            pixelsScanRange.setColumn_type_order(columnTypeOrder);
+
+
+                            // add attribute for pixels in thrift and set here
+                            int numNode = Math.min(3, nodeList.size());
+                            TScanRange scanRange = new TScanRange();
+                            scanRange.setPixels_scan_range(pixelsScanRange);
+                            scanRangeLocations.setScan_range(scanRange);
+
+                            List<ComputeNode> candidateNodeList = Lists.newArrayList();
+                            for (int k = 0; k < numNode; ++k) {
+                                candidateNodeList.add(nodeList.get(nodeIndex++ % nodeList.size()));
+                            }
+                            for (int k = 0; k < numNode && k < candidateNodeList.size(); ++k) {
+                                TScanRangeLocation scanRangeLocation = new TScanRangeLocation();
+                                ComputeNode be = candidateNodeList.get(k);
+                                scanRangeLocation.setBackend_id(be.getId());
+                                scanRangeLocation.setServer(new TNetworkAddress(be.getHost(), be.getBePort()));
+                                scanRangeLocations.addToLocations(scanRangeLocation);
+                            }
+
+                            scanRangeLocationsList.add(scanRangeLocations);
+
+                            curFileRGIdx += splitSize;
+                        }
+                    }
                 }
 
             } catch (MetadataException e) {
