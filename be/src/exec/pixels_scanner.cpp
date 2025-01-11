@@ -158,6 +158,28 @@ Status PixelsScanner::update_jni_scanner_params() {
 
     _jni_scanner_params["paths"] = paths;
 
+    std::string rg_starts;
+    for (const auto& rg_start: _scan_range.rg_starts) {
+        rg_starts.append(std::to_string(rg_start));
+        rg_starts.append(",");
+    }
+    if (!rg_starts.empty()) {
+        rg_starts = rg_starts.substr(0, rg_starts.size() - 1);
+    }
+
+    _jni_scanner_params["rg_starts"] = rg_starts;
+
+    std::string rg_lengths;
+    for (const auto& rg_length: _scan_range.rg_lengths) {
+        rg_lengths.append(std::to_string(rg_length));
+        rg_lengths.append(",");
+    }
+    if (!rg_lengths.empty()) {
+        rg_lengths = rg_lengths.substr(0, rg_lengths.size() - 1);
+    }
+
+    _jni_scanner_params["rg_lengths"] = rg_lengths;
+
     std::string required_column_types;
     for (const auto& type : _scan_range.column_type_order) {
         required_column_types.append(type);

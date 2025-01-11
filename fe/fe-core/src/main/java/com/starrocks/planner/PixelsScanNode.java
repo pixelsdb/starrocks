@@ -47,6 +47,10 @@ import com.starrocks.thrift.TScanRangeLocation;
 import com.starrocks.thrift.TScanRangeLocations;
 import io.pixelsdb.pixels.common.exception.MetadataException;
 import io.pixelsdb.pixels.common.layout.ColumnSet;
+import io.pixelsdb.pixels.common.layout.CostBasedSplitsIndex;
+import io.pixelsdb.pixels.common.layout.IndexFactory;
+import io.pixelsdb.pixels.common.layout.InvertedSplitsIndex;
+import io.pixelsdb.pixels.common.layout.SplitPattern;
 import io.pixelsdb.pixels.common.layout.SplitsIndex;
 import io.pixelsdb.pixels.common.metadata.MetadataService;
 import io.pixelsdb.pixels.common.metadata.SchemaTableName;
@@ -82,7 +86,11 @@ public class PixelsScanNode extends ScanNode {
     private final PixelsTable pixelsTable;
     private final List<TScanRangeLocations> scanRangeLocationsList = new ArrayList<>();
     private final ConfigFactory configFactory = ConfigFactory.Instance();
+    private final MetadataService metadataService = MetadataService.Instance();
     private final List<String> filters = new ArrayList<>();
+    private final int fixedSplitSize = Integer.parseInt(configFactory.getProperty("fixed.split.size"));
+    private final boolean orderedPathEnabled = Boolean.parseBoolean(configFactory.getProperty("executor.ordered.layout.enabled"));;
+    private final boolean compactPathEnabled = Boolean.parseBoolean(configFactory.getProperty("executor.compact.layout.enabled"));;
 
     public PixelsScanNode(PlanNodeId id, TupleDescriptor desc, String planNodeName) {
         super(id, desc, planNodeName);
@@ -186,6 +194,30 @@ public class PixelsScanNode extends ScanNode {
         return addressBuilder.build();
     }
 
+    private SplitsIndex buildSplitsIndex(long transId, long version, Ordered ordered,
+                                         Splits splits, SchemaTableName schemaTableName) throws MetadataException
+    {
+        List<String> columnOrder = ordered.getColumnOrder();
+        SplitsIndex index;
+        String indexTypeName = configFactory.getProperty("splits.index.type");
+        SplitsIndex.IndexType indexType = SplitsIndex.IndexType.valueOf(indexTypeName.toUpperCase());
+        switch (indexType)
+        {
+            case INVERTED:
+                index = new InvertedSplitsIndex(version, columnOrder, SplitPattern.buildPatterns(columnOrder, splits),
+                        splits.getNumRowGroupInFile());
+                break;
+            case COST_BASED:
+                index = new CostBasedSplitsIndex(transId, version, this.metadataService,
+                        schemaTableName, splits.getNumRowGroupInFile(), splits.getNumRowGroupInFile());
+                break;
+            default:
+                throw new UnsupportedOperationException("splits index type '" + indexType + "' is not supported");
+        }
+        IndexFactory.Instance().cacheSplitsIndex(schemaTableName, index);
+        return index;
+    }
+
     public void setupScanRangeLocations(ExecPlan context){
 
         int nodeIndex = random.nextInt(nodeList.size());
@@ -209,9 +241,9 @@ public class PixelsScanNode extends ScanNode {
         }
 
         // get splits from layout, currently only implement orderedPath
-        boolean orderedPathEnabled = true;
+        boolean orderedPathEnabled = this.orderedPathEnabled;
         // TODO: add compactPath split
-        boolean compactPathEnabled = false;
+        boolean compactPathEnabled = this.compactPathEnabled;
 
         // one layout correspond to one scanRange
         for (Layout layout : layouts)
@@ -227,10 +259,40 @@ public class PixelsScanNode extends ScanNode {
 
             // get split size, currently fixed
             // TODO: add dynamic split schema
-            int splitSize = 16;
+            int splitSize = 1;
             Splits splits = layout.getSplits();
-
+            if (this.fixedSplitSize > 0)
+            {
+                splitSize = this.fixedSplitSize;
+            }
+            else
+            {
+                // log.info("columns to be accessed: " + columnSet.toString());
+                try {
+                    SplitsIndex splitsIndex = IndexFactory.Instance().getSplitsIndex(schemaTableName);
+                    if (splitsIndex == null) {
+                        LOG.info("splits index not exist in factory, building index...");
+                        splitsIndex = buildSplitsIndex(pseudoTransId,
+                                version, ordered, splits, schemaTableName);
+                    } else {
+                        long indexVersion = splitsIndex.getVersion();
+                        if (indexVersion < version) {
+                            LOG.info("splits index version is not up-to-date, updating index...");
+                            splitsIndex = buildSplitsIndex(pseudoTransId,
+                                    version, ordered, splits, schemaTableName);
+                        }
+                    }
+                    SplitPattern bestSplitPattern = splitsIndex.search(columnSet);
+                    // log.info("bestPattern: " + bestPattern.toString());
+                    splitSize = bestSplitPattern.getSplitSize();
+                }
+                catch (MetadataException e){
+                    throw new RuntimeException(e);
+                }
+            }
             LOG.info("using pixels split size: " + splitSize);
+
+            int rowGroupNum = splits.getNumRowGroupInFile();
 
             // TODO: add projectionReadEnabled branch
 
@@ -241,7 +303,7 @@ public class PixelsScanNode extends ScanNode {
                 // add splits in orderedPaths
                 if (orderedPathEnabled) {
                     List<String> orderedFilePaths = getFilePaths(
-                            layout.getOrderedPaths(), MetadataService.Instance());
+                            layout.getOrderedPaths(), metadataService);
                     int numPath = orderedFilePaths.size();
                     boolean multiSplitForOrdered = Boolean.parseBoolean(configFactory.getProperty("multi.split.for.ordered"));
 
@@ -259,13 +321,13 @@ public class PixelsScanNode extends ScanNode {
                             paths.add(orderedFilePaths.get(i++));
                         }
 
-                        List<Location> locations = null;
-                        try {
-                            locations = storage.getLocations(orderedFilePaths.get(firstPath));
-                        } catch (IOException e) {
-                            throw new RuntimeException(e);
-                        }
-                        List<TNetworkAddress> orderedAddresses = toTNetworkAddress(locations);
+//                        List<Location> locations = null;
+//                        try {
+//                            locations = storage.getLocations(orderedFilePaths.get(firstPath));
+//                        } catch (IOException e) {
+//                            throw new RuntimeException(e);
+//                        }
+//                        List<TNetworkAddress> orderedAddresses = toTNetworkAddress(locations);
 
                         // addSplitScanRangeLocations
                         TScanRangeLocations scanRangeLocations = new TScanRangeLocations();
@@ -319,7 +381,10 @@ public class PixelsScanNode extends ScanNode {
                     }
 
                 }
-
+                else if(compactPathEnabled) {
+                    List<String> compactFilePaths = getFilePaths(
+                            layout.getCompactPaths(), metadataService);
+                }
 
             } catch (MetadataException e) {
                 throw new RuntimeException(e);

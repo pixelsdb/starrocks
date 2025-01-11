@@ -50,6 +50,8 @@ public class PixelsSplitScanner {
     private PixelsReaderOption option;
     private final String[] includeCols;
     private final String[] paths;
+    private final Integer[] rgStarts;
+    private final Integer[] rgLengths;
     private final String[] colTypes;
     private final int numColumnToRead;
 
@@ -77,6 +79,11 @@ public class PixelsSplitScanner {
         String[] paths = ScannerHelper.splitAndOmitEmptyStrings(params.get("paths"), ",");
         this.paths = paths;
         this.colTypes = ScannerHelper.splitAndOmitEmptyStrings(params.get("required_column_types"), ",");
+
+        String[] rgStarts = ScannerHelper.splitAndOmitEmptyStrings(params.get("rg_starts"), ",");
+        this.rgStarts = Arrays.stream(rgStarts).map(Integer::parseInt).toArray(Integer[]::new);
+        String[] rgLengths = ScannerHelper.splitAndOmitEmptyStrings(params.get("rg_lengths"), ",");
+        this.rgLengths = Arrays.stream(rgLengths).map(Integer::parseInt).toArray(Integer[]::new);
 
         String[] scanColumns = ScannerHelper.splitAndOmitEmptyStrings(params.get("required_fields"), ",");
         String schemaName = params.get("schema_name");
@@ -177,7 +184,8 @@ public class PixelsSplitScanner {
         this.option.enableEncodedColumnVector(true);
         this.option.includeCols(includeCols);
 //      TODO:  this.option.rgRange(split.getRgStart(), split.getRgLength());
-        this.option.rgRange(0, 1);
+//        this.option.rgRange(0, 1);
+        this.option.rgRange(rgStarts[pathIndex], rgLengths[pathIndex]);
 
         // TODO: add predicate
 
@@ -240,7 +248,8 @@ public class PixelsSplitScanner {
                             .setPixelsFooterCache(new PixelsFooterCache())
                             .build();
 //                  TODO: this.option.rgRange(split.getRgStart(), split.getRgLength());
-                    this.option.rgRange(0, 1);
+//                    this.option.rgRange(0, 1);
+                    this.option.rgRange(rgStarts[pathIndex], rgLengths[pathIndex]);
                     if (this.pixelsReader.getRowGroupNum() <= this.option.getRGStart())
                     {
                         /**
