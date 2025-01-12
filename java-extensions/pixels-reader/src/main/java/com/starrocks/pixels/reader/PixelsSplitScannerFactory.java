@@ -45,4 +45,13 @@ public class PixelsSplitScannerFactory implements ScannerFactory{
             throw e;
         }
     }
+
+    public Class getUDFHelperClass() throws ClassNotFoundException {
+        try {
+            return classLoader.loadClass("com.starrocks.pixels.reader.PixelsUDFHelper");
+        } catch (ClassNotFoundException e) {
+            e.printStackTrace();
+            throw e;
+        }
+    }
 }

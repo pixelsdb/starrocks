@@ -61,10 +61,15 @@ private:
 
     Status _get_next_chunk(jobject* chunk, size_t* num_rows);
 
+    Status _get_result_from_boxed_array(int type, Column* col, jobject jcolumn, int rows);
+
     Status _fill_chunk(jobject jchunk, size_t num_rows, ChunkPtr* chunk);
 
     jclass _jni_scanner_cls = nullptr;
     jobject _jni_scanner_obj = nullptr;
+
+    jclass _pixels_udf_helper_class;
+    jmethodID _get_boxed_result;
 
     const TPixelsScanRange& _scan_range;
 

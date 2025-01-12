@@ -225,6 +225,14 @@ Status PixelsScanner::_init_pixels_table_scanner(JNIEnv* env, RuntimeState* runt
     jmethodID get_scanner_method = env->GetMethodID(scanner_factory_class, "getScannerClass", "()Ljava/lang/Class;");
     _jni_scanner_cls = (jclass) env->CallObjectMethod(scanner_factory_obj, get_scanner_method);
     RETURN_IF_ERROR(_check_jni_exception(env, "Failed to init the scanner class."));
+
+    // init pixels_udf_helper
+    jmethodID get_udf_helper_method = env->GetMethodID(scanner_factory_class, "getUDFHelperClass", "()Ljava/lang/Class;");
+    _pixels_udf_helper_class = (jclass) env->CallObjectMethod(scanner_factory_obj, get_udf_helper_method);
+    DCHECK(_pixels_udf_helper_class != nullptr);
+    _get_boxed_result = env->GetStaticMethodID(_pixels_udf_helper_class, "getResultFromBoxedArray", "(IILjava/lang/Object;J)V");
+    DCHECK(_get_boxed_result);
+
     env->DeleteLocalRef(scanner_factory_class);
     env->DeleteLocalRef(scanner_factory_obj);
 
@@ -306,6 +314,15 @@ Status PixelsScanner::_get_next_chunk(jobject* chunk, size_t* num_rows) {
     return Status::OK();
 }
 
+Status PixelsScanner::_get_result_from_boxed_array(int type, Column* col, jobject jcolumn, int rows) {
+    auto* env = JVMFunctionHelper::getInstance().getEnv();
+    col->resize(rows);
+    env->CallStaticVoidMethod(_pixels_udf_helper_class, _get_boxed_result, type, rows, jcolumn,
+                               reinterpret_cast<int64_t>(col));
+    RETURN_ERROR_IF_JNI_EXCEPTION(env);
+    return Status::OK();
+}
+
 Status PixelsScanner::_fill_chunk(jobject jchunk, size_t num_rows, ChunkPtr* chunk) {
     // get result from JNI
     {
@@ -318,8 +335,7 @@ Status PixelsScanner::_fill_chunk(jobject jchunk, size_t num_rows, ChunkPtr* chu
             jobject jcolumn = helper.list_get(jchunk, i);
             LOCAL_REF_GUARD_ENV(env, jcolumn);
             auto& result_column = _result_chunk->columns()[i];
-            auto st =
-                    helper.get_result_from_boxed_array(_result_column_types[i], result_column.get(), jcolumn, num_rows);
+            auto st = _get_result_from_boxed_array(_result_column_types[i], result_column.get(), jcolumn, num_rows);
             RETURN_IF_ERROR(st);
             down_cast<NullableColumn*>(result_column.get())->update_has_null();
         }

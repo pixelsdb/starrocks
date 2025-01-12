@@ -69,7 +69,7 @@ public class PixelsScannerUtils {
             return dataColumn;
         }
         else if (columnVector instanceof BinaryColumnVector) {
-            BinaryColumnVector binaryVector =(BinaryColumnVector) columnVector;
+            BinaryColumnVector binaryVector = (BinaryColumnVector) columnVector;
             dataColumn = new String[rowBatchSize];
             for(int i = 0; i< rowBatchSize; ++i) {
                 dataColumn[i] = binaryVector.toString(i);
@@ -77,7 +77,7 @@ public class PixelsScannerUtils {
             return dataColumn;
         }
         else if (columnVector instanceof DictionaryColumnVector) {
-            DictionaryColumnVector dictionaryVector =(DictionaryColumnVector) columnVector;
+            DictionaryColumnVector dictionaryVector = (DictionaryColumnVector) columnVector;
             dataColumn = new String[rowBatchSize];
             for(int i = 0; i< rowBatchSize; ++i) {
                 dataColumn[i] = dictionaryVector.toString(i);
@@ -85,7 +85,7 @@ public class PixelsScannerUtils {
             return dataColumn;
         }
         else if (columnVector instanceof FloatColumnVector) {
-            FloatColumnVector floatVector =(FloatColumnVector) columnVector;
+            FloatColumnVector floatVector =( FloatColumnVector) columnVector;
             dataColumn = new Float[rowBatchSize];
             for(int i = 0; i< rowBatchSize; ++i) {
                 dataColumn[i] = Float.intBitsToFloat(floatVector.vector[i]);
@@ -93,7 +93,7 @@ public class PixelsScannerUtils {
             return dataColumn;
         }
         else if (columnVector instanceof DoubleColumnVector) {
-            DoubleColumnVector doubleVector =(DoubleColumnVector) columnVector;
+            DoubleColumnVector doubleVector = (DoubleColumnVector) columnVector;
             dataColumn = new Double[rowBatchSize];
             for(int i = 0; i< rowBatchSize; ++i) {
                 dataColumn[i] = Double.longBitsToDouble(doubleVector.vector[i]);

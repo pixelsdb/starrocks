@@ -824,13 +824,13 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
     private boolean enableLocalShuffleAgg = true;
 
     @VariableMgr.VarAttr(name = ENABLE_PIXELS_ORDERED_PATH)
-    private boolean enablePixelsOrderedPath = false;
+    private boolean enablePixelsOrderedPath = true;
 
     @VariableMgr.VarAttr(name = ENABLE_PIXELS_COMPACT_PATH)
     private boolean enablePixelsCompactPath = true;
 
     @VariableMgr.VarAttr(name = PIXELS_FIXED_SPLIT_SIZE)
-    private int pixelsFixedSplitSize = -1;
+    private int pixelsFixedSplitSize = 16;
 
     @VariableMgr.VarAttr(name = USE_COMPUTE_NODES)
     private int useComputeNodes = -1;

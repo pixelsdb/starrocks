@@ -112,6 +112,10 @@
             <version>1.2.83</version>
             <optional>true</optional>
         </dependency>
+        <dependency>
+            <groupId>com.starrocks</groupId>
+            <artifactId>java-utils</artifactId>
+        </dependency>
     </dependencies>
     <build>
         <finalName>starrocks-pixels-reader</finalName>

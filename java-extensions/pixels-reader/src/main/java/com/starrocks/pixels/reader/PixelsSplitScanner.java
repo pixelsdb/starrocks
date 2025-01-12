@@ -277,7 +277,7 @@ public class PixelsSplitScanner {
         }
     }
 
-    public List<Object[]> getNextChunk() throws Exception {
+    public List<ColumnVector> getNextChunk() throws Exception {
         if (!this.blocked.isDone())
         {
             return null;
@@ -296,7 +296,7 @@ public class PixelsSplitScanner {
         VectorizedRowBatch rowBatch = null;
         int rowBatchSize = 0;
 
-        List<Object[]> resultChunk = new ArrayList<>(this.numColumnToRead);
+        List<ColumnVector> resultChunk = new ArrayList<>(this.numColumnToRead);
 
         if (this.numColumnToRead > 0)
         {
@@ -330,10 +330,10 @@ public class PixelsSplitScanner {
 
                     ColumnVector vector = rowBatch.cols[fieldId];
 
-                    Object[] dataColumn = PixelsScannerUtils.getObjectArrayFromPixelsVector(vector, rowBatchSize);
+//                    Object[] dataColumn = PixelsScannerUtils.getObjectArrayFromPixelsVector(vector, rowBatchSize);
 
                     this.resultNumRows = rowBatchSize;
-                    resultChunk.add(dataColumn);
+                    resultChunk.add(vector);
                 }
             } catch (IOException e)
             {
